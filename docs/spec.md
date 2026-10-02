@@ -98,7 +98,8 @@ pkg/versioning/                # PURE core (the knope-versioning equivalent)
 
 ### 0.3 Go version and dependencies
 
-**Go version:** `go 1.27` in `go.mod` (the latest toolchain is 1.27.1). Go 1.27 is the first release where
+**Go version:** `go 1.27` in `go.mod` (the latest toolchain is 1.27.1). **Decided (2026-10-02):** Go 1.27 is the
+minimum from day one. Go 1.27 is the first release where
 `encoding/json/v2` and `encoding/json/jsontext` are generally available, and the spec relies on them. It also
 covers `(?<name>…)` regex groups (Go ≥ 1.22) and `hujson`'s minimum of Go 1.26.
 
@@ -1459,5 +1460,3 @@ Fixtures: `tests/upgrade/*`, `tests/validate/*`.
    config errors in v1?
 5. **Jira search endpoint.** Keep `/rest/api/3/search` (as Knope does) or move to `/rest/api/3/search/jql`?
 6. **RebaseBranch semantics** (Q14). Confirm that switching to the target branch afterwards is intended.
-7. **Go 1.27 minimum.** The spec needs Go 1.27 for the GA `encoding/json/v2`/`jsontext`. Is it acceptable to require
-   the latest toolchain from day one?
