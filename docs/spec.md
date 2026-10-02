@@ -45,7 +45,7 @@ reproduce, the algorithm (taken from the Rust source, not only the docs), edge c
 22. [F21: `--upgrade` and `--validate`](#f21---upgrade-and---validate)
 23. [Testing strategy](#testing-strategy)
 24. [Quirks register](#quirks-register)
-25. [Open questions](#open-questions)
+25. [Decisions](#decisions)
 
 ---
 
@@ -120,7 +120,7 @@ by the project: **urfave/cli v3** and **koanf v2**. Versions were checked agains
 | Regex | `regex` | **stdlib** `regexp` | stdlib | RE2 semantics in both, so behaviour matches. |
 | Glob | `glob` | **stdlib** `io/fs` (`fs.WalkDir` + `path.Match` per segment, with `**` handled by the walker) | stdlib | About 60 lines. `filepath.Glob` alone has no `**`. Fallback if edge cases pile up: `github.com/bmatcuk/doublestar/v4` (v4.10.2, 2026-09-20). |
 | Prompts | `inquire` | **`charm.land/huh/v2`** | v2.0.3, 2026-03-10 (needs Go 1.25.8, built on `charm.land/bubbletea/v2` v2.0.10, 2026-09-24) | Select, MultiSelect with a "select at least one" validator, Input, and Input in password mode. Replaces `AlecAivazis/survey` (no release since 2022). Put it behind `internal/prompt` so tests can script answers. |
-| Git | `git2` (libgit2) | **stdlib** `os/exec` calling the `git` CLI, behind the `Git` interface (F9) | stdlib | Exact behaviour, including rebase and annotated tags. Considered: `github.com/go-git/go-git/v5` (v5.19.2, 2026-07-29; no rebase, and v6 is still alpha). |
+| Git | `git2` (libgit2) | **stdlib** `os/exec` calling the `git` CLI, with **`github.com/go-git/go-git/v5`** as the fallback when `git` is not installed (D2, F9.0) | go-git v5.19.2, 2026-07-29 | The CLI gives exact behaviour, including rebase. go-git has no rebase, so the fallback supports only fast-forward for `RebaseBranch`. v6 is still alpha. |
 | HTTP + retry | reqwest-middleware + reessaie | **stdlib** `net/http` with a retrying `RoundTripper` | stdlib | About 80 lines: exponential backoff with jitter, 5 retries, honours `Retry-After` (seconds or HTTP date), logs rate-limit warnings (F15.1). Considered: `hashicorp/go-retryablehttp` (last release v0.7.8, 2025-06). |
 | GitHub upload URL template | URI template | **stdlib** `net/url` | stdlib | Remove the `{?name,label}` suffix from `upload_url` and set `?name=`. No template library needed (`yosida95/uritemplate` has had no release since 2022). |
 | Command splitting | `execute` | Hand-written tokenizer in `internal/steps/command` | n/a | About 50 lines: whitespace separates words, `'…'` and `"…"` quote, backslash escapes, **no** `$VAR` expansion (matches Knope). Rejected: `google/shlex` (no change since 2019); `mvdan.cc/sh/v3/shell.Fields` (expands variables); `mattn/go-shellwords` (recent tag, but `go 1.13` module and adds little). |
@@ -348,7 +348,7 @@ koanf does the loading and decoding. Two of its defaults don't fit `knope.toml`,
 4. **Layers.** Only one source, `file.Provider("knope.toml")`, is needed for parity. Defaults for Hybrid configs
    (F2.3) are applied to the decoded structs, not merged as koanf layers, because "missing" means "detect from the
    working directory", not a fixed value. Extra layers later (for example `remeris.toml` overrides or `REMERIS_*` env
-   vars) are where koanf pays off (Open question 1).
+   vars) are where koanf pays off (see D1: `knope.toml` is the only file for now).
 
 If `knope.toml` is missing, skip koanf entirely and go to `ConfigSource.Default` (F20).
 
@@ -376,10 +376,10 @@ remeris --help | --version
 | `--upgrade` | `knope.toml` exists | F21 |
 | `--validate` | `knope.toml` exists | F21. All log output is suppressed while validating. |
 | `--override-version` (workflow flag) | workflow has `BumpVersion` or `PrepareRelease` **and** ≥1 package | With 1 package: single `<version>`, parsed with F1. With ≥2 packages: repeatable `name=version`. Unknown names → error `Unknown package(s) to override: a, b`. Bad format → `package override should be formatted like package_name=version`. |
-| `--prerelease-label` (workflow flag, env `KNOPE_PRERELEASE_LABEL`) | workflow has `PrepareRelease` | Sets `prerelease_label` on **every** `PrepareRelease` step in **every** workflow. The flag wins over the env var. |
+| `--prerelease-label` (workflow flag, env `REMERIS_PRERELEASE_LABEL`, then `KNOPE_PRERELEASE_LABEL` as a fallback for migrating CI) | workflow has `PrepareRelease` | Sets `prerelease_label` on **every** `PrepareRelease` step in **every** workflow. The flag wins over the env var. |
 
 - Each workflow is a subcommand, and `help_text` is its description.
-- No subcommand (and no `--validate`) → error `No workflow selected. Run 'knope --help' for a list of options.`
+- No subcommand (and no `--validate`) → error `No workflow selected. Run 'remeris --help' for a list of options.`
 - Unknown workflow names are rejected by the CLI parser. Knope also has a fallback `No workflow named {name}`.
 - `--help` on the root lists workflows. `<workflow> --help` shows the flags for that workflow.
 
@@ -392,15 +392,19 @@ remeris --help | --version
   ConfigSource. The root `Action` handles them, and errors with `No workflow selected…` when none is set.
 - `--override-version`: one package → `*cli.StringFlag` validated by F1 parsing. Several packages →
   `*cli.StringSliceFlag` of `name=version`.
-- `--prerelease-label`: `*cli.StringFlag{Sources: cli.EnvVars("KNOPE_PRERELEASE_LABEL")}`. The flag wins over the env
-  var because of urfave's value precedence.
+- `--prerelease-label`: `*cli.StringFlag{Sources: cli.EnvVars("REMERIS_PRERELEASE_LABEL", "KNOPE_PRERELEASE_LABEL")}` (the first
+  set variable is used). The flag wins over the env vars because of urfave's value precedence.
 - `root.Version` gives `--version`. Help text formatting differs from clap. Golden tests should not compare
   `--help` output byte-for-byte.
 - Exit codes: return the `Diagnostic` from the action. `main` renders it to stderr and exits 1 (do not use
   `cli.Exit` inside steps).
 
-> **Decision:** keep `knope` in the user-facing strings for now so the golden files match byte-for-byte. Replace
-> them with `remeris` later behind one constant (see Open questions).
+> **Decision (D1):** the config file stays `knope.toml` (read and written by `--generate`/`--upgrade`), so existing
+> Knope projects work unchanged. **Everything else says `remeris`**: binary name, `--help`, log and error text
+> (for example `Run 'remeris --help'`, `Run 'remeris --upgrade'`), diagnostic codes (`remeris::inconsistent_versions`),
+> `User-Agent: Remeris`, the env var `REMERIS_PRERELEASE_LABEL`, and the credential directory (F15.2). Keep the name in
+> one constant (`internal/brand`). Golden logs vendored from Knope are rewritten `knope` → `remeris` by the fixture
+> conversion script; `knope.toml` itself is left alone.
 
 ### F3.2 Logging
 
@@ -430,9 +434,19 @@ type Diagnostic interface {
 Workflow failure wraps the step error as `Problem with workflow {name}`. Validation collects them as
 `There are problems with the defined workflows`, listing all.
 
-Golden `stderr.log` files in the Knope tests contain miette's ASCII rendering. Either match that rendering closely,
-or normalise the tests to check only messages and help text. **Recommendation:** check message, help and URL text
-only. Byte-for-byte miette graphics are not worth copying.
+**Decision (D4):** v1 renders the **message** and **help text** only (plus nested related errors), matching
+Knope's wording with `knope` → `remeris`. No source snippets, no docs URL: the Knope URLs point at knope.tech and
+the remeris docs will be written later. Keep `URL()`, `Labels()` and `SourceCode()` on the interface (and keep the
+spans in the TOML index, F2.4) so snippets and links can be turned on later without touching every error.
+
+Rendering:
+```
+Error: {message}
+  help: {help}
+  ╰─▶ {related message}      # one line per nested error, indented per level
+```
+Golden `stderr.log` files from Knope contain miette's ASCII graphics. The fixture conversion script reduces them to
+the message and help lines, and tests compare only those.
 
 ---
 
@@ -737,7 +751,7 @@ For each config, in order:
 3. Dependency entries don't count toward the package version. For the rest, `file.Version()` must equal the
    first-seen version, else:
    `Found inconsistent versions in package: {p1} had {v1} and {p2} had {v2}`
-   (code `knope_versioning::inconsistent_versions`, help `All files in a package must have the same version`).
+   (code `remeris::inconsistent_versions`, help `All files in a package must have the same version`).
 4. Return the validated configs and the first version (if any).
 
 ### F7.3 Package version
@@ -799,9 +813,29 @@ type Git interface {
     // F19:
     LocalBranches() ([]string, error); BranchExists(name string) bool
     CreateBranch(name, from string) error; Checkout(name string) error
-    HasUncommittedChanges() (bool, error); Rebase(onto string) error
+    HasUncommittedChanges() (bool, error); Rebase(current, to string) error   // F19.8
 }
 ```
+
+### F9.0 Backends (decision D2)
+
+Two implementations of the `Git` interface, chosen once at startup:
+
+1. **`git` CLI (primary):** used when `exec.LookPath("git")` succeeds. Every method runs `git` through `os/exec` with
+   `-C <cwd>`, `GIT_TERMINAL_PROMPT=0` and `LC_ALL=C` (stable output to parse).
+2. **go-git fallback:** `github.com/go-git/go-git/v5` (v5.19.2, 2026-07-29) when `git` is not on `PATH`. Log at debug:
+   `git not found on PATH, using built-in Git support`.
+
+| Method | go-git fallback |
+| --- | --- |
+| `AllTagsOnBranch`, `CommitMessagesAfterTag`, `FirstCommitsForFiles`, `HeadCommitSHA`, `CurrentBranch`, `FirstRemoteURL`, `LocalBranches`, `BranchExists` | Full support (`Repository.Tags`, `Log`, `Tree.File`, `Head`, `Remotes`, `Branches`) |
+| `AddFiles` | `Worktree.Add` per path; `Worktree.Remove` for deleted paths |
+| `CreateTag` | `Repository.CreateTag` with `CreateTagOptions{Message: "", Tagger: …}`. The tagger comes from git config (`user.name`/`user.email`, read with `config.LoadConfig(GlobalScope)` + repo config), else the same `Could not determine Git committer…` error |
+| `CreateBranch`, `Checkout`, `HasUncommittedChanges` | `Repository.CreateBranch` + `Storer.SetReference`, `Worktree.Checkout{Force: true}`, `Worktree.Status` (respects `.gitignore`) |
+| `Rebase` | **Fast-forward only** (go-git has no rebase). If `to` is an ancestor of HEAD, move `to` to HEAD and check it out. Otherwise fail with `RebaseBranch needs the git command when the branches have diverged` (help: `Install git, or rebase manually.`) |
+
+Both backends must pass the same contract test suite (`internal/git/contract_test.go`), run against temporary
+repositories. The go-git run sets `PATH` to an empty dir to force the fallback.
 
 ### F9.1 `AllTagsOnBranch`
 1. Map commit OID → the tag names pointing at it (tags peeled to commits, both annotated and lightweight), in
@@ -1068,7 +1102,7 @@ if REAL run && !allow_empty && len(PendingActions)==0 → error "No packages are
 - Result = commit changes (F10.2) followed by change-file changes (F11.2).
 
 ### F13.2 Pre-releases
-- `prerelease_label` comes from the step, overridden at runtime by `--prerelease-label` / `KNOPE_PRERELEASE_LABEL`.
+- `prerelease_label` comes from the step, overridden at runtime by `--prerelease-label` / `REMERIS_PRERELEASE_LABEL` (fallback `KNOPE_PRERELEASE_LABEL`).
 - Change files are **kept** for pre-releases so that the final release picks them up again.
 - Commits are always counted from the last **stable** tag, so each pre-release changelog entry lists **all** changes
   since that stable release.
@@ -1139,7 +1173,7 @@ flag = `version.IsPrerelease()`. With forges configured, **no local tag is creat
 Sources: `integrations/http.rs`, `app_config.rs`, `prompt.rs`
 
 ### F15.1 Client
-- `User-Agent: Knope`.
+- `User-Agent: Remeris`.
 - Retry: exponential backoff, **up to 5 retries** on transient errors (connect errors, 5xx, 408, 429). Honour
   `Retry-After` (seconds or HTTP date).
 - On 429 with `Retry-After`: warn `API rate limited; retrying in {n} seconds` (or `retrying after {value}`). If
@@ -1149,8 +1183,9 @@ Sources: `integrations/http.rs`, `app_config.rs`, `prompt.rs`
   JSON decode errors: `Trouble decoding the response from {GitHub|the Gitea instance at host} while {activity}: …`.
 
 ### F15.2 Credential store
-Directory: `os.UserConfigDir()/knope/` (the same place as Rust `dirs::config_dir()` on Linux, macOS and Windows). One
-file per key, holding the raw value:
+Directory: `os.UserConfigDir()/remeris/` (Knope used `…/knope/`, the same base as Rust `dirs::config_dir()`). One file
+per key, holding the raw value. **Migration:** when a key is missing from `remeris/`, read it from `knope/` and copy it
+into `remeris/`, so existing Knope users are not prompted again.
 
 | key | env override | prompt |
 | --- | --- | --- |
@@ -1257,10 +1292,11 @@ The same flow with the Gitea API (F17). Dry-run text says `Gitea instance`. Fake
 - Needs `[jira]`. Dry run: `Would query configured Jira instance for issues with status {status}` + the prompt line,
   and the fake issue `{FAKE-123, Test issue}`.
 - Real: auth = `Basic base64("{email}:{jira_token}")` (both from the credential store, F15.2).
-  `POST {url}/rest/api/3/search` `{"jql": "status = {status} AND project = {project}", "fields": ["summary"]}` →
-  `issues[].{key, fields.summary}` → Select.
-  (Note: Atlassian has deprecated `/rest/api/3/search` in favour of `/rest/api/3/search/jql`. Put this behind a
-  constant and check it against current Jira Cloud before shipping.)
+  **Decision (D5):** use the current endpoint, not Knope's deprecated `/rest/api/3/search`:
+  `POST {url}/rest/api/3/search/jql` with
+  `{"jql": "status = {status} AND project = {project}", "fields": ["summary"], "maxResults": 50}`.
+  Response: `issues[].{key, fields.summary}` (plus `nextPageToken`, ignored: like Knope, only the first page is
+  shown) → Select. Quote `status` in the JQL (`status = "In Progress"`) so multi-word statuses work; Knope did not.
 
 ### F19.4 `TransitionJiraIssue { status }`
 Needs a selected issue (`NoIssueSelected`, help `You must use the SelectJiraIssue step before TransitionJiraIssue in the same workflow`)
@@ -1289,11 +1325,23 @@ Needs a selected issue. Dry run: `Would switch to or create a branch named {name
   `Uncommitted changes`. Checkout is a forced checkout of HEAD after setting HEAD to the branch.
 
 ### F19.8 `RebaseBranch { to }`
-Dry run: `Would rebase current branch onto {to}`. Real: rebase HEAD onto the local branch `to` (not remotes), then
-log `Rebased current branch onto {to}`, then **switch to `to`** (as Knope does), then log
-`Switched to branch {to}, don't forget to push!`.
-Note: Knope rebases HEAD onto `to` and then checks out `to`. That is a "rebase then fast-forward-style switch" flow.
-Copy the logged behaviour: `git rebase {to}` followed by `git checkout {to}`. Confirm this is what users expect (Open questions).
+**What Knope actually does** (docs and log text say otherwise): it calls libgit2
+`repo.rebase(branch = to, upstream = None, onto = HEAD)`. That replays the commits of `to` that are not in the current
+branch **on top of the current branch**, moves the `to` ref, then checks out `to`. In effect it lands the current
+(feature) branch into `to` as a linear history: if `to` has no new commits, `to` is fast-forwarded to the feature
+branch. The feature branch itself is not changed. "Don't forget to push!" means push `to`. Knope has no tests for
+this step.
+
+**Decision (D6):** keep Knope's behaviour.
+- Dry run: `Would rebase current branch onto {to}` (Knope's wording, kept for parity).
+- Real: `cur = CurrentBranch()`; `to` must be a local branch (remotes are not checked). CLI backend:
+  `git rebase {cur} {to}`. This checks out `to`, replays its own commits onto `cur`, and leaves `to` checked out.
+  go-git backend: see F9.0. Then log `Rebased current branch onto {to}` and `Switched to branch {to}, don't forget to push!`.
+- Conflicts: the CLI leaves the rebase in progress. Fail with `Rebase stopped because of conflicts` (help:
+  `Resolve them and run 'git rebase --continue', or 'git rebase --abort'.`). Knope fails with a generic Git error
+  instead.
+- Fix the step's reference docs when we write the remeris docs: describe it as "integrate the current branch into
+  `to` with a linear history, then switch to `to`".
 
 ---
 
@@ -1444,19 +1492,20 @@ Fixtures: `tests/upgrade/*`, `tests/validate/*`.
 | Q11 | `deno.jsonc` is missing from the explicit file-name table | F6.1 | **Fix** (add it) |
 | Q12 | `CreateTag` makes annotated tags with empty messages | F9.5 | Keep |
 | Q13 | The npm workspace `changelog` is always set, even when the file doesn't exist | F20.3 | Keep |
-| Q14 | `RebaseBranch` switches to the target branch after rebasing | F19.8 | Keep for now. See Open questions. |
+| Q14 | `RebaseBranch` rebases `to` onto the current branch and switches to it (docs say the opposite) | F19.8 | Keep (D6) |
 
 ---
 
-## Open questions
+## Decisions
 
-1. **Name and config file.** Should `remeris` read only `knope.toml`, or also `remeris.toml` (and which one wins)?
-   Should user-facing strings say `knope` (golden parity) or `remeris`? The spec assumes `knope.toml` and Knope's
-   strings behind one constant. If `remeris.toml` is added, it becomes a second koanf layer (F2.4).
-2. **Git backend.** The spec now uses the `git` CLI through `os/exec` (0.3), so `git` must be installed. Is that
-   acceptable for every target environment, or do we need a pure-Go fallback (go-git v5) for the read-only calls?
-3. **Scope.** Knope Bot (the GitHub App) shares `knope-config` but is **out of scope** here. Confirm.
-4. **Diagnostics fidelity.** Is message, help and URL parity enough, or do we want miette-style source snippets for
-   config errors in v1?
-5. **Jira search endpoint.** Keep `/rest/api/3/search` (as Knope does) or move to `/rest/api/3/search/jql`?
-6. **RebaseBranch semantics** (Q14). Confirm that switching to the target branch afterwards is intended.
+Recorded 2026-10-02.
+
+| ID | Question | Decision | Where |
+| --- | --- | --- | --- |
+| D1 | Name and config file | Keep reading `knope.toml`. Use `remeris` everywhere else (binary, messages, codes, env var, credential dir, User-Agent). | F3.1, F15 |
+| D2 | Git backend | `git` CLI first, go-git v5 fallback when `git` is not installed | F9.0 |
+| D3 | Knope Bot (GitHub App) | Out of scope for now | — |
+| D4 | Diagnostics | Match Knope's message and help text. No source snippets or docs URLs until the remeris docs exist. | F3.3 |
+| D5 | Jira search endpoint | Use `POST /rest/api/3/search/jql` | F19.3 |
+| D6 | `RebaseBranch` | Keep Knope's behaviour (integrate the current branch into `to`, then switch to `to`) | F19.8 |
+| D7 | Minimum Go version | Go 1.27 | 0.3 |
