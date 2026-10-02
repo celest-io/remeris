@@ -96,26 +96,46 @@ pkg/versioning/                # PURE core (the knope-versioning equivalent)
     action.go                  # Action, ReleaseTag
 ```
 
-### 0.3 Suggested Go dependencies
+### 0.3 Go version and dependencies
 
-| Need | Knope uses | Go recommendation | Notes |
-| --- | --- | --- | --- |
-| CLI | clap | `github.com/spf13/cobra` | Subcommands are added at runtime from the config. Env binding for `KNOPE_PRERELEASE_LABEL`. |
-| TOML decode | `toml` (serde) | `github.com/pelletier/go-toml/v2` | Needs byte offsets for error spans. go-toml/v2 `unstable` parser exposes them. |
-| TOML **edit, keeping formatting** | `toml_edit` | Write a small span-based editor on top of `go-toml/v2/unstable` | **MUST** keep comments and formatting in `Cargo.toml`, `Cargo.lock`, `gleam.toml`, `pyproject.toml`. See F6. |
-| TOML encode (generate/upgrade) | `toml` | go-toml/v2 encoder, or a hand-written emitter | Output must match the golden files. See F20. |
-| JSON, key order kept | `serde_json` + `preserve_order` | Ordered-map JSON (a custom `json.Decoder` token walk, or `github.com/iancoleman/orderedmap`) | Output is pretty-printed with 2 spaces, **no trailing newline** (serde `to_string_pretty`). |
-| JSONC | `jsonc-parser` | `github.com/tailscale/hujson` | For `deno.json(c)`. |
-| YAML | `serde_yaml` | `gopkg.in/yaml.v3` | Only used as a fallback. `pubspec.yaml` is normally edited by replacing one line. |
-| XML | `xmltree` | `encoding/xml` token stream, or a surgical text edit | See Quirk Q7. |
-| Regex | `regex` | `regexp` (Go ≥ 1.22 for `(?<name>…)`) | RE2 semantics in both, so behaviour matches. |
-| Glob | `glob` | `github.com/bmatcuk/doublestar/v4` | For assets and npm workspaces. |
-| Prompts | `inquire` | `github.com/charmbracelet/huh` | Select, MultiSelect (at least one required), Text, Password with display toggle. |
-| Git | `git2` (libgit2) | Interface backed by the `git` CLI (recommended), or `go-git` | go-git has no rebase. Default workflows run `git` anyway. See F9. |
-| HTTP retry | reqwest-middleware + reessaie | `github.com/hashicorp/go-retryablehttp`, or a hand-rolled loop | Exponential backoff, 5 retries, honours `Retry-After`. |
-| Logging | tracing | `log/slog` with a custom plain handler | No level, time or target prefix. See F3. |
-| Diagnostics | miette | Custom `Diagnostic` interface: `Code()`, `Help()`, `URL()`, optional source span | See F3. |
-| Command splitting | `execute` | `github.com/google/shlex` (or mattn/go-shellwords) | See F5. |
+**Go version:** `go 1.27` in `go.mod` (the latest toolchain is 1.27.1). Go 1.27 is the first release where
+`encoding/json/v2` and `encoding/json/jsontext` are generally available, and the spec relies on them. It also
+covers `(?<name>…)` regex groups (Go ≥ 1.22) and `hujson`'s minimum of Go 1.26.
+
+**How dependencies were chosen:** prefer the standard library. Add a third-party module only when it has had a
+release in the last ~12 months and is not archived or marked unmaintained. CLI and config use the libraries chosen
+by the project: **urfave/cli v3** and **koanf v2**. Versions were checked against `proxy.golang.org` on 2026-10-02.
+
+| Need | Knope uses | Go choice | Latest release (checked 2026-10-02) | Notes |
+| --- | --- | --- | --- | --- |
+| CLI | clap | **`github.com/urfave/cli/v3`** | v3.14.0, 2026-10-02 | Workflows become `[]*cli.Command`, built at runtime from the config. See F3.1. |
+| Config loading | `toml` (serde) | **`github.com/knadh/koanf/v2`** + `providers/file` + `parsers/toml/v2` | v2.3.7, 2026-09-24 (toml parser v2.2.2, 2026-08-04) | Decodes with `go-viper/mapstructure/v2`. koanf loses key order and byte positions, so it is paired with a TOML index. See F2.4. |
+| TOML index (key order + spans) and **format-preserving edits** | `toml_edit`, serde `Spanned` | `github.com/pelletier/go-toml/v2/unstable` (already a dependency through koanf's TOML parser) | go-toml v2.4.3, 2026-07-05 | No maintained Go module offers a `toml_edit` equivalent. Write a small span-based editor on this parser. **MUST** keep comments and formatting in `Cargo.toml`, `Cargo.lock`, `gleam.toml`, `pyproject.toml`. See F6. |
+| TOML encode (`--generate`, `--upgrade`) | `toml` | Hand-written emitter (the schema is small) | n/a | Golden output needs exact control over quoting and inline tables (F20.7). go-toml/v2 `Marshal` is only used in tests, to check the output round-trips. |
+| JSON with key order kept | `serde_json` + `preserve_order` | **stdlib** `encoding/json/jsontext` (Go 1.27) | stdlib | Edit `package.json`, `package-lock.json`, `tauri*.conf.json` and `deno.lock` as a token stream, or as a small ordered tree built from `jsontext.Decoder`. Members keep their original order. Output: `jsontext.Value.Indent("", "  ")`, no trailing newline (matches serde `to_string_pretty`). Set `jsontext.AllowDuplicateNames(true)` to accept the same input serde does. v2 does not escape `<>&` by default, which matches serde. Replaces `iancoleman/orderedmap` (no release since 2023). |
+| JSONC | `jsonc-parser` | `github.com/tailscale/hujson` | pseudo-version 2026-07-27 (no tags; actively committed, needs Go 1.26) | Parse `deno.json(c)`. `hujson` keeps comments, so the version can be edited in place by patching the value. This fixes Quirk Q6. |
+| YAML | `serde_yaml` | **`go.yaml.in/yaml/v3`** | v3.0.5, 2026-07-26 | The YAML org's maintained continuation of `gopkg.in/yaml.v3`, whose README now says "THIS PROJECT IS UNMAINTAINED". Drop-in API. Only used to read `version` and for the rare whole-file fallback. Considered: `github.com/goccy/go-yaml` (v1.19.2, 2026-01). |
+| XML | `xmltree` | **stdlib** `encoding/xml` | stdlib | Use `Decoder.Token` + `InputOffset()` to find the byte range of the direct-child `<version>` text, then patch that range in place (fixes Quirk Q7). |
+| Regex | `regex` | **stdlib** `regexp` | stdlib | RE2 semantics in both, so behaviour matches. |
+| Glob | `glob` | **stdlib** `io/fs` (`fs.WalkDir` + `path.Match` per segment, with `**` handled by the walker) | stdlib | About 60 lines. `filepath.Glob` alone has no `**`. Fallback if edge cases pile up: `github.com/bmatcuk/doublestar/v4` (v4.10.2, 2026-09-20). |
+| Prompts | `inquire` | **`charm.land/huh/v2`** | v2.0.3, 2026-03-10 (needs Go 1.25.8, built on `charm.land/bubbletea/v2` v2.0.10, 2026-09-24) | Select, MultiSelect with a "select at least one" validator, Input, and Input in password mode. Replaces `AlecAivazis/survey` (no release since 2022). Put it behind `internal/prompt` so tests can script answers. |
+| Git | `git2` (libgit2) | **stdlib** `os/exec` calling the `git` CLI, behind the `Git` interface (F9) | stdlib | Exact behaviour, including rebase and annotated tags. Considered: `github.com/go-git/go-git/v5` (v5.19.2, 2026-07-29; no rebase, and v6 is still alpha). |
+| HTTP + retry | reqwest-middleware + reessaie | **stdlib** `net/http` with a retrying `RoundTripper` | stdlib | About 80 lines: exponential backoff with jitter, 5 retries, honours `Retry-After` (seconds or HTTP date), logs rate-limit warnings (F15.1). Considered: `hashicorp/go-retryablehttp` (last release v0.7.8, 2025-06). |
+| GitHub upload URL template | URI template | **stdlib** `net/url` | stdlib | Remove the `{?name,label}` suffix from `upload_url` and set `?name=`. No template library needed (`yosida95/uritemplate` has had no release since 2022). |
+| Command splitting | `execute` | Hand-written tokenizer in `internal/steps/command` | n/a | About 50 lines: whitespace separates words, `'…'` and `"…"` quote, backslash escapes, **no** `$VAR` expansion (matches Knope). Rejected: `google/shlex` (no change since 2019); `mvdan.cc/sh/v3/shell.Fields` (expands variables); `mattn/go-shellwords` (recent tag, but `go 1.13` module and adds little). |
+| Base64 (Jira auth) | `base64` | **stdlib** `encoding/base64` | stdlib | |
+| Logging | tracing | **stdlib** `log/slog` with a custom plain handler | stdlib | No level, time or target prefix. See F3. |
+| Diagnostics | miette | Custom `Diagnostic` interface: `Code()`, `Help()`, `URL()`, optional source span | n/a | See F3. |
+| User config dir | `dirs` | **stdlib** `os.UserConfigDir()` | stdlib | Same locations as Rust `dirs::config_dir()`. |
+| Dates | `time` | **stdlib** `time` (`time.Now().UTC().Format(time.DateOnly)`) | stdlib | |
+| Conventional commits | `git-conventional` | Hand-written parser in `pkg/versioning/changes` | n/a | Must match `git-conventional`'s grammar exactly (F10.1). Considered: `github.com/leodido/go-conventionalcommits` (v0.13.0, 2026-07). Its grammar and footer rules differ, so it would need adapting anyway. |
+| Semver | own | Own type in `pkg/versioning/semver` | n/a | Knope's version grammar is a strict subset of SemVer and has non-standard ordering (F1), so a general semver library would not help. |
+| CLI golden tests | snapbox | **`github.com/rogpeppe/go-internal/testscript`** | v1.16.0, 2026-07-01 (needs Go 1.25) | Runs the binary against `.txtar` scripts. See Testing strategy. |
+| Test diffs | pretty_assertions | `github.com/google/go-cmp` | v0.7.0, 2025-01 | Stable, maintained by Google. Optional: stdlib `testing` is enough for most tests. |
+
+**Removed from the earlier draft:** `spf13/cobra` (replaced by urfave/cli), `iancoleman/orderedmap` (stdlib
+jsontext), `gopkg.in/yaml.v3` (unmaintained), `bmatcuk/doublestar` (stdlib, kept as fallback), `google/shlex`
+(dead), `hashicorp/go-retryablehttp` (stdlib), `charmbracelet/huh` v1 (moved to `charm.land/huh/v2`).
 
 ---
 
@@ -297,6 +317,40 @@ Load():
 
 Forges are **never** auto-detected when `knope.toml` exists. The source type decides which CLI flags exist (F3).
 
+### F2.4 Loading with koanf (Go design)
+
+koanf does the loading and decoding. Two of its defaults don't fit `knope.toml`, so a TOML index fills the gaps.
+
+1. **Key delimiter.** koanf splits keys on its delimiter (`.` by default). Package names (`[packages."foo.bar"]`,
+   `[packages."@scope/pkg.js"]`) and `variables` keys (such as `"{version}"`, or anything with a dot) can contain
+   dots. Create the instance with a delimiter that can't appear in TOML keys:
+   `koanf.NewWithConf(koanf.Conf{Delim: "\x1f", StrictMerge: true})`.
+2. **Order.** `parsers/toml/v2` decodes into `map[string]any`, so the declaration order of `[packages.*]` and
+   `variables` is lost. Both orders matter (package order drives action and tag order, and variable order drives
+   replacement order, F4.4). Read the original bytes a second time with `go-toml/v2/unstable` and build a
+   `tomlIndex` that holds:
+   - the ordered keys of `packages` and of every `variables` table, keyed by their TOML path;
+   - the byte span of every table and array element (`package`, `packages.X`, `versioned_files[i]`, `workflows[i]`),
+     used for diagnostics (F2.2, F3.3).
+
+   After decoding, re-order the `packages` and `variables` maps using the index.
+3. **Decoding.** `k.UnmarshalWithConf("", &raw, koanf.UnmarshalConf{Tag: "toml", DecoderConfig: …})` with
+   `mapstructure` decode hooks for the untagged and tagged unions:
+   - `versioned_files[]`: string → `{path}`; table → `{path, dependency}` or `{path, regex}`, where `regex` is a
+     string or `[]string`;
+   - `assets`: string (glob) or a list of `{path, name?}`;
+   - `workflows[].steps[]`: switch on `type` into the concrete step struct (F4.2), and `BumpVersion` on `rule`;
+   - `Variable` values: exactly `Version` | `ChangelogEntry` | `IssueBranch`.
+
+   Leave `ErrorUnused` off, so unknown keys are ignored as in Knope (Quirk Q1). Decode errors are wrapped as
+   diagnostics, with spans looked up in the index.
+4. **Layers.** Only one source, `file.Provider("knope.toml")`, is needed for parity. Defaults for Hybrid configs
+   (F2.3) are applied to the decoded structs, not merged as koanf layers, because "missing" means "detect from the
+   working directory", not a fixed value. Extra layers later (for example `remeris.toml` overrides or `REMERIS_*` env
+   vars) are where koanf pays off (Open question 1).
+
+If `knope.toml` is missing, skip koanf entirely and go to `ConfigSource.Default` (F20).
+
 ### Acceptance (F2)
 - Fixtures: `tests/prepare_release/{invalid_versioned_files,missing_versioned_files,unknown_versioned_file_format}`, and the `package`/`packages` conflict.
 
@@ -327,6 +381,22 @@ remeris --help | --version
 - No subcommand (and no `--validate`) → error `No workflow selected. Run 'knope --help' for a list of options.`
 - Unknown workflow names are rejected by the CLI parser. Knope also has a fallback `No workflow named {name}`.
 - `--help` on the root lists workflows. `<workflow> --help` shows the flags for that workflow.
+
+**urfave/cli v3 mapping.**
+- Load the config **before** building the command tree (as Knope does), because workflows become subcommands:
+  `root.Commands = append(root.Commands, &cli.Command{Name: w.Name, Usage: w.HelpText, Flags: …, Action: runWorkflow(w)})`.
+- `--dry-run` and `--verbose` (alias `v`) are `*cli.BoolFlag` on the root. v3 root flags are persistent by default,
+  so `remeris release --dry-run` works, as in clap's `global(true)`.
+- `--generate`, `--upgrade` and `--validate` are root `BoolFlag`s with `Local: true`, added only for the matching
+  ConfigSource. The root `Action` handles them, and errors with `No workflow selected…` when none is set.
+- `--override-version`: one package → `*cli.StringFlag` validated by F1 parsing. Several packages →
+  `*cli.StringSliceFlag` of `name=version`.
+- `--prerelease-label`: `*cli.StringFlag{Sources: cli.EnvVars("KNOPE_PRERELEASE_LABEL")}`. The flag wins over the env
+  var because of urfave's value precedence.
+- `root.Version` gives `--version`. Help text formatting differs from clap. Golden tests should not compare
+  `--help` output byte-for-byte.
+- Exit codes: return the `Diagnostic` from the action. `main` renders it to stderr and exits 1 (do not use
+  `cli.Exit` inside steps).
 
 > **Decision:** keep `knope` in the user-facing strings for now so the golden files match byte-for-byte. Replace
 > them with `remeris` later behind one constant (see Open questions).
@@ -446,7 +516,8 @@ Source: `step/command.rs`
 1. Substitute variables (F4.4) into `command`.
 2. Dry run: log `Would run {command}` and return.
 3. If `shell == true`: run through the platform shell (`sh -c "<cmd>"` on Unix, `cmd /C "<cmd>"` on Windows).
-   Otherwise split with shell-words rules (quotes and escapes) into argv and run it directly (no shell).
+   Otherwise split the string into argv with the hand-written tokenizer (whitespace separates words, `'…'` and `"…"`
+   quote, backslash escapes, no `$VAR` expansion; see 0.3) and run it directly (no shell).
 4. Inherit stdin, stdout and stderr, and the working directory.
 5. Non-zero exit → `Command returned non-zero exit code`. Spawn failure → `I/O error: {err}`.
 
@@ -575,8 +646,10 @@ For each format: **read** (where the version comes from), **write** (what is edi
 
 #### `deno.json` / `deno.jsonc`
 - Parse as JSONC. Read `version` (missing or invalid → no version).
-- Write (no dependency): set `version`, re-serialise as plain pretty JSON. **Quirk Q6:** comments are lost, even
-  though the docs say they are kept. Diff `version = {v}`.
+- Write (no dependency): Knope sets `version` and re-serialises the whole file as plain pretty JSON. **Quirk Q6:**
+  comments and formatting are lost, even though the docs say they are kept. **Decision:** with `hujson`, patch only
+  the `version` value (or insert the member) and keep everything else, as the docs promise. Update the Deno fixtures
+  and record the deviation. Diff `version = {v}`.
 - Write with a dependency: **no-op** (deno.lock owns dependency versions).
 
 #### `deno.lock`
@@ -760,7 +833,7 @@ be staged as deletions too (libgit2 `add_all` does this for tracked deleted file
 Knope calls `repo.tag(name, HEAD, signature, "", force=false)`. That makes an **annotated tag with an empty
 message**, using the configured committer (`user.name` and `user.email` must be set, else
 `Could not determine Git committer…`). Go: `git tag -a <name> -m ""` (use `--cleanup=verbatim` so an empty message is
-allowed), or the go-git equivalent. It fails if the tag already exists.
+allowed). It fails if the tag already exists.
 
 ### F9.6 Misc
 - `HeadCommitSHA`: full 40-char SHA.
@@ -1334,10 +1407,17 @@ Fixtures: `tests/upgrade/*`, `tests/validate/*`.
    - `out/`: the expected files after a real run. `dryrun_stdout.log` / `stdout.log` / `stderr.log` hold the
      expected output, with `[DATE]` standing in for today's date.
 
-   Build a Go harness (`internal/testharness`) that copies `in/` to a temp dir, runs `git init` with a fixed author,
-   replays the Git script, runs the binary (dry run and real), then compares `out/` and the logs. Convert each
-   `mod.rs` into a small `case.yaml` (commits, tags, remote, env, args, expected_tags). Vendor the fixtures under
-   `testdata/knope/` with attribution (Knope is MIT-licensed). Enable them one milestone at a time. Keep a
+   Use `github.com/rogpeppe/go-internal/testscript` as the harness. Convert each Knope case with a one-off script
+   into a `.txtar` file under `testdata/script/<suite>/<case>.txtar`, holding:
+   - the `in/` files as txtar sections;
+   - the Git setup as commands (`git init`, `git commit --allow-empty -m '…'`, `git tag …`, with a fixed author
+     through `env GIT_AUTHOR_NAME=…`);
+   - `exec remeris --dry-run release` with `cmp stdout dryrun_stdout.log`, then a real run and `cmp` against each
+     `out/` file;
+   - `[DATE]` handled by a custom `date` command, or by setting `REMERIS_FAKE_DATE` in tests (read only by a test hook).
+
+   `testscript.Main` registers the binary in-process through `TestMain`, so no separate build step is needed.
+   Credit the fixtures to Knope (MIT-licensed). Enable them one milestone at a time. Keep a
    `testdata/deviations.md` listing each fixture changed for a Quirk decision.
 3. **HTTP tests:** use `httptest.Server` with a configurable API base URL (GitHub base URL and Gitea host), and
    check the request bodies against F16/F17. The Knope `integration_github` / `integration_gitea` suites hit real
@@ -1355,7 +1435,7 @@ Fixtures: `tests/upgrade/*`, `tests/validate/*`.
 | Q3 | `CurrentBranch` returns `refs/heads/...`. This breaks the GitHub PR head and `SelectIssueFromBranch` | F9.6, F18, F19.5 | **Fix** (short name). Update the golden logs. |
 | Q4 | Changeset package names are not unquoted, so `"pkg": minor` gives name `"pkg"` | F11.1 | Keep (compatibility). Consider stripping quotes later. |
 | Q5 | Change-file front-matter order comes from a HashMap (random) | F11.4 | Use selection order (deterministic) |
-| Q6 | `deno.json(c)` edits drop comments, despite the docs | F6.2 | Keep for v1, then improve with hujson |
+| Q6 | `deno.json(c)` edits drop comments, despite the docs | F6.2 | **Fix** with an in-place `hujson` edit |
 | Q7 | `pom.xml` is fully re-emitted and loses formatting | F6.2 | **Fix** with a surgical edit |
 | Q8 | Regex write replaces every occurrence of the version text inside the match | F6.2 | Keep |
 | Q9 | `--upgrade` regenerates the whole file (comments lost, hybrid defaults written out) | F21 | Keep for v1. Later: edit in place. |
@@ -1371,11 +1451,13 @@ Fixtures: `tests/upgrade/*`, `tests/validate/*`.
 
 1. **Name and config file.** Should `remeris` read only `knope.toml`, or also `remeris.toml` (and which one wins)?
    Should user-facing strings say `knope` (golden parity) or `remeris`? The spec assumes `knope.toml` and Knope's
-   strings behind one constant.
-2. **Git backend.** `git` CLI (needs git installed, gives exact behaviour) or go-git (pure Go, no rebase)? The spec
-   recommends the CLI behind an interface.
+   strings behind one constant. If `remeris.toml` is added, it becomes a second koanf layer (F2.4).
+2. **Git backend.** The spec now uses the `git` CLI through `os/exec` (0.3), so `git` must be installed. Is that
+   acceptable for every target environment, or do we need a pure-Go fallback (go-git v5) for the read-only calls?
 3. **Scope.** Knope Bot (the GitHub App) shares `knope-config` but is **out of scope** here. Confirm.
 4. **Diagnostics fidelity.** Is message, help and URL parity enough, or do we want miette-style source snippets for
    config errors in v1?
 5. **Jira search endpoint.** Keep `/rest/api/3/search` (as Knope does) or move to `/rest/api/3/search/jql`?
 6. **RebaseBranch semantics** (Q14). Confirm that switching to the target branch afterwards is intended.
+7. **Go 1.27 minimum.** The spec needs Go 1.27 for the GA `encoding/json/v2`/`jsontext`. Is it acceptable to require
+   the latest toolchain from day one?
