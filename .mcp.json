@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "gopls": {
+      "type": "stdio",
+      "command": "mise",
+      "args": ["exec", "--env", "claude", "--", "gopls", "mcp"]
+    },
+    "hk": {
+      "type": "stdio",
+      "command": "mise",
+      "args": ["exec", "--", "hk", "mcp", "--root", "."]
+    }
+  }
+}
