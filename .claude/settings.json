@@ -1,0 +1,110 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__gopls*",
+      "mcp__hk__inspect_project",
+      "mcp__hk__plan",
+      "mcp__hk__start_safe_check",
+      "mcp__hk__get_run",
+      "mcp__hk__get_output",
+      "mcp__hk__get_diff",
+      "LSP",
+      "Bash(./build/remeris:*)",
+      "Bash(mise run:*)",
+      "Bash(mise --version:*)",
+      "Bash(git add:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git commit:*)",
+      "Bash(git diff:*)",
+      "Bash(git fetch:*)",
+      "Bash(git log:*)",
+      "Bash(git pull:*)",
+      "Bash(git status:*)",
+      "Bash(git worktree:*)",
+      "Bash(go build:*)",
+      "Bash(go get:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(go run:*)",
+      "Bash(go test:*)",
+      "Bash(go tool:*)",
+      "Bash(go version:*)",
+      "Bash(go vet:*)",
+      "Bash(golangci-lint:*)",
+      "Bash(gopls version:*)",
+      "Bash(hk check:*)",
+      "Bash(hk fix:*)",
+      "Bash(awk:*)",
+      "Bash(ls:*)",
+      "Bash(fd:*)",
+      "Bash(rg:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:pkg.go.dev)",
+      "WebFetch(domain:go.dev)",
+      "WebFetch(domain:proxy.golang.org)",
+      "WebFetch(domain:sum.golang.org)",
+      "WebFetch(domain:docs.renovatebot.com)",
+      "WebFetch(domain:hk.jdx.dev)",
+      "WebFetch(domain:mise.jdx.dev)"
+    ],
+    "deny": [
+      "Bash(tree:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(sudo *)",
+      "Bash(rm -rf *)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(**/credentials.json)"
+    ],
+    "ask": ["Bash(git push:*)", "mcp__hk__start_check", "mcp__hk__start_safe_fix"],
+    "defaultMode": "plan"
+  },
+  "enabledMcpjsonServers": ["gopls", "hk"],
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/setup_remote.sh",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "GOCACHE": "/tmp/claude/go-build",
+    "GOMODCACHE": "/tmp/claude/go-mod"
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "api.github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+        "proxy.golang.org",
+        "sum.golang.org",
+        "storage.googleapis.com",
+        "go.dev",
+        "dl.google.com",
+        "mise.jdx.dev"
+      ]
+    }
+  },
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true
+  }
+}

@@ -1,0 +1,18 @@
+amends "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Builtins.pkl"
+
+// Shared by the implicit check, fix and pre-commit hooks.
+steps {
+  ["trailing-whitespace"] = Builtins.trailing_whitespace
+  ["end-of-file-fixer"] = Builtins.newlines
+  ["mixed-line-ending"] = Builtins.mixed_line_ending
+  ["check-symlinks"] = Builtins.check_symlinks
+  ["check-added-large-files"] = Builtins.check_added_large_files
+  ["check-executables-have-shebangs"] = Builtins.check_executables_have_shebangs
+  ["check-merge-conflict"] = Builtins.check_merge_conflict
+  ["detect-private-key"] = Builtins.detect_private_key
+  ["go-mod-tidy"] = Builtins.gomod_tidy
+  ["golangci-lint-fmt"] = Builtins.golangci_lint_fmt
+  ["golangci-lint"] = Builtins.golangci_lint
+  ["zizmor"] = Builtins.zizmor
+}

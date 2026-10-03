@@ -1,0 +1,5 @@
+[tools]
+go = "1.27.1"
+golangci-lint = "2.14.0"
+hk = "2.4.0"
+zizmor = "1.30.1"

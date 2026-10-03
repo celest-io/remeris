@@ -1,0 +1,6 @@
+# Tools for coding agents only. Loaded with `mise --env claude` (see .mcp.json), so CI does not build them.
+[tools]
+"go:golang.org/x/tools/gopls" = "0.23.0"
+
+[env]
+ENABLE_LSP_TOOL = true
