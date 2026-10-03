@@ -70,7 +70,8 @@ func TestRunLogsEachStepAtDebug(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if strings.Count(out, "level=DEBUG") != 2 || !strings.Contains(out, "Running step A") || !strings.Contains(out, "Running step B") {
+	if strings.Count(out, "level=DEBUG") != 2 || !strings.Contains(out, "Running step A") ||
+		!strings.Contains(out, "Running step B") {
 		t.Errorf("expected a debug line before each step, got:\n%s", out)
 	}
 }

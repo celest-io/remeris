@@ -8,13 +8,22 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+const (
+	rootName     = "remeris"
+	workflowName = "release"
+	flagDryRun   = "--dry-run"
+	labelRC      = "rc"
+	envLabel     = "REMERIS_PRERELEASE_LABEL"
+	flagOverride = "--override-version"
+)
+
 // run builds the same shape of command tree as internal/cli and returns the options seen by the
 // workflow's action.
 func run(t *testing.T, args ...string) (*GlobalOptions, *WorkflowOptions) {
 	t.Helper()
 	global, workflow := DefaultGlobalOptions(), DefaultWorkflowOptions()
 	root := &cli.Command{
-		Name: "remeris",
+		Name: rootName,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "dry-run"},
 			&cli.BoolFlag{Name: "verbose", Aliases: []string{"v"}},
@@ -25,22 +34,25 @@ func run(t *testing.T, args ...string) (*GlobalOptions, *WorkflowOptions) {
 		},
 		Action: func(context.Context, *cli.Command) error { return nil },
 		Commands: []*cli.Command{{
-			Name: "release",
+			Name: workflowName,
 			Flags: []cli.Flag{
 				&cli.StringSliceFlag{Name: "override-version"},
-				&cli.StringFlag{Name: "prerelease-label", Sources: cli.EnvVars("REMERIS_PRERELEASE_LABEL", "KNOPE_PRERELEASE_LABEL")},
+				&cli.StringFlag{
+					Name:    "prerelease-label",
+					Sources: cli.EnvVars(envLabel, "KNOPE_PRERELEASE_LABEL"),
+				},
 			},
 			Action: func(_ context.Context, cmd *cli.Command) error { return LoadConfig(cmd, workflow) },
 		}},
 	}
-	if err := root.Run(context.Background(), append([]string{"remeris"}, args...)); err != nil {
+	if err := root.Run(context.Background(), append([]string{rootName}, args...)); err != nil {
 		t.Fatalf("Run(%v): %v", args, err)
 	}
 	return global, workflow
 }
 
 func TestLoadConfigDefaults(t *testing.T) {
-	global, workflow := run(t, "release")
+	global, workflow := run(t, workflowName)
 	if !reflect.DeepEqual(global, DefaultGlobalOptions()) {
 		t.Errorf("global = %+v", global)
 	}
@@ -54,11 +66,14 @@ func TestLoadConfigRootFlags(t *testing.T) {
 		args []string
 		want GlobalOptions
 	}{
-		"before the workflow":        {[]string{"--dry-run", "-v", "release"}, GlobalOptions{DryRun: true, Verbose: true}},
-		"after the workflow":         {[]string{"release", "--dry-run", "--verbose"}, GlobalOptions{DryRun: true, Verbose: true}},
-		"only dry run":               {[]string{"release", "--dry-run"}, GlobalOptions{DryRun: true}},
+		"before the workflow": {[]string{flagDryRun, "-v", workflowName}, GlobalOptions{DryRun: true, Verbose: true}},
+		"after the workflow": {
+			[]string{workflowName, flagDryRun, "--verbose"},
+			GlobalOptions{DryRun: true, Verbose: true},
+		},
+		"only dry run":               {[]string{workflowName, flagDryRun}, GlobalOptions{DryRun: true}},
 		"local flag on the root":     {[]string{"--validate"}, GlobalOptions{Validate: true}},
-		"local flag with a workflow": {[]string{"--validate", "release"}, GlobalOptions{Validate: true}},
+		"local flag with a workflow": {[]string{"--validate", workflowName}, GlobalOptions{Validate: true}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -77,40 +92,40 @@ func TestLoadConfigWorkflowFlags(t *testing.T) {
 		want WorkflowOptions
 	}{
 		"flag": {
-			args: []string{"release", "--prerelease-label", "rc"},
-			want: WorkflowOptions{PrereleaseLabel: "rc"},
+			args: []string{workflowName, "--prerelease-label", labelRC},
+			want: WorkflowOptions{PrereleaseLabel: labelRC},
 		},
 		"remeris env var": {
-			env:  map[string]string{"REMERIS_PRERELEASE_LABEL": "beta"},
-			args: []string{"release"},
+			env:  map[string]string{envLabel: "beta"},
+			args: []string{workflowName},
 			want: WorkflowOptions{PrereleaseLabel: "beta"},
 		},
 		"knope env var as fallback": {
 			env:  map[string]string{"KNOPE_PRERELEASE_LABEL": "alpha"},
-			args: []string{"release"},
+			args: []string{workflowName},
 			want: WorkflowOptions{PrereleaseLabel: "alpha"},
 		},
 		"remeris env var wins over knope": {
-			env:  map[string]string{"REMERIS_PRERELEASE_LABEL": "new", "KNOPE_PRERELEASE_LABEL": "old"},
-			args: []string{"release"},
+			env:  map[string]string{envLabel: "new", "KNOPE_PRERELEASE_LABEL": "old"},
+			args: []string{workflowName},
 			want: WorkflowOptions{PrereleaseLabel: "new"},
 		},
 		"flag wins over env var": {
-			env:  map[string]string{"REMERIS_PRERELEASE_LABEL": "env"},
-			args: []string{"release", "--prerelease-label=flag"},
+			env:  map[string]string{envLabel: "env"},
+			args: []string{workflowName, "--prerelease-label=flag"},
 			want: WorkflowOptions{PrereleaseLabel: "flag"},
 		},
 		"one version override": {
-			args: []string{"release", "--override-version", "1.2.3"},
+			args: []string{workflowName, flagOverride, "1.2.3"},
 			want: WorkflowOptions{OverrideVersion: []string{"1.2.3"}},
 		},
 		"repeated overrides": {
-			args: []string{"release", "--override-version", "a=1.0.0", "--override-version=b=2.0.0"},
+			args: []string{workflowName, flagOverride, "a=1.0.0", "--override-version=b=2.0.0"},
 			want: WorkflowOptions{OverrideVersion: []string{"a=1.0.0", "b=2.0.0"}},
 		},
 		"root and workflow flags together": {
-			args: []string{"--dry-run", "release", "--prerelease-label", "rc", "--override-version", "1.0.0"},
-			want: WorkflowOptions{PrereleaseLabel: "rc", OverrideVersion: []string{"1.0.0"}},
+			args: []string{flagDryRun, workflowName, "--prerelease-label", labelRC, flagOverride, "1.0.0"},
+			want: WorkflowOptions{PrereleaseLabel: labelRC, OverrideVersion: []string{"1.0.0"}},
 		},
 	}
 	for name, tc := range cases {
@@ -129,11 +144,11 @@ func TestLoadConfigWorkflowFlags(t *testing.T) {
 func TestLoadConfigKeepsPresetValuesForUnsetFlags(t *testing.T) {
 	cfg := &WorkflowOptions{PrereleaseLabel: "preset"}
 	cmd := &cli.Command{
-		Name:   "remeris",
+		Name:   rootName,
 		Flags:  []cli.Flag{&cli.StringFlag{Name: "prerelease-label"}},
 		Action: func(_ context.Context, cmd *cli.Command) error { return LoadConfig(cmd, cfg) },
 	}
-	if err := cmd.Run(context.Background(), []string{"remeris"}); err != nil {
+	if err := cmd.Run(context.Background(), []string{rootName}); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.PrereleaseLabel != "preset" {
@@ -144,9 +159,9 @@ func TestLoadConfigKeepsPresetValuesForUnsetFlags(t *testing.T) {
 func TestCommandPath(t *testing.T) {
 	var gotRoot, gotChild, gotGrandchild string
 	root := &cli.Command{
-		Name: "remeris",
+		Name: rootName,
 		Commands: []*cli.Command{{
-			Name: "release",
+			Name: workflowName,
 			Commands: []*cli.Command{{
 				Name: "deep",
 				Action: func(_ context.Context, cmd *cli.Command) error {
@@ -156,10 +171,10 @@ func TestCommandPath(t *testing.T) {
 			}},
 		}},
 	}
-	if err := root.Run(context.Background(), []string{"remeris", "release", "deep"}); err != nil {
+	if err := root.Run(context.Background(), []string{rootName, workflowName, "deep"}); err != nil {
 		t.Fatal(err)
 	}
-	if gotRoot != "remeris" || gotChild != "remeris.release" || gotGrandchild != "remeris.release.deep" {
+	if gotRoot != rootName || gotChild != "remeris.release" || gotGrandchild != "remeris.release.deep" {
 		t.Errorf("paths = %q, %q, %q", gotRoot, gotChild, gotGrandchild)
 	}
 }

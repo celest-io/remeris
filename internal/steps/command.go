@@ -44,7 +44,7 @@ func (c *Command) Run(ctx context.Context, rt workflow.RunType[workflow.State]) 
 		if len(args) == 0 {
 			return rt, ioError(errors.New("the command is empty"))
 		}
-		cmd = exec.Command(args[0], args[1:]...)
+		cmd = exec.Command(args[0], args[1:]...) //nolint:gosec // running the configured command is the purpose of this step
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 

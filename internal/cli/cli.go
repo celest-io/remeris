@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/urfave/cli/v3"
+
 	"github.com/celest-io/remeris/internal/app"
 	"github.com/celest-io/remeris/internal/brand"
 	"github.com/celest-io/remeris/internal/config"
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/version"
 	"github.com/celest-io/remeris/internal/workflow"
-	"github.com/urfave/cli/v3"
 )
 
 // Main loads the configuration, runs the command line in args and returns the process exit code.
@@ -34,7 +35,13 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 	global := app.DefaultGlobalOptions()
 
 	// urfave's default version flag claims -v, which is --verbose here.
-	cli.VersionFlag = &cli.BoolFlag{Name: "version", Aliases: []string{"V"}, Usage: "Print version", HideDefault: true, Local: true}
+	cli.VersionFlag = &cli.BoolFlag{
+		Name:        "version",
+		Aliases:     []string{"V"},
+		Usage:       "Print version",
+		HideDefault: true,
+		Local:       true,
+	}
 	cli.VersionPrinter = func(cmd *cli.Command) {
 		_, _ = fmt.Fprintf(cmd.Root().Writer, "%s %s\n", cmd.Root().Name, cmd.Root().Version)
 	}

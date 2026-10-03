@@ -20,7 +20,7 @@ func WriteFile(dryRun bool, path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(path, data, 0o644) //nolint:gosec // files in a repository are meant to be readable
 }
 
 // Remove deletes the file at path. In a dry run it only logs what would happen.

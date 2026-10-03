@@ -14,10 +14,18 @@ import (
 	"github.com/celest-io/remeris/internal/workflow"
 )
 
+const (
+	wfRelease          = "release"
+	wfDocumentChange   = "document-change"
+	stepRelease        = "Release"
+	stepCommand        = "Command"
+	stepPrepareRelease = "PrepareRelease"
+)
+
 func load(t *testing.T, content string) (*Config, error) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "knope.toml")
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return Load(path)
@@ -55,7 +63,7 @@ func TestLoadMissingFileGivesDefault(t *testing.T) {
 	for _, w := range cfg.Workflows {
 		names = append(names, w.Name)
 	}
-	if want := []string{"release", "document-change"}; !slices.Equal(names, want) {
+	if want := []string{wfRelease, wfDocumentChange}; !slices.Equal(names, want) {
 		t.Errorf("default workflows = %v, want %v", names, want)
 	}
 }
@@ -68,23 +76,23 @@ func TestLoadFillsInWorkflows(t *testing.T) {
 	}{
 		"no workflows, no packages": {
 			toml:      "",
-			wantNames: []string{"release", "document-change"},
-			wantPush:  "Release",
+			wantNames: []string{wfRelease, wfDocumentChange},
+			wantPush:  stepRelease,
 		},
 		"forge changes the release workflow": {
 			toml:      "[github]\nowner = \"o\"\nrepo = \"r\"\n",
-			wantNames: []string{"release", "document-change"},
-			wantPush:  "Command",
+			wantNames: []string{wfRelease, wfDocumentChange},
+			wantPush:  stepCommand,
 		},
 		"one declared package adds get-version": {
 			toml:      "[package]\nversioned_files = [\"Cargo.toml\"]\n",
-			wantNames: []string{"release", "document-change", "get-version"},
-			wantPush:  "Release",
+			wantNames: []string{wfRelease, wfDocumentChange, "get-version"},
+			wantPush:  stepRelease,
 		},
 		"two packages do not": {
 			toml:      "[packages.a]\n[packages.b]\n",
-			wantNames: []string{"release", "document-change"},
-			wantPush:  "Release",
+			wantNames: []string{wfRelease, wfDocumentChange},
+			wantPush:  stepRelease,
 		},
 	}
 	for name, tc := range cases {
@@ -123,9 +131,27 @@ func TestDefaultWorkflows(t *testing.T) {
 		release  []string
 		hasGet   bool
 	}{
-		"no forge, no package": {false, 0, `git commit -m "chore: prepare release $version"`, []string{"PrepareRelease", "Command", "Release", "Command", "Command"}, false},
-		"forge, one package":   {true, 1, `git commit -m "chore: prepare release $version"`, []string{"PrepareRelease", "Command", "Command", "Release"}, true},
-		"two packages":         {false, 2, `git commit -m "chore: prepare releases"`, []string{"PrepareRelease", "Command", "Release", "Command", "Command"}, false},
+		"no forge, no package": {
+			false,
+			0,
+			`git commit -m "chore: prepare release $version"`,
+			[]string{stepPrepareRelease, stepCommand, stepRelease, stepCommand, stepCommand},
+			false,
+		},
+		"forge, one package": {
+			true,
+			1,
+			`git commit -m "chore: prepare release $version"`,
+			[]string{stepPrepareRelease, stepCommand, stepCommand, stepRelease},
+			true,
+		},
+		"two packages": {
+			false,
+			2,
+			`git commit -m "chore: prepare releases"`,
+			[]string{stepPrepareRelease, stepCommand, stepRelease, stepCommand, stepCommand},
+			false,
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -147,7 +173,13 @@ func TestDefaultWorkflows(t *testing.T) {
 	}
 
 	noForge := DefaultWorkflows(false, 1)
-	if cmds := []string{noForge[0].Steps[3].(*steps.Command).Command, noForge[0].Steps[4].(*steps.Command).Command}; !slices.Equal(cmds, []string{"git push", "git push --tags"}) {
+	if cmds := []string{
+		noForge[0].Steps[3].(*steps.Command).Command,
+		noForge[0].Steps[4].(*steps.Command).Command,
+	}; !slices.Equal(
+		cmds,
+		[]string{"git push", "git push --tags"},
+	) {
 		t.Errorf("no-forge push commands = %v", cmds)
 	}
 	if got := noForge[2].Steps[0].(*steps.Command).Command; got != `echo "$version"` {
@@ -241,9 +273,12 @@ func TestDecodeEveryStepType(t *testing.T) {
 		&steps.Release{},
 		&steps.CreateChangeFile{},
 		&steps.CreatePullRequest{
-			Base:  "main",
-			Title: variables.Template{Text: "Release $version", Variables: []variables.Entry{{Key: "$version", Variable: variables.Version}}},
-			Body:  variables.Template{Text: "$changelog"},
+			Base: "main",
+			Title: variables.Template{
+				Text:      "Release $version",
+				Variables: []variables.Entry{{Key: "$version", Variable: variables.Version}},
+			},
+			Body: variables.Template{Text: "$changelog"},
 		},
 		&steps.SelectJiraIssue{Status: "Ready"},
 		&steps.TransitionJiraIssue{Status: "Done"},
@@ -503,7 +538,12 @@ project = "PRJ"
 	if !reflect.DeepEqual(cfg.Package.VersionedFiles, wantFiles) {
 		t.Errorf("versioned files:\n got %+v\nwant %+v", cfg.Package.VersionedFiles, wantFiles)
 	}
-	if want := []ExtraSection{{Name: "Notes", Footers: []string{"Changelog-Note"}, Types: []string{"docs"}}}; !reflect.DeepEqual(cfg.Package.ExtraChangelogSections, want) {
+	if want := []ExtraSection{
+		{Name: "Notes", Footers: []string{"Changelog-Note"}, Types: []string{"docs"}},
+	}; !reflect.DeepEqual(
+		cfg.Package.ExtraChangelogSections,
+		want,
+	) {
 		t.Errorf("extra sections = %+v", cfg.Package.ExtraChangelogSections)
 	}
 	if want := []Asset{{Path: "dist/*.zip", Name: "bundle"}}; !reflect.DeepEqual(cfg.Package.Assets, want) {
@@ -540,7 +580,7 @@ func TestInvalidWorkflowNames(t *testing.T) {
 			}
 		})
 	}
-	for _, ok := range []string{"release", "document-change", "get_version", "A1", "9"} {
+	for _, ok := range []string{wfRelease, wfDocumentChange, "get_version", "A1", "9"} {
 		if _, err := load(t, "[[workflows]]\nname = \""+ok+"\"\n"); err != nil {
 			t.Errorf("name %q rejected: %v", ok, err)
 		}
@@ -572,21 +612,54 @@ func TestInvalidStepsAndVariables(t *testing.T) {
 		toml    string
 		wantErr string
 	}{
-		"unknown type":           {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Nope\"\n", `Unknown step type "Nope"`},
-		"missing type":           {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ncommand=\"x\"\n", "missing its 'type' key"},
-		"step not a table":       {"[[workflows]]\nname=\"w\"\nsteps = [\"Release\"]\n", "must be a table with a 'type' key"},
-		"bad bump rule":          {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"BumpVersion\"\nrule=\"Huge\"\n", `Unknown BumpVersion rule "Huge"`},
-		"missing bump rule":      {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"BumpVersion\"\n", `Unknown BumpVersion rule ""`},
-		"pre without label":      {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"BumpVersion\"\nrule=\"Pre\"\n", "requires a 'label'"},
-		"unknown variable":       {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Command\"\ncommand=\"x\"\nvariables={a=\"Nope\"}\n", "Unknown variable Nope"},
-		"variable not string":    {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Command\"\ncommand=\"x\"\nvariables={a=1}\n", "Unknown variable 1"},
-		"variables not table":    {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Command\"\ncommand=\"x\"\nvariables=\"x\"\n", "'variables' must be a table"},
-		"wrong field type":       {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Command\"\ncommand=3\nshell=\"yes\"\n", "Invalid configuration in knope.toml"},
+		"unknown type": {
+			"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Nope\"\n",
+			`Unknown step type "Nope"`,
+		},
+		"missing type":     {"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ncommand=\"x\"\n", "missing its 'type' key"},
+		"step not a table": {"[[workflows]]\nname=\"w\"\nsteps = [\"Release\"]\n", "must be a table with a 'type' key"},
+		"bad bump rule": {
+			"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"BumpVersion\"\nrule=\"Huge\"\n",
+			`Unknown BumpVersion rule "Huge"`,
+		},
+		"missing bump rule": {
+			"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"BumpVersion\"\n",
+			`Unknown BumpVersion rule ""`,
+		},
+		"pre without label": {
+			"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"BumpVersion\"\nrule=\"Pre\"\n",
+			"requires a 'label'",
+		},
+		"unknown variable": {
+			"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Command\"\ncommand=\"x\"\nvariables={a=\"Nope\"}\n",
+			"Unknown variable Nope",
+		},
+		"variable not string": {
+			"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Command\"\ncommand=\"x\"\nvariables={a=1}\n",
+			"Unknown variable 1",
+		},
+		"variables not table": {
+			"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Command\"\ncommand=\"x\"\nvariables=\"x\"\n",
+			"'variables' must be a table",
+		},
+		"wrong field type": {
+			"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"Command\"\ncommand=3\nshell=\"yes\"\n",
+			"Invalid configuration in knope.toml",
+		},
 		"versioned file no path": {"[package]\nversioned_files=[{dependency=\"x\"}]\n", "needs a string 'path'"},
 		"versioned file shape":   {"[package]\nversioned_files=[3]\n", "must be a path or a table"},
-		"regex wrong type":       {"[package]\nversioned_files=[{path=\"a\", regex=3}]\n", "'regex' of a must be a string or an array of strings"},
-		"regex item wrong type":  {"[package]\nversioned_files=[{path=\"a\", regex=[1]}]\n", "'regex' of a must be a string or an array of strings"},
-		"dependency wrong type":  {"[package]\nversioned_files=[{path=\"a\", dependency=1}]\n", "'dependency' of a must be a string"},
+		"regex wrong type": {
+			"[package]\nversioned_files=[{path=\"a\", regex=3}]\n",
+			"'regex' of a must be a string or an array of strings",
+		},
+		"regex item wrong type": {
+			"[package]\nversioned_files=[{path=\"a\", regex=[1]}]\n",
+			"'regex' of a must be a string or an array of strings",
+		},
+		"dependency wrong type": {
+			"[package]\nversioned_files=[{path=\"a\", dependency=1}]\n",
+			"'dependency' of a must be a string",
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -599,7 +672,10 @@ func TestInvalidStepsAndVariables(t *testing.T) {
 }
 
 func TestBumpVersionLabelOnlyForPre(t *testing.T) {
-	cfg := mustLoad(t, "[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"BumpVersion\"\nrule=\"Minor\"\nlabel=\"ignored\"\n")
+	cfg := mustLoad(
+		t,
+		"[[workflows]]\nname=\"w\"\n[[workflows.steps]]\ntype=\"BumpVersion\"\nrule=\"Minor\"\nlabel=\"ignored\"\n",
+	)
 	if got := stepsOf(t, cfg, "w")[0].(*steps.BumpVersion); got.Label != "" || got.Rule != steps.RuleMinor {
 		t.Errorf("step = %+v", got)
 	}

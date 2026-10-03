@@ -9,14 +9,15 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/celest-io/remeris/internal/brand"
-	"github.com/celest-io/remeris/internal/diag"
-	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/parsers/toml/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 	gotoml "github.com/pelletier/go-toml/v2"
+
+	"github.com/celest-io/remeris/internal/brand"
+	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/workflow"
 )
 
 // Source says where a Config came from, which decides the CLI flags that exist (spec F2.3, F3.1).
@@ -128,6 +129,9 @@ func (c *Config) Span(path ...any) (Span, bool) {
 	return c.index.Span(path...)
 }
 
+// tagName is the struct tag mapstructure reads field names from.
+const tagName = "toml"
+
 var workflowName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // Load reads the configuration at path, which is normally brand.ConfigFile in the working
@@ -187,11 +191,11 @@ func decode(path string, src []byte) (*Config, error) {
 
 	var r raw
 	err = k.UnmarshalWithConf("", &r, koanf.UnmarshalConf{
-		Tag: "toml",
+		Tag: tagName,
 		DecoderConfig: &mapstructure.DecoderConfig{
 			DecodeHook: decodeHook,
 			Result:     &r,
-			TagName:    "toml",
+			TagName:    tagName,
 			// Unknown keys are ignored, as in Knope (Quirk Q1): ErrorUnused stays off.
 		},
 	})

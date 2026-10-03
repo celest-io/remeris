@@ -15,6 +15,10 @@ import (
 	"github.com/celest-io/remeris/internal/workflow"
 )
 
+const (
+	milestone11 = "M11"
+)
+
 func skipOnWindows(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -26,12 +30,14 @@ func captureLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
 	old := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
-		if a.Key == slog.TimeKey || a.Key == slog.LevelKey {
-			return slog.Attr{}
-		}
-		return a
-	}})))
+	slog.SetDefault(
+		slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey || a.Key == slog.LevelKey {
+				return slog.Attr{}
+			}
+			return a
+		}})),
+	)
 	t.Cleanup(func() { slog.SetDefault(old) })
 	return &buf
 }
@@ -78,7 +84,11 @@ func TestCommandRun(t *testing.T) {
 		"success":         {step: Command{Command: "true"}},
 		"quoted argument": {step: Command{Command: `sh -c "exit 0"`}},
 		"shell success":   {step: Command{Command: "exit 0", Shell: true}},
-		"non-zero":        {step: Command{Command: "false"}, wantMsg: "Command returned non-zero exit code", wantHel: "Try running it manually"},
+		"non-zero": {
+			step:    Command{Command: "false"},
+			wantMsg: "Command returned non-zero exit code",
+			wantHel: "Try running it manually",
+		},
 		"shell non-zero":  {step: Command{Command: "exit 3", Shell: true}, wantMsg: "Command returned non-zero exit code"},
 		"missing program": {step: Command{Command: "remeris-no-such-program"}, wantMsg: "I/O error: "},
 		"empty command":   {step: Command{Command: "  "}, wantMsg: "I/O error: the command is empty"},
@@ -137,13 +147,13 @@ func TestUnimplementedSteps(t *testing.T) {
 		"PrepareRelease":        {&PrepareRelease{}, "M5"},
 		"Release":               {&Release{}, "M6"},
 		"CreatePullRequest":     {&CreatePullRequest{}, "M7"},
-		"SelectJiraIssue":       {&SelectJiraIssue{}, "M11"},
-		"TransitionJiraIssue":   {&TransitionJiraIssue{}, "M11"},
-		"SelectGitHubIssue":     {&SelectGitHubIssue{}, "M11"},
-		"SelectGiteaIssue":      {&SelectGiteaIssue{}, "M11"},
-		"SelectIssueFromBranch": {&SelectIssueFromBranch{}, "M11"},
-		"SwitchBranches":        {&SwitchBranches{}, "M11"},
-		"RebaseBranch":          {&RebaseBranch{}, "M11"},
+		"SelectJiraIssue":       {&SelectJiraIssue{}, milestone11},
+		"TransitionJiraIssue":   {&TransitionJiraIssue{}, milestone11},
+		"SelectGitHubIssue":     {&SelectGitHubIssue{}, milestone11},
+		"SelectGiteaIssue":      {&SelectGiteaIssue{}, milestone11},
+		"SelectIssueFromBranch": {&SelectIssueFromBranch{}, milestone11},
+		"SwitchBranches":        {&SwitchBranches{}, milestone11},
+		"RebaseBranch":          {&RebaseBranch{}, milestone11},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

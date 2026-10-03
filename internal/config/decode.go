@@ -7,11 +7,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-viper/mapstructure/v2"
+
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/steps"
 	"github.com/celest-io/remeris/internal/variables"
 	"github.com/celest-io/remeris/internal/workflow"
-	"github.com/go-viper/mapstructure/v2"
 )
 
 var (
@@ -78,7 +79,7 @@ func decodeStep(data any) (any, error) {
 	}
 
 	step := newStep()
-	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{DecodeHook: decodeHook, Result: step, TagName: "toml"})
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{DecodeHook: decodeHook, Result: step, TagName: tagName})
 	if err != nil {
 		return nil, err
 	}

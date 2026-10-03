@@ -9,14 +9,27 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/celest-io/remeris/internal/config"
 	"github.com/urfave/cli/v3"
+
+	"github.com/celest-io/remeris/internal/config"
+)
+
+const (
+	flagVerbose  = "verbose"
+	flagValidate = "validate"
+	flagUpgrade  = "upgrade"
+	flagGenerate = "generate"
+	rootName     = "remeris"
+	flagDryRun   = "dry-run"
+	wfPrep       = "prep"
+	wfPlain      = "plain"
+	argDryRun    = "--dry-run"
 )
 
 func loadConfig(t *testing.T, content string) *config.Config {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "knope.toml")
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := config.Load(path)
@@ -31,7 +44,7 @@ func run(t *testing.T, cfg *config.Config, args ...string) (stdout string, err e
 	old := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(old) })
 	var out, errOut bytes.Buffer
-	err = New(cfg, &out, &errOut).Run(context.Background(), append([]string{"remeris"}, args...))
+	err = New(cfg, &out, &errOut).Run(context.Background(), append([]string{rootName}, args...))
 	return out.String(), err
 }
 
@@ -81,9 +94,21 @@ func TestRootFlagsDependOnConfigSource(t *testing.T) {
 		cfg          *config.Config
 		want, absent []string
 	}{
-		"default config": {config.Default(), []string{"dry-run", "verbose", "generate"}, []string{"upgrade", "validate"}},
-		"file config":    {loadConfig(t, twoWorkflows), []string{"dry-run", "verbose", "upgrade", "validate"}, []string{"generate"}},
-		"hybrid config":  {loadConfig(t, ""), []string{"dry-run", "verbose", "upgrade", "validate"}, []string{"generate"}},
+		"default config": {
+			config.Default(),
+			[]string{flagDryRun, flagVerbose, flagGenerate},
+			[]string{flagUpgrade, flagValidate},
+		},
+		"file config": {
+			loadConfig(t, twoWorkflows),
+			[]string{flagDryRun, flagVerbose, flagUpgrade, flagValidate},
+			[]string{flagGenerate},
+		},
+		"hybrid config": {
+			loadConfig(t, ""),
+			[]string{flagDryRun, flagVerbose, flagUpgrade, flagValidate},
+			[]string{flagGenerate},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -111,7 +136,7 @@ func TestWorkflowSubcommandsAndHelpText(t *testing.T) {
 	if strings.Join(names, ",") != "plain,prep,bump" {
 		t.Errorf("subcommands = %v", names)
 	}
-	if got := subcommand(root, "plain").Usage; got != "Just a command" {
+	if got := subcommand(root, wfPlain).Usage; got != "Just a command" {
 		t.Errorf("usage = %q", got)
 	}
 }
@@ -124,13 +149,13 @@ func TestWorkflowFlagConditions(t *testing.T) {
 		workflow                string
 		wantOverride, wantLabel bool
 	}{
-		"no packages: no override flag":    {twoWorkflows, "prep", false, true},
+		"no packages: no override flag":    {twoWorkflows, wfPrep, false, true},
 		"no PrepareRelease: no label":      {twoWorkflows, "bump", false, false},
-		"plain workflow: neither":          {twoWorkflows, "plain", false, false},
-		"one package, PrepareRelease":      {onePackage + twoWorkflows, "prep", true, true},
+		"plain workflow: neither":          {twoWorkflows, wfPlain, false, false},
+		"one package, PrepareRelease":      {onePackage + twoWorkflows, wfPrep, true, true},
 		"one package, BumpVersion":         {onePackage + twoWorkflows, "bump", true, false},
-		"one package, plain":               {onePackage + twoWorkflows, "plain", false, false},
-		"several packages, PrepareRelease": {twoPackages + twoWorkflows, "prep", true, true},
+		"one package, plain":               {onePackage + twoWorkflows, wfPlain, false, false},
+		"several packages, PrepareRelease": {twoPackages + twoWorkflows, wfPrep, true, true},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -147,7 +172,7 @@ func TestWorkflowFlagConditions(t *testing.T) {
 
 func TestOverrideVersionUsageDependsOnPackageCount(t *testing.T) {
 	usage := func(toml string) string {
-		cmd := subcommand(New(loadConfig(t, toml+twoWorkflows), nil, nil), "prep")
+		cmd := subcommand(New(loadConfig(t, toml+twoWorkflows), nil, nil), wfPrep)
 		for _, f := range cmd.Flags {
 			if f.Names()[0] == "override-version" {
 				return f.(*cli.StringSliceFlag).Usage
@@ -164,7 +189,7 @@ func TestOverrideVersionUsageDependsOnPackageCount(t *testing.T) {
 }
 
 func TestPrereleaseLabelFlagReadsEnv(t *testing.T) {
-	cmd := subcommand(New(loadConfig(t, twoWorkflows), nil, nil), "prep")
+	cmd := subcommand(New(loadConfig(t, twoWorkflows), nil, nil), wfPrep)
 	var sources []string
 	for _, f := range cmd.Flags {
 		if f.Names()[0] == "prerelease-label" {
@@ -192,7 +217,7 @@ func TestUnknownWorkflow(t *testing.T) {
 
 func TestDryRunPrintsWouldRun(t *testing.T) {
 	cfg := loadConfig(t, twoWorkflows)
-	for _, args := range [][]string{{"--dry-run", "plain"}, {"plain", "--dry-run"}} {
+	for _, args := range [][]string{{argDryRun, wfPlain}, {wfPlain, argDryRun}} {
 		out, err := run(t, cfg, args...)
 		if err != nil || out != "Would run echo hi\n" {
 			t.Errorf("%v: out = %q, err = %v", args, out, err)
@@ -202,21 +227,21 @@ func TestDryRunPrintsWouldRun(t *testing.T) {
 
 func TestVerboseLogsEachStep(t *testing.T) {
 	cfg := loadConfig(t, twoWorkflows)
-	out, err := run(t, cfg, "--dry-run", "-v", "plain")
+	out, err := run(t, cfg, argDryRun, "-v", wfPlain)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(out, "Running step Command ") || !strings.HasSuffix(out, "Would run echo hi\n") {
 		t.Errorf("out = %q", out)
 	}
-	quiet, _ := run(t, cfg, "--dry-run", "plain")
+	quiet, _ := run(t, cfg, argDryRun, wfPlain)
 	if strings.Contains(quiet, "Running step") {
 		t.Errorf("debug output without --verbose: %q", quiet)
 	}
 }
 
 func TestStepFailureIsWrappedInWorkflowProblem(t *testing.T) {
-	_, err := run(t, loadConfig(t, twoWorkflows), "prep")
+	_, err := run(t, loadConfig(t, twoWorkflows), wfPrep)
 	if err == nil || err.Error() != "Problem with workflow prep" {
 		t.Fatalf("err = %v", err)
 	}
@@ -238,13 +263,17 @@ func TestValidate(t *testing.T) {
 		}
 	})
 	t.Run("passes when every workflow works as a dry run", func(t *testing.T) {
-		out, err := run(t, loadConfig(t, "[[workflows]]\nname=\"a\"\nsteps=[{type=\"Command\", command=\"false\"}]\n"), "--validate")
+		out, err := run(
+			t,
+			loadConfig(t, "[[workflows]]\nname=\"a\"\nsteps=[{type=\"Command\", command=\"false\"}]\n"),
+			"--validate",
+		)
 		if err != nil || out != "" {
 			t.Errorf("out = %q, err = %v", out, err)
 		}
 	})
 	t.Run("wins over a workflow", func(t *testing.T) {
-		out, err := run(t, loadConfig(t, twoWorkflows), "--validate", "plain")
+		out, err := run(t, loadConfig(t, twoWorkflows), "--validate", wfPlain)
 		if err == nil || out != "" {
 			t.Errorf("--validate should run instead of the workflow, out = %q, err = %v", out, err)
 		}
@@ -282,31 +311,31 @@ func TestVersionFlags(t *testing.T) {
 
 func TestMainRendersErrors(t *testing.T) {
 	t.Chdir(t.TempDir())
-	if err := os.WriteFile("knope.toml", []byte(twoWorkflows), 0o644); err != nil {
+	if err := os.WriteFile("knope.toml", []byte(twoWorkflows), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	old := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(old) })
 
 	var out, errOut bytes.Buffer
-	code := Main(context.Background(), []string{"remeris", "prep"}, &out, &errOut)
+	code := Main(context.Background(), []string{rootName, wfPrep}, &out, &errOut)
 
 	want := "Error: Problem with workflow prep\n  ╰─▶ Step PrepareRelease is not implemented yet (milestone M5)\n"
 	if code != 1 || errOut.String() != want {
 		t.Errorf("code = %d, stderr = %q, want %q", code, errOut.String(), want)
 	}
-	if code := Main(context.Background(), []string{"remeris", "--dry-run", "plain"}, &out, &errOut); code != 0 {
+	if code := Main(context.Background(), []string{rootName, argDryRun, wfPlain}, &out, &errOut); code != 0 {
 		t.Errorf("successful run exited %d", code)
 	}
 }
 
 func TestMainReportsConfigErrors(t *testing.T) {
 	t.Chdir(t.TempDir())
-	if err := os.WriteFile("knope.toml", []byte("[[workflows]]\nname = \"bad name\"\n"), 0o644); err != nil {
+	if err := os.WriteFile("knope.toml", []byte("[[workflows]]\nname = \"bad name\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	code := Main(context.Background(), []string{"remeris"}, &out, &errOut)
+	code := Main(context.Background(), []string{rootName}, &out, &errOut)
 	if code != 1 || !strings.HasPrefix(errOut.String(), "Error: Workflow names may only contain") {
 		t.Errorf("code = %d, stderr = %q", code, errOut.String())
 	}
@@ -332,7 +361,7 @@ func TestSetupLogging(t *testing.T) {
 		want           string
 	}{
 		"default":                 {false, false, "info\n"},
-		"verbose":                 {true, false, "debug\ninfo\n"},
+		flagVerbose:               {true, false, "debug\ninfo\n"},
 		"quiet":                   {false, true, ""},
 		"quiet wins over verbose": {true, true, ""},
 	}

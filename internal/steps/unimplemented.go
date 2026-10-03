@@ -103,25 +103,53 @@ func (s *PrepareRelease) Run(_ context.Context, rt workflow.RunType[workflow.Sta
 func (s *Release) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
 	return rt, notImplemented(s, "M6")
 }
-func (s *CreateChangeFile) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
+
+func (s *CreateChangeFile) Run(
+	_ context.Context,
+	rt workflow.RunType[workflow.State],
+) (workflow.RunType[workflow.State], error) {
 	return rt, notImplemented(s, "M4")
 }
-func (s *CreatePullRequest) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
+
+func (s *CreatePullRequest) Run(
+	_ context.Context,
+	rt workflow.RunType[workflow.State],
+) (workflow.RunType[workflow.State], error) {
 	return rt, notImplemented(s, "M7")
 }
-func (s *SelectJiraIssue) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
+
+func (s *SelectJiraIssue) Run(
+	_ context.Context,
+	rt workflow.RunType[workflow.State],
+) (workflow.RunType[workflow.State], error) {
 	return rt, notImplemented(s, "M11")
 }
-func (s *TransitionJiraIssue) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
+
+func (s *TransitionJiraIssue) Run(
+	_ context.Context,
+	rt workflow.RunType[workflow.State],
+) (workflow.RunType[workflow.State], error) {
 	return rt, notImplemented(s, "M11")
 }
-func (s *SelectGitHubIssue) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
+
+func (s *SelectGitHubIssue) Run(
+	_ context.Context,
+	rt workflow.RunType[workflow.State],
+) (workflow.RunType[workflow.State], error) {
 	return rt, notImplemented(s, "M11")
 }
-func (s *SelectGiteaIssue) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
+
+func (s *SelectGiteaIssue) Run(
+	_ context.Context,
+	rt workflow.RunType[workflow.State],
+) (workflow.RunType[workflow.State], error) {
 	return rt, notImplemented(s, "M11")
 }
-func (s *SelectIssueFromBranch) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
+
+func (s *SelectIssueFromBranch) Run(
+	_ context.Context,
+	rt workflow.RunType[workflow.State],
+) (workflow.RunType[workflow.State], error) {
 	return rt, notImplemented(s, "M11")
 }
 func (s *SwitchBranches) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {

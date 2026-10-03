@@ -8,6 +8,13 @@ import (
 	"github.com/celest-io/remeris/internal/workflow"
 )
 
+const (
+	echoHi        = "echo hi"
+	msgNoPackages = "No packages to operate on"
+	msgNoIssue    = "No issue selected"
+	keyV          = "$v"
+)
+
 func TestVariableValid(t *testing.T) {
 	for _, v := range []Variable{Version, ChangelogEntry, IssueBranch} {
 		if !v.Valid() {
@@ -27,10 +34,14 @@ func TestResolve(t *testing.T) {
 		wantMsg  string
 		wantHelp string
 	}{
-		"version without packages":   {Version, "No packages to operate on", "There must be at least one package for remeris"},
-		"changelog without packages": {ChangelogEntry, "No packages to operate on", "There must be at least one package for remeris"},
-		"issue branch":               {IssueBranch, "No issue selected", "select an issue"},
-		"unknown":                    {"Nope", `Unknown variable "Nope"`, ""},
+		"version without packages": {Version, msgNoPackages, "There must be at least one package for remeris"},
+		"changelog without packages": {
+			ChangelogEntry,
+			msgNoPackages,
+			"There must be at least one package for remeris",
+		},
+		"issue branch": {IssueBranch, msgNoIssue, "select an issue"},
+		"unknown":      {"Nope", `Unknown variable "Nope"`, ""},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -55,20 +66,20 @@ func TestTemplateReplace(t *testing.T) {
 		wantErr string
 	}{
 		"no variables in text": {
-			tmpl: Template{Text: "echo hi", Variables: []Entry{{"$v", Version}}},
-			want: "echo hi",
+			tmpl: Template{Text: echoHi, Variables: []Entry{{keyV, Version}}},
+			want: echoHi,
 		},
 		"unused keys are skipped, even unresolvable ones": {
-			tmpl: Template{Text: "echo hi", Variables: []Entry{{"$v", Version}, {"$i", IssueBranch}, {"$c", ChangelogEntry}}},
-			want: "echo hi",
+			tmpl: Template{Text: echoHi, Variables: []Entry{{keyV, Version}, {"$i", IssueBranch}, {"$c", ChangelogEntry}}},
+			want: echoHi,
 		},
 		"used key that cannot resolve fails": {
-			tmpl:    Template{Text: "echo $v", Variables: []Entry{{"$v", Version}}},
-			wantErr: "No packages to operate on",
+			tmpl:    Template{Text: "echo $v", Variables: []Entry{{keyV, Version}}},
+			wantErr: msgNoPackages,
 		},
 		"absent variables apply the defaults": {
 			tmpl:    Template{Text: "echo $version"},
-			wantErr: "No packages to operate on",
+			wantErr: msgNoPackages,
 		},
 		"defaults skip text without their keys": {
 			tmpl: Template{Text: "echo $other"},
@@ -80,7 +91,7 @@ func TestTemplateReplace(t *testing.T) {
 		},
 		"a declared key replaces the default for its name": {
 			tmpl:    Template{Text: "echo $version", Variables: []Entry{{"$version", IssueBranch}}},
-			wantErr: "No issue selected",
+			wantErr: msgNoIssue,
 		},
 	}
 	for name, tc := range cases {
@@ -105,10 +116,10 @@ func TestTemplateReplaceOrder(t *testing.T) {
 	text := "$a $b"
 	first := Template{Text: text, Variables: []Entry{{"$a", Version}, {"$b", IssueBranch}}}
 	second := Template{Text: text, Variables: []Entry{{"$b", IssueBranch}, {"$a", Version}}}
-	if _, err := first.Replace(workflow.State{}); err == nil || err.Error() != "No packages to operate on" {
+	if _, err := first.Replace(workflow.State{}); err == nil || err.Error() != msgNoPackages {
 		t.Errorf("declared order a,b: got %v", err)
 	}
-	if _, err := second.Replace(workflow.State{}); err == nil || err.Error() != "No issue selected" {
+	if _, err := second.Replace(workflow.State{}); err == nil || err.Error() != msgNoIssue {
 		t.Errorf("declared order b,a: got %v", err)
 	}
 }
