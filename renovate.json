@@ -1,0 +1,43 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "packageRules": [
+    {
+      "description": "Go toolchain: go.mod and mise.toml move together",
+      "matchPackageNames": [
+        "go",
+        "golang/go"
+      ],
+      "groupName": "go toolchain"
+    },
+    {
+      "description": "hk: the version in mise.toml and the Pkl package URLs in hk.pkl move together",
+      "matchPackageNames": [
+        "hk",
+        "jdx/hk"
+      ],
+      "groupName": "hk"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "hk Pkl package URLs in hk.pkl",
+      "managerFilePatterns": [
+        "/(^|/)hk\\.pkl$/"
+      ],
+      "matchStrings": [
+        "github\\.com/jdx/hk/releases/download/v(?<currentValue>[^/]+)/hk@"
+      ],
+      "depNameTemplate": "jdx/hk",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    }
+  ]
+}
