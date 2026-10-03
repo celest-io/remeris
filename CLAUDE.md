@@ -43,6 +43,24 @@ leaves them as `unknown`, so build with `mise run build` when the version matter
 `go.mod` has `go 1.27` and `toolchain go1.27.1`, so a newer `go` fetches the right toolchain by itself.
 Run `mise run lint` before pushing: CI runs the same checks.
 
+## MCP servers
+
+`.mcp.json` configures two project servers. Claude Code asks for approval the first time it sees them.
+Both start through `mise exec`, so they use the versions pinned in this repo.
+
+- **gopls** (`gopls mcp`, pinned in `mise.claude.toml` and installed with `go install` on first use, so
+  the first start is slow). Use it for Go work instead of grepping:
+  - at the start of a session, `go_workspace`;
+  - to find things, `go_search`; to read a file with its package context, `go_file_context`;
+    for a package's public API, `go_package_api`;
+  - before changing any exported symbol, `go_symbol_references`; to rename, `go_rename_symbol`;
+  - after every edit, `go_diagnostics` on the changed files, then run the tests of the changed packages.
+- **hk** (`hk mcp --root .`). Tools: `inspect_project`, `plan`, `start_check`, `start_safe_check`,
+  `start_safe_fix`, `get_run`, `get_output`, `get_diff`, `cancel_run`. It runs the same steps as
+  `mise run lint` and returns structured diagnostics. Prefer `plan` and `start_safe_check`, read the result
+  with `get_run` and `get_output`, and look at `get_diff` before accepting a fix. `mise run lint` stays the
+  last check before pushing; `mise run ci` is what CI runs.
+
 ## Lint and style
 
 - `hk.pkl` runs hk builtins only: whitespace, end-of-file, line endings, symlinks, merge conflicts, private
