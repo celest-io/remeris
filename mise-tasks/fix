@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Apply the fixes hk and golangci-lint can make"
+set -euo pipefail
+
+hk fix --all

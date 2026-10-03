@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Build the remeris binary into build/"
+set -euo pipefail
+
+go build -o build/remeris ./cmd/remeris
