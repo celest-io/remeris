@@ -1,0 +1,38 @@
+# A command that exits non-zero fails the workflow: the error goes to stderr, the exit code is 1.
+[windows] skip 'uses a POSIX shell'
+
+! exec remeris fail
+cmp stderr stderr.log
+
+# Steps after the failing one do not run.
+! exists after
+
+# The shell mode reports it the same way.
+! exec remeris fail-shell
+stderr '^Error: Problem with workflow fail-shell\n  ╰─▶ Command returned non-zero exit code$'
+
+# A command that cannot be started is an I/O error.
+! exec remeris missing
+stderr '^Error: Problem with workflow missing\n  ╰─▶ I/O error: '
+
+-- knope.toml --
+[[workflows]]
+name = "fail"
+[[workflows.steps]]
+type = "Command"
+command = "false"
+[[workflows.steps]]
+type = "Command"
+command = "touch after"
+
+[[workflows]]
+name = "fail-shell"
+steps = [{ type = "Command", shell = true, command = "exit 3" }]
+
+[[workflows]]
+name = "missing"
+steps = [{ type = "Command", command = "remeris-no-such-program" }]
+-- stderr.log --
+Error: Problem with workflow fail
+  ╰─▶ Command returned non-zero exit code
+      help: The command failed to execute. Try running it manually to get more information.

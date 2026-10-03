@@ -1,0 +1,6 @@
+exec remeris --version
+stdout '^remeris \S+$'
+! stderr .
+
+exec remeris -V
+stdout '^remeris \S+$'

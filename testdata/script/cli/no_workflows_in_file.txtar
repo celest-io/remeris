@@ -1,0 +1,16 @@
+# A knope.toml without workflows gets the default ones (a hybrid config), and still has --validate.
+exec remeris --help
+stdout 'release'
+stdout 'document-change'
+stdout '--validate'
+! stdout '--generate'
+
+# Both default workflows fail validation until their steps exist.
+! exec remeris --validate
+stderr 'Problem with workflow release'
+stderr 'Problem with workflow document-change'
+
+-- knope.toml --
+[github]
+owner = "celest-io"
+repo = "remeris"

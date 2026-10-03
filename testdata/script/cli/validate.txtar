@@ -1,0 +1,62 @@
+# --validate runs every workflow as a dry run, prints nothing on success and exits 0.
+exec remeris --validate
+! stdout .
+! stderr .
+
+# A step that is not implemented yet fails the dry run too, so --validate reports it.
+cp knope-later.toml knope.toml
+! exec remeris --validate
+! stdout .
+cmp stderr later.log
+
+# Every failing workflow is reported, not just the first.
+cp knope-many.toml knope.toml
+! exec remeris --validate
+! stdout .
+cmp stderr many.log
+
+# --validate wins over a workflow name and runs nothing.
+! exec remeris --validate ok
+! stdout .
+
+-- knope.toml --
+[[workflows]]
+name = "ok"
+steps = [{ type = "Command", command = "false" }]
+-- knope-later.toml --
+[[workflows]]
+name = "ok"
+steps = [{ type = "Command", command = "echo hi" }]
+
+[[workflows]]
+name = "later"
+steps = [{ type = "Command", command = "echo hi" }, { type = "Release" }]
+-- knope-many.toml --
+[[workflows]]
+name = "first"
+steps = [{ type = "BumpVersion", rule = "Patch" }]
+
+[[workflows]]
+name = "fine"
+steps = [{ type = "Command", command = "echo hi" }]
+
+[[workflows]]
+name = "second"
+steps = [{ type = "Command", command = "echo $version" }]
+
+[[workflows]]
+name = "third"
+steps = [{ type = "SelectGitHubIssue" }]
+-- later.log --
+Error: There are problems with the defined workflows
+  ╰─▶ Problem with workflow later
+      ╰─▶ Step Release is not implemented yet (milestone M6)
+-- many.log --
+Error: There are problems with the defined workflows
+  ╰─▶ Problem with workflow first
+      ╰─▶ Step BumpVersion is not implemented yet (milestone M3)
+  ╰─▶ Problem with workflow second
+      ╰─▶ No packages to operate on
+          help: There must be at least one package for remeris to work with, no supported package files were found in this directory.
+  ╰─▶ Problem with workflow third
+      ╰─▶ Step SelectGitHubIssue is not implemented yet (milestone M11)

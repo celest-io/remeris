@@ -1,0 +1,43 @@
+# Ported from knope-dev/knope, crates/knope/tests/command/replace_version (MIT, see testdata/README.md).
+# Needs packages: the Version variable, Cargo.toml and --override-version. Enable it when the
+# last of these lands: M2 (Cargo.toml), M3 (packages, Version, --override-version) and M5 (PrepareRelease).
+skip 'needs packages: milestones M2, M3 and M5'
+
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add knope.toml Cargo.toml
+exec git commit -m Initial
+
+exec remeris replace-version --override-version=2.0.0
+cmp stdout stdout.log
+cmp Cargo.toml out/Cargo.toml
+
+-- knope.toml --
+[[workflows]]
+name = "replace-version"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo current version is $$$$"
+
+[workflows.steps.variables]
+"$$$$" = "Version"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo new version is $version"
+-- Cargo.toml --
+[package]
+name = "test"
+version = "1.2.3"
+-- stdout.log --
+current version is 1.2.3
+new version is 2.0.0
+-- out/Cargo.toml --
+[package]
+name = "test"
+version = "2.0.0"

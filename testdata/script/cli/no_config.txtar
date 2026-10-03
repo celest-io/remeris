@@ -1,0 +1,38 @@
+# Without a knope.toml the default workflows apply: release and document-change, and no
+# get-version because there are no packages.
+exec remeris --help
+stdout 'release +Prepare and create a new release'
+stdout 'document-change +Create a new change file'
+! stdout 'get-version'
+stdout '--generate'
+! stdout '--validate'
+! stdout '--upgrade'
+
+# --generate exists only here, and is not built yet.
+! exec remeris --generate
+! stdout .
+cmp stderr generate.log
+
+# --validate and --upgrade do not exist without a knope.toml.
+! exec remeris --validate
+stderr 'flag provided but not defined: -validate'
+
+# The default release workflow starts with PrepareRelease.
+! exec remeris --dry-run release
+cmp stderr release.log
+! exec remeris --dry-run document-change
+cmp stderr document-change.log
+
+# No --override-version without packages; --prerelease-label because release has PrepareRelease.
+exec remeris release --help
+stdout '--prerelease-label'
+! stdout '--override-version'
+
+-- generate.log --
+Error: --generate is not implemented yet (milestone M10)
+-- release.log --
+Error: Problem with workflow release
+  ╰─▶ Step PrepareRelease is not implemented yet (milestone M5)
+-- document-change.log --
+Error: Problem with workflow document-change
+  ╰─▶ Step CreateChangeFile is not implemented yet (milestone M4)

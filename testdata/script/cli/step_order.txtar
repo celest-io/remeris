@@ -1,0 +1,22 @@
+# Steps run in order, and the first failure stops the workflow.
+[windows] skip 'uses touch'
+
+! exec remeris run
+cmp stderr stderr.log
+exists first
+! exists third
+
+-- knope.toml --
+[[workflows]]
+name = "run"
+[[workflows.steps]]
+type = "Command"
+command = "touch first"
+[[workflows.steps]]
+type = "Release"
+[[workflows.steps]]
+type = "Command"
+command = "touch third"
+-- stderr.log --
+Error: Problem with workflow run
+  ╰─▶ Step Release is not implemented yet (milestone M6)

@@ -1,0 +1,44 @@
+# Workflow names become subcommands and koanf key paths, so they are restricted.
+! exec remeris --help
+! stdout .
+cmp stderr name.log
+
+# A TOML syntax error names the position.
+cp syntax.toml knope.toml
+! exec remeris --help
+stderr '^Error: TOML parse error at line 3, column '
+stderr '  help: Check the TOML is valid\.$'
+
+# An unknown step type lists the valid ones.
+cp step.toml knope.toml
+! exec remeris --help
+stderr 'Unknown step type "Nope"'
+
+# Unknown keys are ignored.
+cp unknown.toml knope.toml
+exec remeris --dry-run hello
+cmp stdout hello.log
+
+-- knope.toml --
+[[workflows]]
+name = "has space"
+-- syntax.toml --
+[[workflows]]
+name = "ok"
+steps = 
+-- step.toml --
+[[workflows]]
+name = "w"
+steps = [{ type = "Nope" }]
+-- unknown.toml --
+future_key = true
+
+[[workflows]]
+name = "hello"
+extra = 1
+steps = [{ type = "Command", command = "echo hi", note = "ignored" }]
+-- name.log --
+Error: Workflow names may only contain letters, digits, '-' and '_': has space
+  help: Rename the workflow in knope.toml.
+-- hello.log --
+Would run echo hi

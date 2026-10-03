@@ -1,0 +1,59 @@
+# Variables are only looked up when their key occurs in the command. An unused variable that
+# could not be resolved (there are no packages yet) never fails.
+[windows] skip 'uses a POSIX echo'
+
+exec remeris unused
+cmp stdout unused.log
+
+# `variables = {}` turns the default $version and $changelog off, so they are left alone.
+exec remeris defaults-off
+cmp stdout defaults-off.log
+
+# A used variable that cannot be resolved fails the step.
+! exec remeris used
+! stdout .
+cmp stderr used.err
+
+# The default variables apply when `variables` is absent.
+! exec remeris default-version
+cmp stderr default-version.err
+
+-- knope.toml --
+[[workflows]]
+name = "unused"
+[[workflows.steps]]
+type = "Command"
+command = "echo nothing to replace"
+variables = { "$v" = "Version", "$b" = "IssueBranch" }
+
+[[workflows]]
+name = "defaults-off"
+[[workflows.steps]]
+type = "Command"
+command = "echo $version $changelog"
+variables = {}
+
+[[workflows]]
+name = "used"
+[[workflows.steps]]
+type = "Command"
+command = "echo $v"
+variables = { "$v" = "Version" }
+
+[[workflows]]
+name = "default-version"
+[[workflows.steps]]
+type = "Command"
+command = "echo $version"
+-- unused.log --
+nothing to replace
+-- defaults-off.log --
+$version $changelog
+-- used.err --
+Error: Problem with workflow used
+  ╰─▶ No packages to operate on
+      help: There must be at least one package for remeris to work with, no supported package files were found in this directory.
+-- default-version.err --
+Error: Problem with workflow default-version
+  ╰─▶ No packages to operate on
+      help: There must be at least one package for remeris to work with, no supported package files were found in this directory.

@@ -1,0 +1,30 @@
+# --help lists the workflows from knope.toml, with their help text, and the flags. The exact layout
+# is urfave/cli's, so only the content is checked.
+exec remeris --help
+stdout 'remeris'
+stdout 'shell-command +Say hello'
+stdout 'other'
+stdout '--dry-run'
+stdout '--verbose, -v'
+stdout '--validate'
+stdout '--upgrade'
+! stdout '--generate'
+! stderr .
+
+# A workflow's own help shows its flags, and the root flags that apply to it.
+exec remeris other --help
+stdout '--prerelease-label'
+stdout 'REMERIS_PRERELEASE_LABEL'
+stdout 'KNOPE_PRERELEASE_LABEL'
+! stdout '--override-version'
+stdout '--dry-run'
+
+-- knope.toml --
+[[workflows]]
+name = "shell-command"
+help_text = "Say hello"
+steps = [{ type = "Command", command = "echo hello" }]
+
+[[workflows]]
+name = "other"
+steps = [{ type = "PrepareRelease" }]
