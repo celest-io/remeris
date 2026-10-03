@@ -33,3 +33,7 @@ go.work.sum
 
 # Build output
 build/
+
+# Personal Claude Code and mise overrides
+.claude/*.local.*
+mise.local.*
