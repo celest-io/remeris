@@ -28,13 +28,17 @@ Tools are pinned in `mise.toml` and tasks are executable files in `mise-tasks/`.
 
 ```sh
 mise install        # Go, golangci-lint, hk, zizmor
-mise run build      # build/remeris
+mise run build      # build/remeris, with the version information injected
 mise run test       # go test ./...
 mise run lint       # hk check --all
 mise run fix        # hk fix --all: formatting and whatever golangci-lint can fix
 mise run ci         # build, lint, test: what CI runs
 go test ./internal/config -run TestName   # one package or test
 ```
+
+The build task sets the variables of `internal/version` with `-ldflags -X` (version from `git describe`,
+revision, branch, build date, Go version, and the build number in GitHub Actions). A plain `go build`
+leaves them as `unknown`, so build with `mise run build` when the version matters.
 
 `go.mod` has `go 1.27` and `toolchain go1.27.1`, so a newer `go` fetches the right toolchain by itself.
 Run `mise run lint` before pushing: CI runs the same checks.
