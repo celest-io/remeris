@@ -1,6 +1,6 @@
 exec remeris --version
-stdout '^remeris \S+$'
+stdout '^remeris .+ \[.+\] \(Go: .+\)$'
 ! stderr .
 
 exec remeris -V
-stdout '^remeris \S+$'
+stdout '^remeris .+ \[.+\] \(Go: .+\)$'
