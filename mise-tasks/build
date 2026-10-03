@@ -1,5 +1,26 @@
 #!/usr/bin/env bash
-#MISE description="Build the remeris binary into build/"
+#MISE description="Build the remeris binary into build/, with the version information injected"
 set -euo pipefail
 
-go build -o build/remeris ./cmd/remeris
+pkg=github.com/celest-io/remeris/internal/version
+
+version="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+revision="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+build_date="$(date -u '+%Y-%m-%d_%H:%M:%S')"
+go_version="$(go version | awk '{print $3}')"
+
+ldflags=(
+  "-X '${pkg}.Version=${version}'"
+  "-X '${pkg}.Revision=${revision}'"
+  "-X '${pkg}.Branch=${branch}'"
+  "-X '${pkg}.BuildUser=$(whoami)'"
+  "-X '${pkg}.BuildDate=${build_date}'"
+  "-X '${pkg}.GoVersion=${go_version}'"
+)
+# Set by GitHub Actions; left as "unknown" for local builds.
+if [ -n "${GITHUB_RUN_NUMBER:-}" ]; then
+  ldflags+=("-X '${pkg}.BuildNumber=${GITHUB_RUN_NUMBER}'")
+fi
+
+go build -ldflags "${ldflags[*]}" -o build/remeris ./cmd/remeris
