@@ -109,3 +109,63 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
   audits need `GH_TOKEN` (CI sets it).
 - Dependencies: prefer the standard library. Add a module only for the reasons given in spec 0.3, at the
   versions it lists or newer patch releases.
+
+## Code layout
+
+Milestone M0 is in place: `remeris <workflow>` runs `Command` steps and every other step fails with
+`Step X is not implemented yet (milestone Mx)`. Not built yet: semver, versioned files, packages, git,
+changes, forges, prompts, discovery, `--generate`, `--upgrade` (see spec section 1).
+
+```
+cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests
+internal/brand/     the "remeris" name, knope.toml file name, env var names
+internal/diag/      Diagnostic interface and the renderer for errors (message, help, related errors)
+internal/app/       GlobalOptions, WorkflowOptions and the generic LoadConfig[T]
+internal/cli/       root command, one subcommand per workflow, logging, --validate
+internal/config/    knope.toml loading: koanf + a go-toml unstable index for key order and spans
+internal/workflow/  Step interface, State, RunType (real or dry run), runner
+internal/variables/ Template and Variable substitution
+internal/steps/     Command step and the stubs of the others; steps/command splits command lines
+internal/fsx/       dry-run aware file writes
+testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
+```
+
+Imports flow one way: `workflow` imports only `diag`, then `variables`, `steps`, `config`, `cli`. Keep it so.
+Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.
+
+### Adding or finishing a step
+
+1. Give it a file in `internal/steps/` (move it out of `unimplemented.go`), with `toml:"..."` tags on its fields.
+2. Implement `Type()` and `Run(ctx, rt)`. In a dry run, log what would happen and change nothing.
+3. Make sure it is in `stepConstructors` in `internal/config/decode.go`.
+4. Add unit tests, and enable the Knope fixtures that needed it (remove their `skip` line).
+
+### Things that will bite you
+
+- **Errors:** return a `diag` error (`diag.New(...).WithHelp(...)`, `WithRelated`, `WithCause`); never log
+  an error and never call `os.Exit` in a step. `cli.Main` renders it to stderr and exits 1. Match Knope's
+  message and help text with `knope` rewritten to `remeris`. Wrap step errors with `workflow.Problem`.
+- **Logging:** `slog` to stdout through a plain handler (no level or time). `--validate` silences it.
+- **`LoadConfig` and cliflagv3:** keys are prefixed with the command lineage (`remeris`, `remeris.release`) and
+  only the given command's own flags are readable. Load `GlobalOptions` from the root command
+  (`cmd.Root()`) and `WorkflowOptions` from the workflow command.
+- **urfave/cli:** backticks in a flag's usage text turn the next word into the flag's placeholder; avoid them.
+  Its default `--version` flag claims `-v`, so `cli.VersionFlag` is replaced (`--version`, `-V`).
+- **`knope.toml` decoding:** koanf uses the key delimiter `\x1f` so keys with dots survive. Maps lose order,
+  so `config/index.go` re-reads the file to restore the order of `packages` and `variables`. Unknown keys
+  are ignored on purpose (Quirk Q1). Workflow names must match `^[A-Za-z0-9_-]+$`.
+- **Variables:** `Template.Variables` nil means the `variables` key was absent (defaults `$version` and
+  `$changelog` apply); an empty non-nil slice means `variables = {}` (substitution off).
+- **Command step:** `shell = true` runs `sh -c` (`cmd /C` on Windows); otherwise the line is split by
+  `internal/steps/command.Split` and run directly, with no `$VAR` expansion. The Windows path compiles but
+  is not run in CI.
+
+### Tests
+
+- Unit tests sit next to the code. `internal/cli` tests build the command tree in process.
+- Golden tests are `.txtar` scripts in `testdata/script/<suite>/`, run by `cmd/remeris/main_test.go` with the
+  binary registered as `remeris`. `UPDATE_SCRIPTS=1 go test ./cmd/remeris` rewrites files compared with
+  `cmp`; read the diff before committing. `--help` is compared by content, not byte for byte.
+- Ported Knope fixtures start with a comment naming their Knope source and are credited in
+  `testdata/README.md`. A fixture that needs an unbuilt feature starts with `skip` and names the milestones.
+  Record behaviour that differs from Knope in `testdata/deviations.md`.
