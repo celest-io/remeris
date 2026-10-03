@@ -61,6 +61,27 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
   with `get_run` and `get_output`, and look at `get_diff` before accepting a fix. `mise run lint` stays the
   last check before pushing; `mise run ci` is what CI runs.
 
+## Claude Code settings
+
+`.claude/settings.json` is shared by everyone; put personal overrides in `.claude/settings.local.json`
+(git-ignored, like `mise.local.toml`).
+
+- **Plan mode is the default.** Propose the approach, then implement it.
+- **Allowed without asking:** reading and searching, `mise run`, `go build/test/vet/get/mod tidy`, `golangci-lint`,
+  `hk check` and `hk fix`, local git (`add`, `commit`, `branch`, `checkout`, `diff`, `log`, `status`,
+  `worktree`, `fetch`, `pull`), the gopls tools and the read-only hk tools.
+- **Asks first:** `git push`, and the hk tools that run fixers (`start_check`, `start_safe_fix`).
+- **Denied:** `find`, `grep` and `tree` (slow: use `fd` and `rg`), `sudo`, `rm -rf`, and reading `.env` files,
+  SSH and cloud credentials.
+- **Sandbox:** on, with unsandboxed commands off and network limited to the hosts the toolchain needs (GitHub,
+  the Go module proxy and checksum database, the Go downloads, mise). Go caches go to `/tmp/claude`. If a
+  command needs another host, add it to `sandbox.network.allowedDomains` instead of working around it.
+- **Plugins:** `gopls-lsp`, `code-review` and `code-simplifier` from the official marketplace. The LSP tool is
+  switched on by `ENABLE_LSP_TOOL` in `mise.claude.toml`.
+- **Cloud sessions:** the SessionStart hook runs `scripts/setup_remote.sh`, which does nothing on a laptop.
+  In a remote session it installs mise (checking the installer's signature), selects `MISE_ENV=claude` and runs
+  `mise install`. If a tool is missing there, read that script's output first.
+
 ## Lint and style
 
 - `hk.pkl` runs hk builtins only: whitespace, end-of-file, line endings, symlinks, merge conflicts, private
