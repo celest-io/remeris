@@ -4,7 +4,13 @@
 `knope-versioning` `0.8.x`, `knope-config` `0.4.x`, plus the [changesets](https://github.com/knope-dev/changesets) crate it
 depends on.
 
-**Goal:** Rebuild Knope in Go, one feature at a time. The Go binary (`remeris`) should be a **drop-in replacement**:
+**Scope:**
+- **Phase 1 (parity):** rebuild Knope's features in Go, one at a time (milestones M0–M11). Two foundations go beyond
+  Knope from the start because the rest builds on them: full SemVer 2.0.0 (F1) and extension hooks for Phase 2.
+- **Phase 2 (extensions):** pre-release channels, signed commits (git or GitHub App), more changelog sources, and
+  better monorepo support with per-package variables. See [Phase 2](#phase-2-extensions-beyond-knope).
+
+**Goal of Phase 1:** Rebuild Knope in Go, one feature at a time. The Go binary (`remeris`) should be a **drop-in replacement**:
 it reads the same `knope.toml`, uses the same `.changeset/` files and Git tag formats, writes the same file edits and
 changelog output, and prints the same messages. Each section below is one unit of work. It lists the behaviour to
 reproduce, the algorithm (taken from the Rust source, not only the docs), edge cases, and acceptance criteria.
@@ -43,9 +49,10 @@ reproduce, the algorithm (taken from the Rust source, not only the docs), edge c
 20. [F19: Issue steps (GitHub / Gitea / Jira / branch)](#f19-issue-steps)
 21. [F20: Default config, auto-detection and `--generate`](#f20-default-config-auto-detection-and---generate)
 22. [F21: `--upgrade` and `--validate`](#f21---upgrade-and---validate)
-23. [Testing strategy](#testing-strategy)
-24. [Quirks register](#quirks-register)
-25. [Decisions](#decisions)
+23. [Phase 2: Extensions beyond Knope](#phase-2-extensions-beyond-knope)
+24. [Testing strategy](#testing-strategy)
+25. [Quirks register](#quirks-register)
+26. [Decisions](#decisions)
 
 ---
 
@@ -73,22 +80,25 @@ Keep this split in Go. It keeps the core easy to unit-test with no filesystem or
 
 ```
 cmd/remeris/main.go            # entry point
+internal/app/                  # readykit pattern: GlobalOptions/WorkflowOptions, DefaultXxx(), LoadConfig[T] (F3.1)
 internal/cli/                  # command tree built from config, flags, run/validate/generate/upgrade
 internal/config/               # knope.toml loading, defaults, discovery, serialisation (generate/upgrade)
 internal/workflow/             # Workflow, Step (tagged union), runner, State, RunType
 internal/steps/                # one file per step
 internal/variables/            # Template + Variable substitution
 internal/git/                  # Git interface + implementation
-internal/forge/github/         # REST + GraphQL
+internal/forge/github/         # go-github client, auth (token or GitHub App), releases, PRs, issues
 internal/forge/gitea/
 internal/issues/jira/
 internal/httpx/                # client with retry/backoff/rate-limit logging, ApiRequestError
 internal/credentials/          # token/email store in user config dir, prompting
 internal/prompt/               # select, multiselect, text, password
 internal/fsx/                  # dry-run aware write/remove/mkdir
+internal/signing/              # Phase 2 (E2): signed commits/tags via git or the GitHub API
 pkg/versioning/                # PURE core (the knope-versioning equivalent)
-    semver/                    # Version, Prerelease, Rule, PackageVersions
-    changes/                   # Change, ChangeType, conventional commit parsing
+    semver/                    # full SemVer 2.0.0 Version, Rule, PackageVersions
+    changes/                   # Change, ChangeType, Source interface (E3)
+    changes/conventional/      # conventional commit parsing (a Source)
     changesets/                # .changeset file format (the changesets crate equivalent)
     releasenotes/              # Sections, ChangeTemplate, Changelog, Release
     versionedfile/             # one file per format + Config/Format
@@ -110,6 +120,7 @@ by the project: **urfave/cli v3** and **koanf v2**. Versions were checked agains
 | Need | Knope uses | Go choice | Latest release (checked 2026-10-02) | Notes |
 | --- | --- | --- | --- | --- |
 | CLI | clap | **`github.com/urfave/cli/v3`** | v3.14.0, 2026-10-02 | Workflows become `[]*cli.Command`, built at runtime from the config. See F3.1. |
+| CLI flags → typed options | — | **`github.com/knadh/koanf/providers/cliflagv3`** | v1.1.1, 2026-03-20 | The readykit pattern (D9): flags are loaded into koanf and unmarshalled into option structs. See F3.1. |
 | Config loading | `toml` (serde) | **`github.com/knadh/koanf/v2`** + `providers/file` + `parsers/toml/v2` | v2.3.7, 2026-09-24 (toml parser v2.2.2, 2026-08-04) | Decodes with `go-viper/mapstructure/v2`. koanf loses key order and byte positions, so it is paired with a TOML index. See F2.4. |
 | TOML index (key order + spans) and **format-preserving edits** | `toml_edit`, serde `Spanned` | `github.com/pelletier/go-toml/v2/unstable` (already a dependency through koanf's TOML parser) | go-toml v2.4.3, 2026-07-05 | No maintained Go module offers a `toml_edit` equivalent. Write a small span-based editor on this parser. **MUST** keep comments and formatting in `Cargo.toml`, `Cargo.lock`, `gleam.toml`, `pyproject.toml`. See F6. |
 | TOML encode (`--generate`, `--upgrade`) | `toml` | Hand-written emitter (the schema is small) | n/a | Golden output needs exact control over quoting and inline tables (F20.7). go-toml/v2 `Marshal` is only used in tests, to check the output round-trips. |
@@ -121,8 +132,10 @@ by the project: **urfave/cli v3** and **koanf v2**. Versions were checked agains
 | Glob | `glob` | **stdlib** `io/fs` (`fs.WalkDir` + `path.Match` per segment, with `**` handled by the walker) | stdlib | About 60 lines. `filepath.Glob` alone has no `**`. Fallback if edge cases pile up: `github.com/bmatcuk/doublestar/v4` (v4.10.2, 2026-09-20). |
 | Prompts | `inquire` | **`charm.land/huh/v2`** | v2.0.3, 2026-03-10 (needs Go 1.25.8, built on `charm.land/bubbletea/v2` v2.0.10, 2026-09-24) | Select, MultiSelect with a "select at least one" validator, Input, and Input in password mode. Replaces `AlecAivazis/survey` (no release since 2022). Put it behind `internal/prompt` so tests can script answers. |
 | Git | `git2` (libgit2) | **stdlib** `os/exec` calling the `git` CLI, with **`github.com/go-git/go-git/v5`** as the fallback when `git` is not installed (D2, F9.0) | go-git v5.19.2, 2026-07-29 | The CLI gives exact behaviour, including rebase. go-git has no rebase, so the fallback supports only fast-forward for `RebaseBranch`. v6 is still alpha. |
-| HTTP + retry | reqwest-middleware + reessaie | **stdlib** `net/http` with a retrying `RoundTripper` | stdlib | About 80 lines: exponential backoff with jitter, 5 retries, honours `Retry-After` (seconds or HTTP date), logs rate-limit warnings (F15.1). Considered: `hashicorp/go-retryablehttp` (last release v0.7.8, 2025-06). |
-| GitHub upload URL template | URI template | **stdlib** `net/url` | stdlib | Remove the `{?name,label}` suffix from `upload_url` and set `?name=`. No template library needed (`yosida95/uritemplate` has had no release since 2022). |
+| HTTP + retry | reqwest-middleware + reessaie | **stdlib** `net/http` with a retrying `RoundTripper` (also used as go-github's transport) | stdlib | About 80 lines: exponential backoff with jitter, 5 retries, honours `Retry-After` (seconds or HTTP date), logs rate-limit warnings (F15.1). Considered: `hashicorp/go-retryablehttp` (last release v0.7.8, 2025-06). |
+| GitHub API | reqwest (hand-written) | **`github.com/google/go-github/v92`** | v92.0.0, 2026-09-14 (needs Go 1.26) | All GitHub calls (D10, F16.0). Also handles the asset upload URL, so no URI-template library is needed. |
+| GitHub App auth | — | **`github.com/jferrl/go-githubauth`** | v1.9.1, 2026-09-19 (needs Go 1.26; uses `golang-jwt/jwt/v5`, `x/oauth2`) | App JWT → installation token as an `oauth2.TokenSource` (F16.1, E2). Rejected: `bradleyfalzon/ghinstallation/v2` (v2.19.0) because it pins `go-github/v88` and `jwt/v4`, which would add a second go-github major. |
+| Commit signing (go-git fallback, E2) | — | go-git's signing support (OpenPGP via `github.com/ProtonMail/go-crypto` v1.5.2, 2026-09-25, already a go-git dependency) | — | Only for the go-git backend. The `git` CLI backend uses the user's own git signing config. |
 | Command splitting | `execute` | Hand-written tokenizer in `internal/steps/command` | n/a | About 50 lines: whitespace separates words, `'…'` and `"…"` quote, backslash escapes, **no** `$VAR` expansion (matches Knope). Rejected: `google/shlex` (no change since 2019); `mvdan.cc/sh/v3/shell.Fields` (expands variables); `mattn/go-shellwords` (recent tag, but `go 1.13` module and adds little). |
 | Base64 (Jira auth) | `base64` | **stdlib** `encoding/base64` | stdlib | |
 | Logging | tracing | **stdlib** `log/slog` with a custom plain handler | stdlib | No level, time or target prefix. See F3. |
@@ -130,7 +143,7 @@ by the project: **urfave/cli v3** and **koanf v2**. Versions were checked agains
 | User config dir | `dirs` | **stdlib** `os.UserConfigDir()` | stdlib | Same locations as Rust `dirs::config_dir()`. |
 | Dates | `time` | **stdlib** `time` (`time.Now().UTC().Format(time.DateOnly)`) | stdlib | |
 | Conventional commits | `git-conventional` | Hand-written parser in `pkg/versioning/changes` | n/a | Must match `git-conventional`'s grammar exactly (F10.1). Considered: `github.com/leodido/go-conventionalcommits` (v0.13.0, 2026-07). Its grammar and footer rules differ, so it would need adapting anyway. |
-| Semver | own | Own type in `pkg/versioning/semver` | n/a | Knope's version grammar is a strict subset of SemVer and has non-standard ordering (F1), so a general semver library would not help. |
+| Semver | own | Own type in `pkg/versioning/semver` | n/a | Full SemVer 2.0.0 (D8, F1). Own type because the bump logic needs Knope's `(label, counter)` view of pre-releases and exact control of precedence and errors; about 200 lines plus tests. |
 | CLI golden tests | snapbox | **`github.com/rogpeppe/go-internal/testscript`** | v1.16.0, 2026-07-01 (needs Go 1.25) | Runs the binary against `.txtar` scripts. See Testing strategy. |
 | Test diffs | pretty_assertions | `github.com/google/go-cmp` | v0.7.0, 2025-01 | Stable, maintained by Google. Optional: stdlib `testing` is enough for most tests. |
 
@@ -159,34 +172,80 @@ Each milestone ships something users can run, and its tests pass on its own. Lat
 | M10 | Discovery + tooling | F20 (Cargo/npm/Deno workspaces, `--generate`), F21 (`--upgrade`, `--validate`) | Zero-config monorepos |
 | M11 | Issues | F19 (GitHub/Gitea/Jira issues, SwitchBranches, RebaseBranch, SelectIssueFromBranch, TransitionJiraIssue), `IssueBranch` variable | Issue-driven dev workflows |
 
+Phase 2 milestones (P2.1–P2.6) are listed at the end of [Phase 2](#phase-2-extensions-beyond-knope).
+
 ---
 
 ## F1: Semantic versions
 
 Source: `knope-versioning/src/semver/{mod,rule,package_versions,prerelease_map}.rs`
 
-### F1.1 Version grammar (a strict **subset** of SemVer)
+### F1.1 Version grammar: full SemVer 2.0.0 (decision D8)
+
+Knope accepts only a subset of SemVer (`M.m.p` or `M.m.p-label.N`). Remeris implements the full
+[SemVer 2.0.0](https://semver.org/spec/v2.0.0.html) grammar from the start, because it is the base for the
+pre-release channel work (E1).
 
 ```
-Version    := Stable | Stable "-" Prerelease
-Stable     := u64 "." u64 "." u64
-Prerelease := Label "." u64          ; split on the FIRST "." after "-"
-Label      := any string without "."  ; e.g. "rc", "alpha", "beta"
+version     := core ["-" prerelease] ["+" build]
+core        := numeric "." numeric "." numeric            ; uint64, no leading zeros ("0" is fine)
+prerelease  := pre-id *("." pre-id)
+pre-id      := numeric | alphanumeric                     ; numeric: no leading zeros
+alphanumeric:= 1*[0-9A-Za-z-] containing at least one non-digit
+build       := build-id *("." build-id)
+build-id    := 1*[0-9A-Za-z-]                             ; leading zeros allowed
 ```
 
-Parsing (`FromStr`):
-1. Split on the **first** `-`. The left side must split on `.` into **exactly 3** parts, each parsing as `u64`.
-2. If there is a right side, split it on the **first** `.`. The left part is the label (any string, even empty).
-   The right part must parse as `u64`. So `1.2.3-rc.4` is valid. `1.2.3-rc4`, `1.2.3-rc.4.5`, `1.2.3+build` and
-   `v1.2.3` are all **invalid**.
-3. Error message: `Found invalid semantic version {detail}`. Help: `The version must be a valid Semantic Version`.
-   URL: `https://knope.tech/reference/concepts/semantic-versioning`.
+No `v` prefix in a Version (tag prefixes such as `v` / `name/v` are stripped before parsing, F7.5).
+Error message stays Knope's: `Found invalid semantic version {detail}`, help `The version must be a valid Semantic Version`.
 
-Display: `M.m.p` or `M.m.p-label.N`.
+```go
+type Version struct {
+    Major, Minor, Patch uint64
+    Pre   []PreID   // empty = stable
+    Build []string  // kept for display and writing; ignored for precedence
+}
+type PreID struct { Str string; Num uint64; IsNum bool }
 
-Ordering: compare the stable part `(major, minor, patch)` first. If equal, stable > pre. Two pre-releases compare
-by **label as a string** (lexicographic byte order), then by number. This is not SemVer precedence, but it only
-matters inside `PackageVersions`, so copy it exactly.
+func Parse(s string) (Version, error)
+func (v Version) String() string           // canonical form, including build metadata
+func Compare(a, b Version) int             // SemVer §11 precedence, build ignored
+func (v Version) Equal(o Version) bool     // identical, including build
+func (v Version) IsPrerelease() bool
+```
+
+**Precedence (SemVer §11):** compare major, minor and patch numerically. A version with a pre-release is lower
+than the same core without one. Pre-release identifiers are compared left to right: two numeric ids compare
+numerically, two alphanumeric ids compare in ASCII order, numeric is lower than alphanumeric, and if all shared
+ids are equal the longer list is higher. Build metadata is ignored.
+
+Which comparison to use where:
+- Ordering, `Latest()`, "is the tag already released" (F14), bump calculations → `Compare`.
+- The "inconsistent versions" check across a package's files (F7.2) → `Equal`, so `1.2.3` vs `1.2.3+b1` is
+  reported (Knope could not express build metadata at all).
+
+**Knope's pre-release model on top of SemVer.** Knope's bumping logic needs a `(label, counter)` pair. Any
+pre-release is mapped onto that pair like this:
+
+| Pre-release | label | counter |
+| --- | --- | --- |
+| `rc.4` | `rc` | 4 |
+| `alpha.beta.2` | `alpha.beta` | 2 |
+| `rc4`, `beta` | `rc4`, `beta` | none |
+| `1` (single numeric id) | `""` | 1 |
+
+The rule: if there are at least 2 identifiers and the last one is numeric, it is the counter and the rest
+(joined with `.`) is the label. Otherwise the whole pre-release is the label and there is no counter. Versions
+produced by a bump are always `core-label.N` with no build metadata.
+
+**Differences from Knope (record in `testdata/deviations.md`):**
+- Accepted now, rejected by Knope: `1.2.3-rc4`, `1.2.3-rc.4.5`, `1.2.3+build.7`, `1.2.3-alpha.beta.1`. Tags like
+  these were silently skipped by Knope and now count as releases.
+- Rejected now, accepted by Knope: leading zeros (`01.2.3` → Knope read it as `1.2.3`; `1.2.3-rc.01`).
+- Ordering between pre-releases follows SemVer precedence instead of Knope's "label string, then number" (Quirk
+  Q2). For the `label.N` shape both give the same order, so only exotic versions are affected.
+
+Display: `String()` prints the canonical form, so `1.2.3+build` keeps its build metadata when written to files.
 
 ### F1.2 Rules
 
@@ -211,7 +270,7 @@ Fix/Custom→Patch. It is `Patch` when there are no changes.
 
 ### F1.3 `PackageVersions`: the version history of a package
 
-State: `stable *StableVersion` and `prereleases map[StableVersion]map[Label]Prerelease`. Keep both maps **ordered by
+State: `stable *Core` and `prereleases map[Core]map[Label]Version` (Core = major.minor.patch; Label as defined in F1.1). Keep both maps **ordered by
 key** (Go: sort keys when needed). There is always at least one label per entry.
 
 **`FromTags(prefix *string, tags []string)`**: tags must already be in **newest-first order** (see F9.3).
@@ -222,11 +281,11 @@ key** (Go: sort keys when needed). There is always at least one label per entry.
 
 **`update(version)`**:
 - Stable `new`: if `stable >= new` do nothing. Otherwise set `stable = new` and **clear all pre-releases**.
-- Pre `(s, pre)`: if a pre with the same `s` and label already exists and is `>= pre`, do nothing. Otherwise
-  insert or overwrite `prereleases[s][pre.label] = pre`.
+- Pre `(s, pre)`: if a pre with the same `s` and label already exists and is `>= pre` (by `Compare`), do nothing.
+  Otherwise insert or overwrite `prereleases[s][label(pre)] = pre`.
 
-**`Latest()`**: if there are pre-releases, return the pre whose stable key is the **largest**, using the largest
-label in that map (by string order). Otherwise return `stable`. Otherwise return nothing.
+**`Latest()`**: if there are pre-releases, take the **largest** stable key and return the highest-precedence
+pre-release in its map (`Compare`; Knope used the largest label string). Otherwise return `stable`. Otherwise return nothing.
 
 **`CalculateNewVersion(rule)`**:
 | rule | stable exists | result |
@@ -238,7 +297,8 @@ label in that map (by string order). Otherwise return `stable`. Otherwise return
 
 `calculatePre(label, r)`:
 1. `base = bump_stable(stable, r)` if stable exists, else the largest pre-release stable key, else `0.0.0`.
-2. `n = prereleases[base][label].version + 1` if that entry exists, else `0`.
+2. `n = counter + 1` if `prereleases[base][label]` exists and has a counter; `0` if it exists without a counter
+   (so `1.2.4-beta` is followed by `1.2.4-beta.0`, which is higher by SemVer precedence); else `0`.
 3. Return `base-label.n`.
 
 Examples to test (from the docs and code):
@@ -248,7 +308,11 @@ Examples to test (from the docs and code):
 - BumpVersion `Release` on `1.2.3-rc.4` → `1.2.3`.
 
 ### Acceptance (F1)
-- Port every unit test in `semver/*.rs` and `package_versions.rs` as a Go table test.
+- Port every unit test in `semver/*.rs` and `package_versions.rs` as a Go table test (adjusting the few that
+  expect Knope's subset errors, see F1.1).
+- Add SemVer 2.0.0 conformance tests: the valid/invalid examples and the precedence chain from the spec
+  (`1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta < 1.0.0-beta < 1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0`),
+  plus a fuzz test that `Parse(v.String())` round-trips.
 
 ---
 
@@ -383,21 +447,73 @@ remeris --help | --version
 - Unknown workflow names are rejected by the CLI parser. Knope also has a fallback `No workflow named {name}`.
 - `--help` on the root lists workflows. `<workflow> --help` shows the flags for that workflow.
 
-**urfave/cli v3 mapping.**
-- Load the config **before** building the command tree (as Knope does), because workflows become subcommands:
-  `root.Commands = append(root.Commands, &cli.Command{Name: w.Name, Usage: w.HelpText, Flags: …, Action: runWorkflow(w)})`.
-- `--dry-run` and `--verbose` (alias `v`) are `*cli.BoolFlag` on the root. v3 root flags are persistent by default,
-  so `remeris release --dry-run` works, as in clap's `global(true)`.
-- `--generate`, `--upgrade` and `--validate` are root `BoolFlag`s with `Local: true`, added only for the matching
-  ConfigSource. The root `Action` handles them, and errors with `No workflow selected…` when none is set.
-- `--override-version`: one package → `*cli.StringFlag` validated by F1 parsing. Several packages →
-  `*cli.StringSliceFlag` of `name=version`.
-- `--prerelease-label`: `*cli.StringFlag{Sources: cli.EnvVars("REMERIS_PRERELEASE_LABEL", "KNOPE_PRERELEASE_LABEL")}` (the first
-  set variable is used). The flag wins over the env vars because of urfave's value precedence.
-- `root.Version` gives `--version`. Help text formatting differs from clap. Golden tests should not compare
-  `--help` output byte-for-byte.
-- Exit codes: return the `Diagnostic` from the action. `main` renders it to stderr and exits 1 (do not use
-  `cli.Exit` inside steps).
+**urfave/cli v3 + koanf: the readykit pattern (decision D9).** Reuse the structure of
+`celest-io/readykit` (`cmd/readykit/main.go`, `pkg/app/config.go`):
+
+1. **Typed options struct with defaults.** Runtime options live in plain structs with `mapstructure` tags whose
+   names match the flag names, plus a constructor for defaults:
+   ```go
+   // internal/app/options.go
+   type GlobalOptions struct {
+       DryRun   bool   `mapstructure:"dry-run"`
+       Verbose  bool   `mapstructure:"verbose"`
+       Generate bool   `mapstructure:"generate"`
+       Upgrade  bool   `mapstructure:"upgrade"`
+       Validate bool   `mapstructure:"validate"`
+       // GitHub App auth (E2), never read from knope.toml:
+       GitHubAppID          int64  `mapstructure:"github-app-id"`
+       GitHubInstallationID int64  `mapstructure:"github-installation-id"`
+       GitHubAppKeyPath     string `mapstructure:"github-app-private-key-path"`
+   }
+   func DefaultGlobalOptions() *GlobalOptions { return &GlobalOptions{} }
+
+   type WorkflowOptions struct {
+       OverrideVersion []string `mapstructure:"override-version"`  // "1.2.3" or "pkg=1.2.3"
+       PrereleaseLabel string   `mapstructure:"prerelease-label"`
+   }
+   ```
+2. **Flags declare their env vars** through `Sources: cli.EnvVars(...)`, as in readykit:
+   `--prerelease-label` → `cli.EnvVars("REMERIS_PRERELEASE_LABEL", "KNOPE_PRERELEASE_LABEL")`,
+   `--github-app-id` → `REMERIS_GITHUB_APP_ID`, `--github-installation-id` → `REMERIS_GITHUB_INSTALLATION_ID`,
+   `--github-app-private-key-path` → `REMERIS_GITHUB_APP_PRIVATE_KEY_PATH`.
+   The private key itself can also come from `REMERIS_GITHUB_APP_PRIVATE_KEY` (PEM content, for CI secrets); that one is
+   read directly, never through a flag, so it doesn't show up in `--help` defaults or process listings.
+   The flag wins over the env vars (urfave's precedence).
+3. **One generic loader**, copied from readykit's `app.LoadConfig` with one fix:
+   ```go
+   // internal/app/config.go
+   func LoadConfig[T any](cmd *cli.Command, cfg *T) error {
+       k := koanf.New(".")
+       if err := k.Load(cliflagv3.Provider(cmd, "."), nil); err != nil { return err }
+       return k.UnmarshalWithConf(commandPath(cmd), cfg, koanf.UnmarshalConf{Tag: "mapstructure"})
+   }
+   // commandPath returns "remeris" or "remeris.release": cliflagv3 keys every flag by the
+   // command lineage, so readykit's cmd.Name prefix only works for the root command.
+   func commandPath(cmd *cli.Command) string { /* join Lineage() names root→cmd with "." */ }
+   ```
+   Only flags that were set (on the command line or through their env var) reach koanf, so values not set keep the
+   defaults from the constructor. Workflow names are validated against `^[A-Za-z0-9_-]+$` at config load
+   time, because a `.` in a workflow name would break the koanf key path. Knope allows any string, so this is a
+   small deviation; the error is `Workflow names may only contain letters, digits, '-' and '_': {name}`.
+4. **Command tree.** As in readykit, `main` builds a root `cli.Command` with `Name: "remeris"`,
+   `Version: version.Full()`, `Suggest: true`, `EnableShellCompletion: true`, root `Flags`, and a `Before` hook that
+   runs `LoadConfig(cmd, globalOpts)` and sets up `slog` (verbose → debug level). Command constructors take the
+   shared state as an argument and close over it (`workflowCommand(cfg, w) *cli.Command`), like readykit's
+   `daemonCommand(cfg)`. Each workflow `Action` runs `LoadConfig(cmd, &WorkflowOptions{})` and then the workflow.
+5. **Project config is loaded before the tree is built**, because workflows become subcommands. `knope.toml` uses
+   its own koanf instance (F2.4, file provider + TOML parser + TOML index). It is not merged with the CLI koanf
+   instance: CLI options and project config have different shapes and lifetimes.
+6. Flag details:
+   - `--dry-run` and `--verbose` (alias `v`) are root `BoolFlag`s. v3 root flags are persistent by default, so
+     `remeris release --dry-run` works, as in clap's `global(true)`.
+   - `--generate`, `--upgrade` and `--validate` are root `BoolFlag`s with `Local: true`, added only for the matching
+     ConfigSource. The root `Action` handles them, and errors with `No workflow selected…` when none is set.
+   - `--override-version`: `StringSliceFlag` in both cases. With one package, exactly one bare `<version>` is allowed.
+     With several, each value must be `name=version`.
+   - `root.Version` gives `--version`. Help formatting differs from clap, so golden tests don't compare `--help`.
+7. **Errors.** Readykit logs `slog.Error` and exits 1. Remeris instead renders the `Diagnostic` (F3.3) to stderr and
+   exits 1, because diagnostics have help text and nested errors that a log line would lose. Steps never call
+   `cli.Exit`.
 
 > **Decision (D1):** the config file stays `knope.toml` (read and written by `--generate`/`--upgrade`), so existing
 > Knope projects work unchanged. **Everything else says `remeris`**: binary name, `--help`, log and error text
@@ -521,6 +637,9 @@ Variables:
   `notes`. Otherwise use `latestVersion` and find that release in the changelog (F12.5). If that fails:
   `Could not find a changelog entry for version {v}`.
 - **`IssueBranch`**: needs a selected issue (`No issue selected`). Value = `branchNameFromIssue(issue)` (F19.6).
+
+Phase 2 hook: implement lookup as `Resolve(v Variable, scope *PackageScope)`. Phase 1 always passes `nil`, which
+gives the single-package rules above. E4 passes a package for qualified variables and `for_each` loops.
 
 ---
 
@@ -1100,6 +1219,7 @@ if REAL run && !allow_empty && len(PendingActions)==0 → error "No packages are
 - commits = ignore ? none : `CommitMessagesAfterTag(lastStableTag(pkg))` (F9.2).
 - Change files for this package (sorted by id), each with GitInfo (F11.2).
 - Result = commit changes (F10.2) followed by change-file changes (F11.2).
+- Implement both as `changes.Source` values (Phase 2 hook, E3), run in that fixed order in Phase 1.
 
 ### F13.2 Pre-releases
 - `prerelease_label` comes from the step, overridden at runtime by `--prerelease-label` / `REMERIS_PRERELEASE_LABEL` (fallback `KNOPE_PRERELEASE_LABEL`).
@@ -1202,13 +1322,55 @@ Prompt failure / non-interactive → `Failed to get user input` (help: `This ste
 
 ## F16: GitHub integration
 
-### F16.1 Auth states
-- `RequireAuthentication`: token from env / store / prompt.
-- `MaybeAuthenticated`: env / store, **no prompt**. Anonymous is allowed (used for PR lookups on public repos).
-- The client and token are cached in State after first use.
+### F16.0 Client: `google/go-github` (decision D10)
 
-### F16.2 Create release (`POST https://api.github.com/repos/{owner}/{repo}/releases`)
-Headers: `Authorization: token {token}`, `Accept: application/vnd.github+json`. Body:
+Every GitHub call goes through `github.com/google/go-github/v92` (v92.0.0, 2026-09-14, needs Go 1.26). No
+hand-written REST calls. The HTTP behaviour from F15.1 (User-Agent, retries, rate-limit warnings) lives in the
+`http.Client` handed to go-github:
+
+```go
+httpClient := &http.Client{Transport: httpx.NewRetryTransport(authTransport)}   // F15.1
+gh := github.NewClient(httpClient)
+gh.UserAgent = "Remeris"
+if cfg.GitHub.APIURL != "" { gh, _ = gh.WithEnterpriseURLs(cfg.GitHub.APIURL, cfg.GitHub.UploadURL) }
+```
+
+`APIURL`/`UploadURL` are new optional `[github]` keys (`api_url`, `upload_url`). They give GitHub Enterprise support
+and let tests point the client at an `httptest.Server`. Unknown to Knope, but ignored by it, so the file stays
+compatible.
+
+| Knope call | go-github method |
+| --- | --- |
+| Create release | `Repositories.CreateRelease(ctx, o, r, &github.RepositoryRelease{TagName, Name, Body, Prerelease, Draft, GenerateReleaseNotes, TargetCommitish})` |
+| Upload asset | `Repositories.UploadReleaseAsset(ctx, o, r, releaseID, &github.UploadOptions{Name: name}, file)`. go-github expands the upload URL, so no URI-template code is needed. |
+| Publish draft | `Repositories.EditRelease(ctx, o, r, id, &github.RepositoryRelease{Draft: github.Ptr(false)})` |
+| Find existing PR | `PullRequests.List(ctx, o, r, &github.PullRequestListOptions{Head: owner+":"+branch, Base: base})` |
+| Update PR | `PullRequests.Edit(ctx, o, r, number, &github.PullRequest{Title, Body})` |
+| Create PR | `PullRequests.Create(ctx, o, r, &github.NewPullRequest{Title, Body, Head: branch, Base: base})` |
+| PRs for a commit (F16.4) | `PullRequests.ListPullRequestsWithCommit(ctx, o, r, sha, nil)` |
+| List issues (F19.1) | `Issues.ListByRepo(ctx, o, r, &github.IssueListByRepoOptions{State: "open", Labels: labels})` |
+
+Errors: wrap `*github.ErrorResponse` / `*github.RateLimitError` / `*github.AbuseRateLimitError` into the same
+`ApiRequestError` message (`Trouble communicating with GitHub while {activity}: {status} with body: {message}`).
+
+### F16.1 Auth
+Token sources, in order:
+1. **GitHub App** (E2, available from M7 because it is just another token source): when an App ID and a private key
+   are configured (F3.1 flags/env vars), use `github.com/jferrl/go-githubauth` to mint an installation token.
+   `githubauth.NewApplicationTokenSource(appID, pem)` → `githubauth.NewInstallationTokenSource(installationID, appTS)`
+   → `oauth2.NewClient`. If no installation ID is given, look it up once with the app JWT
+   (`Apps.FindRepositoryInstallation(ctx, owner, repo)`). Tokens refresh automatically.
+2. `GITHUB_TOKEN` env var.
+3. Stored token (F15.2).
+4. Prompt (only for `RequireAuthentication`).
+
+- `RequireAuthentication`: sources 1 → 4.
+- `MaybeAuthenticated`: sources 1 → 3, **no prompt**. Anonymous is allowed (used for PR lookups on public repos).
+- The client is built once and cached in State.
+- Log at debug which source was used (`Using GitHub App installation {id}` / `Using GITHUB_TOKEN`), never the token.
+
+### F16.2 Create release
+The wire payload (built by go-github from `RepositoryRelease`) must be:
 ```json
 {"tag_name": "...", "name": "...", "body": "... (omitted when empty)", "prerelease": false,
  "generate_release_notes": <body empty>, "draft": <assets configured>, "target_commitish": "<HEAD sha, omitted if unknown>"}
@@ -1216,9 +1378,8 @@ Headers: `Authorization: token {token}`, `Accept: application/vnd.github+json`. 
 With assets:
 1. Resolve assets: glob → every match (name = file name), or the explicit list (name = `name`, else the file name).
 2. For each: read the file (`Could not read asset file {path}: … Release has been created but not published!`), then
-   POST to `upload_url`, expanding the URI template `{?name,label}` with `name`. Headers: `Content-Type: application/octet-stream`
-   and `Content-Length`. The body is the raw bytes.
-3. `PATCH {release.url}` `{"draft": false}`.
+   upload it with `UploadReleaseAsset` (content type `application/octet-stream`).
+3. Publish: `EditRelease` with `draft: false`.
 
 Dry run:
 `Would create a {release|prerelease} on GitHub with name {name} and tag {tag}[ at commit {sha}] and {body:\n<notes> | autogenerated body}`,
@@ -1229,12 +1390,11 @@ then `Would upload assets to GitHub:` and `- {name} from {path}` for each asset.
 ### F16.4 PR info enrichment (for `$pr_number` / `$pr_author_login`)
 Dry run: log `Would fetch Pull Request info from GitHub repo {owner}/{repo} for {n} changes`, and set each change
 that has GitInfo to `pr_number=1234`, `pr_author_login="some-user"`.
-Real: for each change with GitInfo, `GET https://api.github.com/repos/{o}/{r}/commits/{shortHash}/pulls`
-(headers `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2026-03-10`, plus `Authorization: Bearer`
-if there is a token). Take the first PR: `number` and `user.login`. Errors for one commit → warn and continue.
+Real: for each change with GitInfo, `ListPullRequestsWithCommit` with the short hash (Knope sends
+`X-GitHub-Api-Version: 2026-03-10`; go-github sets its own API version header). Take the first PR: `number` and `user.login`. Errors for one commit → warn and continue.
 Nothing found → debug log.
 
-### F16.5 Issues (GraphQL), see F19.1.
+### F16.5 Issues, see F19.1.
 
 ---
 
@@ -1258,8 +1418,8 @@ Config: `{owner, repo, host}`. Base = `{host}/api/v1`. Auth = query parameter `a
 3. For each configured forge (GitHub first, then Gitea):
    - `branch = CurrentBranch()`. Dry run: `Would create or update a pull request from {branch} to {base}:`,
      `\tTitle: {title}`, `\tBody: {body}`.
-   - GitHub: `GET https://api.github.com/repos/{o}/{r}/pulls?head={owner}:{branch}&base={base}` (Bearer auth). If
-     one exists → `PATCH {pr.url}` `{title, body}`. Else → `POST …/pulls` `{title, body, head: branch, base}`.
+   - GitHub (go-github, F16.0): `PullRequests.List` with `Head: owner+":"+branch`, `Base: base`. If one exists →
+     `PullRequests.Edit` with `{title, body}`. Else → `PullRequests.Create` with `{title, body, head: branch, base}`.
    - Gitea: as in F17, using only the **last path segment** of the branch ref as `branch`.
 
 **Quirk Q3:** for GitHub, Knope sends `head=owner:refs/heads/<branch>` and `"head": "refs/heads/<branch>"`, and the
@@ -1276,14 +1436,11 @@ rev-parse --abbrev-ref HEAD`).
 - Dry run: needs `[github]` (`NotConfigured`). Logs `Would query configured GitHub instance for issues with labels a, b`
   (or `with any labels`), then `Would prompt user to select an issue and move workflow to IssueSelected state.` Sets
   the fake issue `{key:"123", summary:"Test issue"}`.
-- Real: needs auth. `POST https://api.github.com/graphql` with `Authorization: bearer {token}`:
-  ```graphql
-  query($repo: String!, $owner: String!, $labels: [String!]) {
-    repository(name:$repo, owner:$owner) { issues(states:OPEN, first: 30, labels: $labels) { nodes { number, title } } }
-  }
-  ```
-  Read `/data/repository/issues/nodes`. If it is missing → `UnexpectedApiResponse({json})`. Show a Select
-  `Select an Issue` with items `"{key}: {summary}"`. Log `Selected item : {issue}`.
+- Real: needs auth. Knope uses a GraphQL query (`issues(states:OPEN, first: 30, labels: $labels)`). go-github is
+  REST-only, so use `Issues.ListByRepo` with `State: "open"`, `Labels: labels`, `PerPage: 30`. The REST endpoint also
+  returns pull requests: skip items where `IsPullRequest()` is true, and fetch further pages until 30 issues are
+  collected or there are no more pages (same result set as the GraphQL query). Show a Select `Select an Issue` with
+  items `"{key}: {summary}"`. Log `Selected item : {issue}`.
 
 ### F19.2 `SelectGiteaIssue { labels? }`
 The same flow with the Gitea API (F17). Dry-run text says `Gitea instance`. Fake issue `{123, "Test issue"}`.
@@ -1444,6 +1601,171 @@ Fixtures: `tests/upgrade/*`, `tests/validate/*`.
 
 ---
 
+## Phase 2: Extensions beyond Knope
+
+Phase 1 (M0–M11) reaches Knope parity. Phase 2 adds features Knope doesn't have. Each extension below is a
+design sketch: enough to keep Phase 1 from closing doors, and a starting point for its own detailed spec when we
+get there. All new config keys are optional, and Knope ignores unknown keys, so a `knope.toml` that uses them still
+loads in Knope (it just won't do the new things).
+
+### Phase 1 hooks (build these during parity work)
+
+These cost little now and avoid rewrites later:
+
+| Hook | Where | Why |
+| --- | --- | --- |
+| Full SemVer 2.0.0 `Version` | F1 (D8) | Base for E1 channels. |
+| `changes.Source` interface; conventional commits and changesets implemented as sources | F10, F11, F13.1 | E3 adds sources without touching `PrepareRelease`. |
+| Variable lookup takes a scope: `Resolve(v Variable, scope *PackageScope)`. Phase 1 always passes `nil` (= Knope's single-package rule). | F4.4 | E4 per-package variables. |
+| `Git.Commit(msg string, opts CommitOptions)` and `Git.CreateTag(name string, opts TagOptions)` with a `Sign` field, unused in Phase 1 | F9 | E2 signing. |
+| GitHub client built from an auth provider (token or App), not from a raw token | F16.0, F16.1 | E2 commits through the API. |
+| Config decoding ignores unknown keys | F2.4 | Phase 2 keys can be added to `knope.toml` without breaking Phase 1 builds. |
+
+### E1: Pre-release channels (alpha → beta → rc → stable)
+
+Knope supports one pre-release label at a time, chosen per run (`prerelease_label`, `--prerelease-label`). There is
+no notion of an ordered progression, so nothing stops going from `rc` back to `alpha`.
+
+Sketch:
+```toml
+[release]
+channels = ["alpha", "beta", "rc"]   # ordered, lowest first; any SemVer alphanumeric identifiers
+```
+- `remeris release --channel beta` (env `REMERIS_CHANNEL`) replaces `--prerelease-label` when `channels` is set. The
+  label must be one of the channels.
+- **Promotion rule:** for the same base version, a channel lower than the latest existing pre-release is an error
+  (`Cannot release alpha after rc for 1.3.0`), unless `--allow-channel-downgrade`. Moving up starts that channel's
+  counter at 0 (`1.3.0-rc.2` → `--channel stable` gives `1.3.0`).
+- **Base version:** the change set since the last stable tag decides the base (as today). If the bump rule grows
+  mid-cycle (a breaking change lands during `beta`), the base moves (`1.3.0-beta.2` → `2.0.0-beta.0`), and the
+  channel order check applies to the new base.
+- **Counter start:** option `counter_start = 0 | 1` (Knope uses 0).
+- **Changelog:** option `collapse_prereleases = true` removes the pre-release sections of a cycle from the changelog
+  when the stable version is released, leaving one combined entry.
+- Precedence: SemVer compares `alpha < beta < rc` correctly as strings, but the configured order (not string order) is
+  what the promotion rule uses, so custom names like `preview` work.
+
+### E2: Signed commits and tags
+
+Knope never commits: the default workflows run `git commit` through a `Command` step. E2 adds first-class steps:
+
+```toml
+[[workflows.steps]]
+type = "Commit"
+message = "chore: prepare release $version"   # a Template (F4.4)
+sign = "auto"        # "auto" | "git" | "github" | "none"
+push = true          # push the branch (and new tags) after committing
+
+[[workflows.steps]]
+type = "Release"
+sign_tags = true     # annotated, signed tags for git-only releases
+```
+
+**`sign = "git"`:** use the user's own git signing setup. CLI backend: `git commit -S -m …` / `git tag -s`. This
+respects `gpg.format` (`openpgp`, `ssh`, `x509`), `user.signingkey` and `gpg.program`. go-git fallback: OpenPGP keys
+through `CommitOptions.SignKey`, and SSH keys through go-git's signer support (check which go-git v5 release has it
+during the spike); `x509` is CLI-only. If signing fails, the step fails; it never silently falls back to unsigned.
+
+**`sign = "github"`: GitHub App, commits made through the API.** GitHub signs commits created through the API by
+an App and shows them as Verified, as long as the author/committer are not overridden (confirm this, and the exact
+conditions, in a spike before building on it). Flow, all through go-github with the App installation token (F16.1):
+1. Precondition: the local branch must equal the remote branch (`git fetch` then compare SHAs). Otherwise fail:
+   `Local branch is not in sync with origin; push or pull first`.
+2. Read the staged changes (`git diff --cached --name-status -z`). For each added/modified file:
+   `Git.CreateBlob` (base64). Deleted files become tree entries with a nil SHA.
+3. `Git.CreateTree` with `base_tree` = the HEAD tree. Keep file modes (executable bit, symlinks).
+4. `Git.CreateCommit` with the message and parent = HEAD, **no author or committer** (so GitHub signs it).
+5. `Git.UpdateRef("heads/{branch}", sha, force=false)`. A race with someone else's push fails here, with no force.
+6. Sync locally: `git fetch origin {branch}` then `git reset --soft {sha}` (the index already matches the commit).
+7. Tags: `Release` with a forge creates the tag at `target_commitish` = this SHA, so no local tag or push is needed.
+   Signed annotated tags are only supported with `sign = "git"` (verify whether App-created tag objects are signed).
+
+**`sign = "auto"`:** `github` when GitHub App credentials are configured and `[github]` is set; else `git` when
+git's `commit.gpgsign` is true; else `none`.
+
+Dry run: `Would create a signed commit via the GitHub API on {branch}: {message}` (or `…with git`), and list the files.
+
+### E3: More changelog sources
+
+Today a change comes from either a conventional commit or a change file. E3 turns these into pluggable sources:
+
+```go
+// pkg/versioning/changes
+type Source interface {
+    Name() string
+    // Changes returns the changes for one package since its last stable release.
+    Changes(ctx context.Context, pkg PackageInfo, since ReleaseRef) ([]Change, error)
+}
+```
+Config:
+```toml
+[changes]
+sources = ["conventional_commits", "changesets"]          # default; order = order in the changelog
+ignore_conventional_commits = true                        # still works: removes that source (Knope compatibility)
+
+[changes.github_pull_requests]                            # example of a new source
+labels = { major = ["breaking"], minor = ["feature", "enhancement"], patch = ["bug", "fix"] }
+skip_labels = ["no-changelog"]
+```
+Candidate sources:
+| Source | Change from | Notes |
+| --- | --- | --- |
+| `conventional_commits` | commit messages | Phase 1 (F10) |
+| `changesets` | `.changeset/*.md` | Phase 1 (F11) |
+| `github_pull_requests` | merged PRs since the last tag | Type from labels; summary = title; details = a `## Changelog` section of the body, if present. Uses go-github. |
+| `commits` | every commit subject | For repos without conventions; all patch unless configured. |
+| `command` | an external program | Runs a command that prints a JSON array `[{type, summary, details?, packages?}]`. Escape hatch for custom systems. |
+| `jira` | Jira issues in a fix version | Uses the existing Jira client (F19.3). |
+
+Dedupe: when two sources describe the same work (a PR and its squash commit), keep the first source's change
+and drop others with the same commit hash or PR number. Controlled by `dedupe = true` (default).
+
+### E4: Monorepo releases with per-package variables
+
+Knope already releases several packages from one repo with their own versions and `{name}/v{version}` tags. Two
+gaps:
+1. `Version` and `ChangelogEntry` only work with a single package (`Too many packages defined`), so with several
+   packages you can't put versions in commit messages, PR titles or commands.
+2. Commits are assigned to packages only by conventional-commit scope.
+
+Sketch:
+- **Qualified variables.** A variable value can name a package:
+  ```toml
+  variables = { "$api_version" = { variable = "Version", package = "api" },
+                "$web_notes"   = { variable = "ChangelogEntry", package = "web" } }
+  ```
+  The plain string form (`"Version"`) keeps Knope's single-package rule.
+- **Per-package iteration.** `Command` and `CreatePullRequest` get `for_each = "released_package"` (only packages
+  released in this run, i.e. with a pending `CreateRelease`) or `for_each = "package"` (all packages). Inside the
+  loop these default variables apply: `$package`, `$version`, `$changelog`, `$tag`. Example:
+  ```toml
+  [[workflows.steps]]
+  type = "Command"
+  for_each = "released_package"
+  command = "npm publish --workspace $package"
+  ```
+- **Aggregate variables** for multi-package text: `ReleasedPackages` (`api@1.2.0, web@0.4.1`) and `ReleaseNotes` (each
+  released package as `## {package} {version}` followed by its notes, ready for a PR body). The default multi-package
+  commit message becomes `chore: prepare releases $released_packages` (opt-in, to keep parity by default).
+- **Path-based attribution.** Package option `paths = ["packages/api/**"]`: a commit counts for the package if it
+  touches a matching file. `commit_filter = "scopes" | "paths" | "both"` (default `scopes`, Knope's behaviour).
+  Requires the `Git` interface to return changed paths per commit.
+- **Tag format.** Option `tag_format = "{name}@{version}"` per package (default Knope's `{name}/v{version}`), for
+  ecosystems like npm that use `@`. Tag parsing (F7.5) must use the same format.
+
+### Phase 2 order (proposal)
+
+| # | Extension | Depends on |
+| --- | --- | --- |
+| P2.1 | E4 per-package variables and `for_each` | Phase 1 F4.4 scope hook |
+| P2.2 | E2 signed commits: `Commit` step with `sign = "git"` | F9 |
+| P2.3 | E2 GitHub App commits (`sign = "github"`) | F16.1, spike on verification rules |
+| P2.4 | E1 pre-release channels | F1 |
+| P2.5 | E3 change sources: `github_pull_requests`, `command` | F13.1 Source interface |
+| P2.6 | E4 path-based attribution, tag formats | F9 changed-paths API |
+
+---
+
 ## Testing strategy
 
 1. **Unit tests** for `pkg/versioning/*`. Port every `#[cfg(test)]` module from `knope-versioning` and from the CLI
@@ -1480,7 +1802,7 @@ Fixtures: `tests/upgrade/*`, `tests/validate/*`.
 | ID | Quirk | Where | Decision |
 | --- | --- | --- | --- |
 | Q1 | Unknown TOML keys are silently ignored (for example the docs' `label` vs the code's `labels`) | F2, F19 | Keep. Maybe add a `--validate` warning later. |
-| Q2 | Pre-release ordering compares labels as strings | F1 | Keep |
+| Q2 | Pre-release ordering compares labels as strings | F1 | **Change**: SemVer precedence (D8) |
 | Q3 | `CurrentBranch` returns `refs/heads/...`. This breaks the GitHub PR head and `SelectIssueFromBranch` | F9.6, F18, F19.5 | **Fix** (short name). Update the golden logs. |
 | Q4 | Changeset package names are not unquoted, so `"pkg": minor` gives name `"pkg"` | F11.1 | Keep (compatibility). Consider stripping quotes later. |
 | Q5 | Change-file front-matter order comes from a HashMap (random) | F11.4 | Use selection order (deterministic) |
@@ -1509,3 +1831,8 @@ Recorded 2026-10-02.
 | D5 | Jira search endpoint | Use `POST /rest/api/3/search/jql` | F19.3 |
 | D6 | `RebaseBranch` | Keep Knope's behaviour (integrate the current branch into `to`, then switch to `to`) | F19.8 |
 | D7 | Minimum Go version | Go 1.27 | 0.3 |
+| D8 | Version grammar | Full SemVer 2.0.0 from Phase 1 (pre-release ids, build metadata, §11 precedence). Bumps keep Knope's `label.N` shape. | F1 |
+| D9 | CLI flags and config | Reuse readykit's urfave/cli v3 + koanf (`cliflagv3`) pattern, with a lineage-based key prefix for subcommands | F3.1 |
+| D10 | GitHub client | `google/go-github` (v92) for every GitHub call | F16.0 |
+| D11 | GitHub App auth | `jferrl/go-githubauth`; App credentials only from flags/env, never `knope.toml` | F16.1, E2 |
+| D12 | Phases | Knope parity first (Phase 1), then E1 channels, E2 signed commits, E3 change sources, E4 monorepo variables (Phase 2) | Phase 2 |
