@@ -1,7 +1,10 @@
 # Remeris
 
-Remeris is a Go reimplementation of [Knope](https://github.com/knope-dev/knope): a drop-in replacement
-that reads the same `knope.toml`, `.changeset/` files and Git tag formats, and prints the same messages.
+Remeris is a release tool, written in Go, that supports multiple release configurations. It starts by
+re-implementing [Knope](https://github.com/knope-dev/knope) and reusing its ideas: it reads Knope's `knope.toml`,
+`.changeset/` files and Git tag formats, writes the same file edits and changelog output, and prints the same
+messages. Knope's configuration is the first supported one, not a legacy format: treat it as a peer of the
+configurations that follow.
 
 ## Read first
 
@@ -18,9 +21,12 @@ To compare behaviour or reuse test fixtures, clone Knope into a scratch director
 
 ## Naming (decision D1)
 
-The config file stays `knope.toml`. Everything else says `remeris`: the binary, help, log and error text,
-diagnostic codes, env vars (`REMERIS_*`, with `KNOPE_PRERELEASE_LABEL` as a fallback) and the credential
-directory. Keep the name in one constant (`internal/brand`).
+The program is `remeris`: the binary, help, log and error text, diagnostic codes (`remeris::...`) and the
+credential directory. Each release configuration keeps the names its own format defines, and the code that
+implements the configuration owns them: Knope's is `knope.toml` and the `KNOPE_*` environment variables.
+There is no global "brand" package; do not add one. A flag that two formats could share accepts one
+environment variable per name, `REMERIS_*` first (for example `REMERIS_PRERELEASE_LABEL` and
+`KNOPE_PRERELEASE_LABEL`).
 
 ## Commands
 
