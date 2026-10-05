@@ -100,7 +100,7 @@ func TestLoadConfigWorkflowFlags(t *testing.T) {
 			args: []string{workflowName},
 			want: WorkflowOptions{PrereleaseLabel: "beta"},
 		},
-		"knope env var as fallback": {
+		"knope env var": {
 			env:  map[string]string{"KNOPE_PRERELEASE_LABEL": "alpha"},
 			args: []string{workflowName},
 			want: WorkflowOptions{PrereleaseLabel: "alpha"},

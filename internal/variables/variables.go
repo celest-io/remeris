@@ -4,7 +4,6 @@ package variables
 import (
 	"strings"
 
-	"github.com/celest-io/remeris/internal/brand"
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/workflow"
 )
@@ -86,12 +85,12 @@ func Resolve(_ workflow.State, v Variable, _ *PackageScope) (string, error) {
 	switch v {
 	case Version, ChangelogEntry:
 		return "", diag.New("No packages to operate on").
-			WithCode(brand.Name + "::no_defined_packages").
-			WithHelp("There must be at least one package for " + brand.Name +
-				" to work with, no supported package files were found in this directory.")
+			WithCode("remeris::no_defined_packages").
+			WithHelp("There must be at least one package for remeris to work with, " +
+				"no supported package files were found in this directory.")
 	case IssueBranch:
 		return "", diag.New("No issue selected").
-			WithCode(brand.Name + "::no_issue_selected").
+			WithCode("remeris::no_issue_selected").
 			WithHelp("You must select an issue with a Select*Issue step before using the IssueBranch variable.")
 	}
 	return "", diag.Newf("Unknown variable %q", string(v))

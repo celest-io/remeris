@@ -15,10 +15,12 @@ import (
 	"github.com/knadh/koanf/v2"
 	gotoml "github.com/pelletier/go-toml/v2"
 
-	"github.com/celest-io/remeris/internal/brand"
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/workflow"
 )
+
+// KnopeFile is the file name of Knope's release configuration, the first configuration remeris supports.
+const KnopeFile = "knope.toml"
 
 // Source says where a Config came from, which decides the CLI flags that exist (spec F2.3, F3.1).
 type Source int
@@ -134,7 +136,7 @@ const tagName = "toml"
 
 var workflowName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-// Load reads the configuration at path, which is normally brand.ConfigFile in the working
+// Load reads the configuration at path, which is normally KnopeFile in the working
 // directory. A file that cannot be read means there is none, and the default configuration is
 // returned.
 func Load(path string) (*Config, error) {
@@ -200,7 +202,7 @@ func decode(path string, src []byte) (*Config, error) {
 		},
 	})
 	if err != nil {
-		return nil, diag.Newf("Invalid configuration in %s: %w", brand.ConfigFile, err).
+		return nil, diag.Newf("Invalid configuration in %s: %w", KnopeFile, err).
 			WithCode("config::invalid").
 			WithHelp("Check the file against the documented schema.")
 	}
@@ -221,7 +223,7 @@ func decode(path string, src []byte) (*Config, error) {
 		if !workflowName.MatchString(rw.Name) {
 			return nil, diag.Newf("Workflow names may only contain letters, digits, '-' and '_': %s", rw.Name).
 				WithCode("config::workflow_name").
-				WithHelp("Rename the workflow in " + brand.ConfigFile + ".")
+				WithHelp("Rename the workflow in " + KnopeFile + ".")
 		}
 		for j, step := range rw.Steps {
 			orderVariables(step, index, "workflows", i, "steps", j)

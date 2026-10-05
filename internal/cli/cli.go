@@ -9,17 +9,26 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/celest-io/remeris/internal/app"
-	"github.com/celest-io/remeris/internal/brand"
 	"github.com/celest-io/remeris/internal/config"
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/version"
 	"github.com/celest-io/remeris/internal/workflow"
 )
 
+// name is the program name, used in help, errors and diagnostic codes.
+const name = "remeris"
+
+// Environment variables that set --prerelease-label. Remeris' own name wins; KNOPE_PRERELEASE_LABEL is the
+// name Knope's configuration documents for the same setting.
+const (
+	prereleaseLabelEnv      = "REMERIS_PRERELEASE_LABEL"
+	knopePrereleaseLabelEnv = "KNOPE_PRERELEASE_LABEL"
+)
+
 // Main loads the configuration, runs the command line in args and returns the process exit code.
 // Logs go to stdout, rendered errors to stderr.
 func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	cfg, err := config.Load(brand.ConfigFile)
+	cfg, err := config.Load(config.KnopeFile)
 	if err == nil {
 		err = New(cfg, stdout, stderr).Run(ctx, args)
 	}
@@ -47,7 +56,7 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 	}
 
 	root := &cli.Command{
-		Name:                  brand.Name,
+		Name:                  name,
 		Usage:                 "Automate releases and change management",
 		Version:               version.Full(),
 		Writer:                stdout,
@@ -69,7 +78,7 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 			if cmd.Args().Present() {
 				return diag.Newf("No workflow named %s", cmd.Args().First())
 			}
-			return diag.Newf("No workflow selected. Run '%s --help' for a list of options.", brand.Name)
+			return diag.Newf("No workflow selected. Run '%s --help' for a list of options.", name)
 		},
 	}
 	for _, w := range cfg.Workflows {
@@ -91,14 +100,14 @@ func rootFlags(cfg *config.Config) []cli.Flag {
 		},
 	}
 	if cfg.Source == config.SourceDefault {
-		return append(flags, &cli.BoolFlag{Name: "generate", Local: true, Usage: "Generate a " + brand.ConfigFile + " file"})
+		return append(flags, &cli.BoolFlag{Name: "generate", Local: true, Usage: "Generate a " + config.KnopeFile + " file"})
 	}
 	return append(flags,
 		&cli.BoolFlag{
 			Name: "upgrade", Local: true,
-			Usage: "Upgrade to the latest " + brand.ConfigFile + " syntax from any deprecated (but still supported) syntax.",
+			Usage: "Upgrade to the latest " + config.KnopeFile + " syntax from any deprecated (but still supported) syntax.",
 		},
-		&cli.BoolFlag{Name: "validate", Local: true, Usage: "Check that the " + brand.ConfigFile + " file is valid."},
+		&cli.BoolFlag{Name: "validate", Local: true, Usage: "Check that the " + config.KnopeFile + " file is valid."},
 	)
 }
 
@@ -119,7 +128,7 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 		flags = append(flags, &cli.StringFlag{
 			Name:    "prerelease-label",
 			Usage:   "Set the prerelease_label attribute of any PrepareRelease steps at runtime.",
-			Sources: cli.EnvVars(brand.PrereleaseLabelEnv, brand.LegacyPrereleaseLabelEnv),
+			Sources: cli.EnvVars(prereleaseLabelEnv, knopePrereleaseLabelEnv),
 		})
 	}
 
@@ -163,7 +172,7 @@ func runSpecialMode(ctx context.Context, global *app.GlobalOptions, cfg *config.
 
 func notImplemented(what, milestone string) error {
 	return diag.Newf("%s is not implemented yet (milestone %s)", what, milestone).
-		WithCode(brand.Name + "::not_implemented")
+		WithCode(name + "::not_implemented")
 }
 
 // validate runs every workflow as a dry run and reports all the problems at once (spec F21).
