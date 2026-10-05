@@ -118,11 +118,10 @@ changes, forges, prompts, discovery, `--generate`, `--upgrade` (see spec section
 
 ```
 cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests
-internal/brand/     the "remeris" name, knope.toml file name, env var names
 internal/diag/      Diagnostic interface and the renderer for errors (message, help, related errors)
 internal/app/       GlobalOptions, WorkflowOptions and the generic LoadConfig[T]
 internal/cli/       root command, one subcommand per workflow, logging, --validate
-internal/config/    knope.toml loading: koanf + a go-toml unstable index for key order and spans
+internal/config/    Knope configuration (knope.toml) loading: koanf + a go-toml unstable index for key order and spans
 internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
 internal/steps/     Command step and the stubs of the others; steps/command splits command lines
