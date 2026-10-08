@@ -1,6 +1,7 @@
 package config
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -28,8 +29,14 @@ func load(t *testing.T, content string) (*Config, error) {
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return Load(path)
+	return LoadFS(path, anyFS{})
 }
+
+// anyFS says every file exists, so tests of other features can name versioned files freely.
+type anyFS struct{}
+
+func (anyFS) Open(string) (fs.File, error)     { return nil, fs.ErrNotExist }
+func (anyFS) Stat(string) (fs.FileInfo, error) { return nil, nil }
 
 func mustLoad(t *testing.T, content string) *Config {
 	t.Helper()
@@ -514,11 +521,6 @@ assets = [{ path = "dist/*.zip", name = "bundle" }]
 owner = "celest-io"
 repo = "remeris"
 
-[gitea]
-owner = "o"
-repo = "r"
-host = "https://codeberg.org"
-
 [jira]
 url = "https://x.atlassian.net"
 project = "PRJ"
@@ -549,9 +551,15 @@ project = "PRJ"
 	if want := []Asset{{Path: "dist/*.zip", Name: "bundle"}}; !reflect.DeepEqual(cfg.Package.Assets, want) {
 		t.Errorf("assets = %+v", cfg.Package.Assets)
 	}
-	if *cfg.GitHub != (GitHub{"celest-io", "remeris"}) || *cfg.Gitea != (Gitea{"o", "r", "https://codeberg.org"}) ||
-		*cfg.Jira != (Jira{"https://x.atlassian.net", "PRJ"}) {
+	if *cfg.GitHub != (GitHub{"celest-io", "remeris"}) || *cfg.Jira != (Jira{"https://x.atlassian.net", "PRJ"}) {
 		t.Errorf("forge sections: %+v %+v %+v", cfg.GitHub, cfg.Gitea, cfg.Jira)
+	}
+}
+
+func TestDecodeGitea(t *testing.T) {
+	cfg := mustLoad(t, "[gitea]\nowner = \"o\"\nrepo = \"r\"\nhost = \"https://codeberg.org\"\n")
+	if *cfg.Gitea != (Gitea{"o", "r", "https://codeberg.org"}) {
+		t.Errorf("gitea = %+v", cfg.Gitea)
 	}
 }
 

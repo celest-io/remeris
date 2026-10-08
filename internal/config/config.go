@@ -1,11 +1,12 @@
 // Package config loads knope.toml (spec F2).
 //
-// Milestone M0 decodes the whole top-level schema but only validates and uses the workflows.
+// The whole top-level schema is decoded; workflows and packages are validated.
 package config
 
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"regexp"
 
@@ -50,6 +51,8 @@ type Config struct {
 
 	// index holds key order and spans of the source, for diagnostics.
 	index *tomlIndex
+	// packages are the validated packages, in declaration order.
+	packages []PackageConfig
 }
 
 type Changes struct {
@@ -139,12 +142,16 @@ var workflowName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 // Load reads the configuration at path, which is normally KnopeFile in the working
 // directory. A file that cannot be read means there is none, and the default configuration is
 // returned.
-func Load(path string) (*Config, error) {
+func Load(path string) (*Config, error) { return LoadFS(path, osRoot{}) }
+
+// LoadFS is Load with the file system that the existence checks of `versioned_files` use. Paths are
+// slash-separated and relative to its root, which is the working directory for Load.
+func LoadFS(path string, root fs.StatFS) (*Config, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return Default(), nil
 	}
-	cfg, err := decode(path, src)
+	cfg, err := decode(path, src, root)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +186,7 @@ type rawWorkflow struct {
 	Steps    []workflow.Step `toml:"steps"`
 }
 
-func decode(path string, src []byte) (*Config, error) {
+func decode(path string, src []byte, root fs.StatFS) (*Config, error) {
 	// A key delimiter that cannot occur in TOML keeps package names and variable keys that
 	// contain dots intact (F2.4).
 	k := koanf.NewWithConf(koanf.Conf{Delim: "\x1f", StrictMerge: true})
@@ -218,6 +225,9 @@ func decode(path string, src []byte) (*Config, error) {
 		index:        index,
 	}
 	cfg.Packages = orderedPackages(r.Packages, index.Keys("packages"))
+	if cfg.packages, err = validatePackages(&r, index, string(src), root, cfg.Packages); err != nil {
+		return nil, err
+	}
 
 	for i, rw := range r.Workflows {
 		if !workflowName.MatchString(rw.Name) {

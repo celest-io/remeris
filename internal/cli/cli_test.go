@@ -142,7 +142,7 @@ func TestWorkflowSubcommandsAndHelpText(t *testing.T) {
 }
 
 func TestWorkflowFlagConditions(t *testing.T) {
-	const onePackage = "[package]\nversioned_files = [\"Cargo.toml\"]\n"
+	const onePackage = "[package]\n"
 	const twoPackages = "[packages.a]\n[packages.b]\n"
 	cases := map[string]struct {
 		toml                    string

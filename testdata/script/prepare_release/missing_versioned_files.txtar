@@ -1,0 +1,27 @@
+# Ported from knope crates/knope/tests/prepare_release/missing_versioned_files
+# A versioned file that does not exist fails at config load, before any step runs, in a real run,
+# a dry run and --validate alike.
+! exec remeris release
+! stdout .
+cmp stderr stderr.log
+
+! exec remeris --dry-run release
+! stdout .
+cmp stderr stderr.log
+
+! exec remeris --validate
+! stdout .
+cmp stderr stderr.log
+
+-- knope.toml --
+[package]
+versioned_files = ["pyproject.toml", "Cargo.toml", "package.json", "go.mod"]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- stderr.log --
+Error: File pyproject.toml does not exist
+  help: Make sure the file exists and is accessible.

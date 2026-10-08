@@ -1,0 +1,20 @@
+# Ported from knope crates/knope/tests/validate/multiple_package_formats
+# Defining both [package] and [packages] is a config load error, which --validate reports.
+! exec remeris --validate
+! stdout .
+cmp stderr stderr.log
+
+-- knope.toml --
+[package]
+
+[packages.knope]
+
+[[workflows]]
+name = "workflow"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo this is nothing, really"
+-- stderr.log --
+Error: You cannot define both `packages` and `package`
+  help: Add the `package` as a key under `packages` instead.
