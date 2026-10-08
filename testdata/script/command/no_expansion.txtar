@@ -1,0 +1,16 @@
+# Without shell = true the command is split into arguments and run directly: nothing expands $VAR.
+[windows] skip 'uses a POSIX echo'
+
+env AN_ENV_VAR='a value'
+exec remeris direct
+cmp stdout stdout.log
+
+-- knope.toml --
+[[workflows]]
+name = "direct"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo $AN_ENV_VAR '$AN_ENV_VAR' \"two  words\" a\\ b"
+-- stdout.log --
+$AN_ENV_VAR $AN_ENV_VAR two  words a b

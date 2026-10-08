@@ -1,0 +1,12 @@
+# --verbose logs each step at debug level before it runs.
+exec remeris --dry-run --verbose greet
+stdout '^Running step Command '
+stdout '^Would run echo hi$'
+
+exec remeris --dry-run greet
+! stdout 'Running step'
+
+-- knope.toml --
+[[workflows]]
+name = "greet"
+steps = [{ type = "Command", command = "echo hi" }]

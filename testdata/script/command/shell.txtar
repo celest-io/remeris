@@ -1,0 +1,19 @@
+# Ported from knope-dev/knope, crates/knope/tests/command/shell (MIT, see testdata/README.md).
+# A Command step with shell = true runs through the platform shell, so $AN_ENV_VAR is expanded.
+[windows] skip 'Knope skips this fixture on Windows: it expands $VAR, which cmd.exe does not'
+
+env AN_ENV_VAR='a value'
+exec remeris shell-command
+cmp stdout stdout.log
+! stderr .
+
+-- knope.toml --
+[[workflows]]
+name = "shell-command"
+
+[[workflows.steps]]
+type = "Command"
+shell = true
+command = "echo $AN_ENV_VAR"
+-- stdout.log --
+a value

@@ -1,0 +1,34 @@
+# Steps that are decoded but not built yet fail with the milestone that brings them, in a real run
+# and in a dry run alike.
+! exec remeris release
+! stdout .
+cmp stderr release.log
+
+! exec remeris --dry-run release
+cmp stderr release.log
+
+# Steps before it still run, and --generate and --upgrade say when they will exist.
+exec remeris --dry-run before
+cmp stdout before.log
+
+! exec remeris --upgrade
+cmp stderr upgrade.log
+
+! exec remeris --generate
+stderr 'unknown flag|not defined|flag provided but not defined'
+
+-- knope.toml --
+[[workflows]]
+name = "release"
+steps = [{ type = "Release" }]
+
+[[workflows]]
+name = "before"
+steps = [{ type = "Command", command = "echo first" }]
+-- release.log --
+Error: Problem with workflow release
+  ╰─▶ Step Release is not implemented yet (milestone M6)
+-- before.log --
+Would run echo first
+-- upgrade.log --
+Error: --upgrade is not implemented yet (milestone M10)

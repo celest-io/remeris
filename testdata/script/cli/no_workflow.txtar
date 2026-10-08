@@ -1,0 +1,22 @@
+# Without a workflow (and without --validate) there is nothing to do.
+! exec remeris
+! stdout .
+cmp stderr stderr.log
+
+# The same with flags that do not select one.
+! exec remeris --dry-run -v
+cmp stderr stderr.log
+
+# A name that is not a workflow.
+! exec remeris nope
+! stdout .
+cmp stderr unknown.log
+
+-- knope.toml --
+[[workflows]]
+name = "hello"
+steps = [{ type = "Command", command = "echo hello" }]
+-- stderr.log --
+Error: No workflow selected. Run 'remeris --help' for a list of options.
+-- unknown.log --
+Error: No workflow named nope
