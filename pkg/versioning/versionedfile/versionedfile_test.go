@@ -257,7 +257,6 @@ func TestNewNotImplemented(t *testing.T) {
 		format    versionedfile.Format
 		milestone string
 	}{
-		"PyProject":       {versionedfile.PyProject, m2},
 		"PackageJson":     {versionedfile.PackageJson, m2},
 		"GoMod":           {versionedfile.GoMod, m2},
 		"CargoLock":       {versionedfile.CargoLock, m9},
