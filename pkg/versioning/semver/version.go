@@ -69,17 +69,18 @@ func Parse(s string) (Version, error) {
 	rest, build, hasBuild := strings.Cut(s, "+")
 	core, pre, hasPre := strings.Cut(rest, "-")
 
+	// Like Knope, every part is parsed before the number of parts is checked, so "1.x" reports the bad digit.
 	parts := strings.Split(core, ".")
-	if len(parts) != 3 {
-		return Version{}, newParseError(detailParts)
-	}
-	var nums [3]uint64
-	for i, p := range parts {
+	nums := make([]uint64, 0, len(parts))
+	for _, p := range parts {
 		n, detail := parseNumeric(p)
 		if detail != "" {
 			return Version{}, newParseError(detail)
 		}
-		nums[i] = n
+		nums = append(nums, n)
+	}
+	if len(nums) != 3 {
+		return Version{}, newParseError(detailParts)
 	}
 	v := Version{Major: nums[0], Minor: nums[1], Patch: nums[2]}
 

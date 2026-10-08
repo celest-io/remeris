@@ -118,7 +118,8 @@ func TestParseErrors(t *testing.T) {
 	}{
 		"two parts":  {v12, detParts},
 		"four":       {"1.2.3.4", detParts},
-		"empty":      {"", detParts},
+		"empty":      {"", detEmpty}, // Knope parses the parts before counting them
+		"bad second": {"1.x", detDigit},
 		"letters":    {"a.b.c", detDigit},
 		"v prefix":   {"v1.2.3", detDigit},
 		"space":      {" 1.2.3", detDigit},
