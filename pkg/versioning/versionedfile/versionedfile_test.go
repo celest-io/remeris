@@ -261,7 +261,6 @@ func TestNewNotImplemented(t *testing.T) {
 		"PyProject":       {versionedfile.PyProject, m2},
 		"PackageJson":     {versionedfile.PackageJson, m2},
 		"GoMod":           {versionedfile.GoMod, m2},
-		"RegexFile":       {versionedfile.RegexFile, m2},
 		"CargoLock":       {versionedfile.CargoLock, m9},
 		"DenoJson":        {versionedfile.DenoJson, m9},
 		"DenoLock":        {versionedfile.DenoLock, m9},

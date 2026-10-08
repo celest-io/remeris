@@ -26,7 +26,9 @@ type File interface {
 func New(cfg Config, content string, gitTags []string) (File, error) {
 	_, _ = content, gitTags
 	switch cfg.Format {
-	case Cargo, PyProject, PackageJson, GoMod, RegexFile:
+	case RegexFile:
+		return newRegexFile(cfg, content)
+	case Cargo, PyProject, PackageJson, GoMod:
 		return nil, notImplemented(cfg.Format, "M2")
 	default:
 		return nil, notImplemented(cfg.Format, "M9")
