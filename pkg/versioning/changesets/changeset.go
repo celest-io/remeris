@@ -1,9 +1,11 @@
 package changesets
 
 import (
+	"errors"
 	"io/fs"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // LoadError is returned by [FromFS] when a change file cannot be read or parsed. Its message is the cause's,
@@ -79,8 +81,9 @@ func FromChanges(changes []Change) ChangeSet {
 }
 
 // FromFS loads the change files of a directory: the regular files ending in ".md" directly in the root of fsys
-// (the id is the name without ".md"). Files are read in name order, so the result is deterministic. A file that
-// cannot be read or parsed fails the whole load with a [*LoadError].
+// (the id is the name without ".md"). Callers pass the .changeset directory itself, e.g. fs.Sub(root, ".changeset").
+// Files are read in name order, so the result is deterministic. A file that cannot be read, is not valid UTF-8,
+// or cannot be parsed fails the whole load with a [*LoadError].
 func FromFS(fsys fs.FS) (ChangeSet, error) {
 	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
@@ -96,6 +99,9 @@ func FromFS(fsys fs.FS) (ChangeSet, error) {
 		data, err := fs.ReadFile(fsys, name)
 		if err != nil {
 			return ChangeSet{}, &LoadError{File: name, Err: err}
+		}
+		if !utf8.Valid(data) {
+			return ChangeSet{}, &LoadError{File: name, Err: errors.New("stream did not contain valid UTF-8")}
 		}
 		change, err := ParseChange(UniqueID(id), string(data))
 		if err != nil {

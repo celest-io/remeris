@@ -143,6 +143,19 @@ func TestFromFSErrors(t *testing.T) {
 	}
 }
 
+func TestFromFSInvalidUTF8(t *testing.T) {
+	t.Parallel()
+	fsys := fstest.MapFS{fileBad: file("---\nfoo: patch\n---\n\n\xff\n")}
+	_, err := changesets.FromFS(fsys)
+	mustErr(t, err)
+	var loadErr *changesets.LoadError
+	if !errors.As(err, &loadErr) {
+		t.Fatalf("not a LoadError: %v", err)
+	}
+	equal(t, fileBad, loadErr.File)
+	equal(t, "stream did not contain valid UTF-8", err.Error())
+}
+
 func TestFromChanges(t *testing.T) {
 	t.Parallel()
 	changes := []changesets.Change{

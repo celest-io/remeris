@@ -13,6 +13,9 @@ import (
 const (
 	fence      = "---"
 	fileSuffix = ".md"
+	patchText  = "patch"
+	minorText  = "minor"
+	majorText  = "major"
 )
 
 // Errors returned by [ParseChange]. Use [errors.Is] to tell them apart.
@@ -53,11 +56,11 @@ type ChangeType struct {
 // matched case-sensitively; anything else is a custom type.
 func ParseChangeType(s string) ChangeType {
 	switch s {
-	case "patch":
+	case patchText:
 		return ChangeType{Kind: Patch}
-	case "minor":
+	case minorText:
 		return ChangeType{Kind: Minor}
-	case "major":
+	case majorText:
 		return ChangeType{Kind: Major}
 	default:
 		return ChangeType{Kind: Custom, Custom: s}
@@ -68,11 +71,11 @@ func ParseChangeType(s string) ChangeType {
 func (c ChangeType) String() string {
 	switch c.Kind {
 	case Patch:
-		return "patch"
+		return patchText
 	case Minor:
-		return "minor"
+		return minorText
 	case Major:
-		return "major"
+		return majorText
 	default:
 		return c.Custom
 	}
@@ -154,9 +157,9 @@ func (c Change) String() string {
 // The errors are [ErrMissingFrontMatter] and [ErrInvalidFrontMatter]; an empty front matter is
 // [ErrEmptyVersioning] wrapped in an invalid front matter error.
 //
-// Like the crate, a package listed twice puts the closing "---" where it is not expected, so the file is an
-// [ErrInvalidFrontMatter]: the spec says "last wins", but the crate skips as many lines as the deduplicated map
-// has entries before it looks for the closing fence.
+// A package listed twice is an [ErrInvalidFrontMatter], although the spec's "last wins" would suggest otherwise.
+// The changesets crate counts unique names when it skips to the closing fence, so a duplicate always lands on a
+// front-matter line and fails; this returns the error at the duplicate line instead.
 func ParseChange(id UniqueID, content string) (Change, error) {
 	lines := splitLines(content)
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) != fence {
@@ -165,7 +168,7 @@ func ParseChange(id UniqueID, content string) (Change, error) {
 	lines = lines[1:]
 
 	var versioning []PackageChange
-	index := map[string]int{}
+	seen := map[string]struct{}{}
 	for _, line := range lines {
 		if strings.TrimSpace(line) == fence {
 			break
@@ -175,18 +178,18 @@ func ParseChange(id UniqueID, content string) (Change, error) {
 			return Change{}, ErrInvalidFrontMatter
 		}
 		pc := PackageChange{Package: strings.TrimSpace(name), Type: ParseChangeType(strings.TrimSpace(value))}
-		if i, seen := index[pc.Package]; seen {
-			versioning[i] = pc
-			continue
+		if _, dup := seen[pc.Package]; dup {
+			return Change{}, ErrInvalidFrontMatter
 		}
-		index[pc.Package] = len(versioning)
+		seen[pc.Package] = struct{}{}
 		versioning = append(versioning, pc)
 	}
 	if len(versioning) == 0 {
 		return Change{}, fmt.Errorf("%w: %w", ErrInvalidFrontMatter, ErrEmptyVersioning)
 	}
 
-	lines = lines[min(len(versioning), len(lines)):]
+	// Without duplicates, there is one front-matter line per package, so this lands on the closing fence.
+	lines = lines[len(versioning):]
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) != fence {
 		return Change{}, ErrInvalidFrontMatter
 	}

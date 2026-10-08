@@ -151,6 +151,16 @@ func TestParseChange(t *testing.T) {
 			versioning: []changesets.PackageChange{{Package: namePkg, Type: patch()}},
 			summary:    "S\n---\nmore",
 		},
+		"closing fence with spaces": {
+			content:    "---\npkg: patch\n  ---  \n\nS\n",
+			versioning: []changesets.PackageChange{{Package: namePkg, Type: patch()}},
+			summary:    "S",
+		},
+		"lone cr on unterminated last line is kept": {
+			content:    "---\npkg: patch\n---\n\nS\r",
+			versioning: []changesets.PackageChange{{Package: namePkg, Type: patch()}},
+			summary:    "S\r",
+		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -181,6 +191,13 @@ func TestParseChangeErrors(t *testing.T) {
 			changesets.ErrInvalidFrontMatter,
 			msgInvalid,
 		},
+		"duplicate names with different types": {
+			"---\na: patch\na: major\n---\n\nS\n",
+			changesets.ErrInvalidFrontMatter,
+			msgInvalid,
+		},
+		"bom before opening fence": {"\uFEFF---\npkg: patch\n---\n", changesets.ErrMissingFrontMatter, msgMissing},
+		"four dashes as opening":   {"----\npkg: patch\n---\n", changesets.ErrMissingFrontMatter, msgMissing},
 		"empty front matter": {
 			"---\n---\n\nS\n",
 			changesets.ErrEmptyVersioning,
