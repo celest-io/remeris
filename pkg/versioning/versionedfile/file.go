@@ -28,7 +28,9 @@ func New(cfg Config, content string, gitTags []string) (File, error) {
 	switch cfg.Format {
 	case RegexFile:
 		return newRegexFile(cfg, content)
-	case Cargo, PyProject, PackageJson, GoMod:
+	case Cargo:
+		return newCargoFile(cfg.Path, content)
+	case PyProject, PackageJson, GoMod:
 		return nil, notImplemented(cfg.Format, "M2")
 	default:
 		return nil, notImplemented(cfg.Format, "M9")
