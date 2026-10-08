@@ -156,6 +156,16 @@ func (f cargoFile) edit(path []tomledit.Key, version string) error {
 	return nil
 }
 
+// PackageName returns the package.name of the file and whether it has one. A package uses it to default the
+// dependency of a Cargo.lock (spec F7.2).
+func (f cargoFile) PackageName() (string, bool) {
+	v, ok := f.doc.Lookup(keyPackage, keyName)
+	if !ok || v.Kind != tomledit.String {
+		return "", false
+	}
+	return v.Str, true
+}
+
 // Write returns the write action, or nil if SetVersion was never called.
 func (f cargoFile) Write() []action.Action {
 	if f.diff.Empty() {
