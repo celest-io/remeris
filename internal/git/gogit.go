@@ -68,14 +68,10 @@ func (g *GoGit) AllTagsOnBranch(ctx context.Context) ([]string, error) {
 		return nil, unknownGitError(err) // an unborn HEAD, as in Knope's revwalk
 	}
 	tags := make([]string, 0, len(byCommit))
-	shallow, err := repo.Storer.Shallow()
-	if err != nil {
-		return nil, unknownGitError(err)
-	}
-	err = walkFromHead(ctx, repo, head.Hash(), shallow, func(h plumbing.Hash) {
-		if t, ok := byCommit[h]; ok {
+	err = walkFromHead(ctx, repo, head.Hash(), func(c *object.Commit) {
+		if t, ok := byCommit[c.Hash]; ok {
 			tags = append(tags, t...)
-			delete(byCommit, h)
+			delete(byCommit, c.Hash)
 		}
 	})
 	if err != nil {
@@ -180,9 +176,11 @@ func (f *frontier) Pop() any {
 // walkFromHead calls visit for every commit reachable from start, in the order of git rev-list and libgit2's
 // default revwalk: the newest commit of the frontier first, parents in parent order. The parents of the shallow
 // commits are not followed: a shallow clone does not have them.
-func walkFromHead(
-	ctx context.Context, repo *gogit.Repository, start plumbing.Hash, shallow []plumbing.Hash, visit func(plumbing.Hash),
-) error {
+func walkFromHead(ctx context.Context, repo *gogit.Repository, start plumbing.Hash, visit func(*object.Commit)) error {
+	shallow, err := repo.Storer.Shallow()
+	if err != nil {
+		return unknownGitError(err)
+	}
 	seen := map[plumbing.Hash]bool{start: true}
 	var queue frontier
 	seq := 0
@@ -203,7 +201,7 @@ func walkFromHead(
 			return err
 		}
 		c := heap.Pop(&queue).(queued).commit //nolint:forcetypeassert // only queued values are pushed
-		visit(c.Hash)
+		visit(c)
 		if slices.Contains(shallow, c.Hash) {
 			continue
 		}

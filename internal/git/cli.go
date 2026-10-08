@@ -176,3 +176,73 @@ func (c *CLI) tagsByCommit(ctx context.Context) (map[string][]string, error) {
 	}
 	return byCommit, nil
 }
+
+// CommitMessagesAfterTag returns the commits reachable from HEAD but not from the tag, oldest first (spec F9.2).
+// A nil tag, or a tag that is missing or does not peel to a commit, selects every commit.
+//
+// Commands: git rev-parse --verify --quiet refs/tags/<tag>^{commit};
+// git log --reverse -z --format=%H%x00%an%x00%B refs/tags/<tag>..HEAD --. The default order of git log is
+// the date-ordered walk of libgit2's revwalk.
+func (c *CLI) CommitMessagesAfterTag(ctx context.Context, tag *string) ([]Commit, error) {
+	rng := "HEAD"
+	if tag == nil {
+		slog.DebugContext(ctx, "Using ALL commits")
+	} else {
+		ref := "refs/tags/" + *tag
+		if _, err := c.run(ctx, "", "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			slog.DebugContext(ctx, "Tag "+*tag+" not found, using ALL commits")
+		} else {
+			slog.DebugContext(ctx, "Using commits since tag "+*tag)
+			rng = ref + "..HEAD"
+		}
+	}
+	out, err := c.run(ctx, "", "log", "--reverse", "-z", "--format=%H%x00%an%x00%B", rng, "--")
+	if err != nil {
+		return nil, unknownGitError(err)
+	}
+	fields := strings.Split(out, "\x00")
+	commits := make([]Commit, 0, len(fields)/3)
+	for ; len(fields) >= 3; fields = fields[3:] {
+		commits = append(commits, Commit{Message: fields[2], Info: newCommitInfo(fields[0], fields[1])})
+	}
+	return commits, nil
+}
+
+// FirstCommitsForFiles finds, for each path, the first commit whose tree contains it (spec F9.3).
+//
+// The oldest commit whose tree has a path always adds it relative to every parent, so one
+// git log --topo-order --reverse -m --root --diff-filter=A over the paths lists it first. Merges are diffed
+// against each parent (-m) to catch a file that only a merge brings in. Paths are literal, not patterns, and
+// a directory is never found. Errors are swallowed.
+func (c *CLI) FirstCommitsForFiles(ctx context.Context, paths []string) map[string]*CommitInfo {
+	results := make(map[string]*CommitInfo, len(paths))
+	if len(paths) == 0 {
+		return results
+	}
+	args := []string{"--literal-pathspecs", "log", "--topo-order", "--reverse", "-m", "--root", "--no-renames",
+		"--full-history", "--diff-filter=A", "--name-status", "-z", "--format=%x01%H%x00%an", "HEAD", "--"}
+	out, err := c.run(ctx, "", append(args, paths...)...)
+	if err != nil {
+		return map[string]*CommitInfo{}
+	}
+	wanted := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		wanted[p] = true
+	}
+	for _, chunk := range strings.Split(out, "\x01")[1:] {
+		fields := strings.Split(chunk, "\x00")
+		if len(fields) < 2 {
+			continue
+		}
+		info := newCommitInfo(fields[0], fields[1])
+		for rest := fields[2:]; len(rest) >= 2; rest = rest[2:] {
+			if path := rest[1]; wanted[path] && results[path] == nil {
+				results[path] = &info
+			}
+		}
+	}
+	return results
+}
