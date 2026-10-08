@@ -124,7 +124,7 @@ internal/cli/       root command, one subcommand per workflow, logging, --valida
 internal/config/    Knope configuration (knope.toml) loading: koanf + a go-toml unstable index for key order and spans
 internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
-internal/steps/     Command step and the stubs of the others; steps/command splits command lines
+internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines
 internal/fsx/       dry-run aware file writes
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 ```
@@ -134,7 +134,8 @@ Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.
 
 ### Adding or finishing a step
 
-1. Give it a file in `internal/steps/` (move it out of `unimplemented.go`), with `toml:"..."` tags on its fields.
+1. Every step has its own file in `internal/steps/`, with `toml:"..."` tags on its fields. A step that is not built
+   yet has a stub whose `Run` returns `notImplemented(s, "Mx")` (in `not_implemented.go`): replace that body.
 2. Implement `Type()` and `Run(ctx, rt)`. In a dry run, log what would happen and change nothing.
 3. Make sure it is in `stepConstructors` in `internal/config/decode.go`.
 4. Add unit tests, and enable the Knope fixtures that needed it (remove their `skip` line).
