@@ -10,10 +10,14 @@ depends on.
 - **Phase 2 (extensions):** pre-release channels, signed commits (git or GitHub App), more changelog sources, and
   better monorepo support with per-package variables. See [Phase 2](#phase-2-extensions-beyond-knope).
 
-**Goal of Phase 1:** Rebuild Knope in Go, one feature at a time. The Go binary (`remeris`) should be a **drop-in replacement**:
-it reads the same `knope.toml`, uses the same `.changeset/` files and Git tag formats, writes the same file edits and
-changelog output, and prints the same messages. Each section below is one unit of work. It lists the behaviour to
-reproduce, the algorithm (taken from the Rust source, not only the docs), edge cases, and acceptance criteria.
+**Goal:** Remeris supports multiple release configurations. The first one is Knope's, and Knope is a peer of the
+configurations that follow, not a legacy format.
+
+**Goal of Phase 1:** Rebuild Knope in Go, one feature at a time. On Knope's configuration the Go binary (`remeris`)
+should be a **drop-in replacement**: it reads the same `knope.toml`, uses the same `.changeset/` files and Git tag
+formats, writes the same file edits and changelog output, and prints the same messages. Each section below is one
+unit of work. It lists the behaviour to reproduce, the algorithm (taken from the Rust source, not only the docs),
+edge cases, and acceptance criteria.
 
 > Conventions in this document
 >
@@ -440,7 +444,7 @@ remeris --help | --version
 | `--upgrade` | `knope.toml` exists | F21 |
 | `--validate` | `knope.toml` exists | F21. All log output is suppressed while validating. |
 | `--override-version` (workflow flag) | workflow has `BumpVersion` or `PrepareRelease` **and** ≥1 package | With 1 package: single `<version>`, parsed with F1. With ≥2 packages: repeatable `name=version`. Unknown names → error `Unknown package(s) to override: a, b`. Bad format → `package override should be formatted like package_name=version`. |
-| `--prerelease-label` (workflow flag, env `REMERIS_PRERELEASE_LABEL`, then `KNOPE_PRERELEASE_LABEL` as a fallback for migrating CI) | workflow has `PrepareRelease` | Sets `prerelease_label` on **every** `PrepareRelease` step in **every** workflow. The flag wins over the env var. |
+| `--prerelease-label` (workflow flag, env `REMERIS_PRERELEASE_LABEL` or `KNOPE_PRERELEASE_LABEL`, the first one set wins) | workflow has `PrepareRelease` | Sets `prerelease_label` on **every** `PrepareRelease` step in **every** workflow. The flag wins over the env var. |
 
 - Each workflow is a subcommand, and `help_text` is its description.
 - No subcommand (and no `--validate`) → error `No workflow selected. Run 'remeris --help' for a list of options.`
@@ -515,12 +519,14 @@ remeris --help | --version
    exits 1, because diagnostics have help text and nested errors that a log line would lose. Steps never call
    `cli.Exit`.
 
-> **Decision (D1):** the config file stays `knope.toml` (read and written by `--generate`/`--upgrade`), so existing
-> Knope projects work unchanged. **Everything else says `remeris`**: binary name, `--help`, log and error text
-> (for example `Run 'remeris --help'`, `Run 'remeris --upgrade'`), diagnostic codes (`remeris::inconsistent_versions`),
-> `User-Agent: Remeris`, the env var `REMERIS_PRERELEASE_LABEL`, and the credential directory (F15.2). Keep the name in
-> one constant (`internal/brand`). Golden logs vendored from Knope are rewritten `knope` → `remeris` by the fixture
-> conversion script; `knope.toml` itself is left alone.
+> **Decision (D1):** the program is `remeris`: binary name, `--help`, log and error text (for example
+> `Run 'remeris --help'`), diagnostic codes (`remeris::inconsistent_versions`), `User-Agent: Remeris` and the
+> credential directory (F15.2). Knope's release configuration is the first of several supported ones, not a legacy
+> format, so it keeps the names its own format defines: the file `knope.toml` (read and written by
+> `--generate`/`--upgrade`) and `KNOPE_PRERELEASE_LABEL`. The code that implements a configuration owns its names
+> (the file name lives in `internal/config`); there is no global name package. A setting that is also useful to other
+> configurations gets `REMERIS_*` as its own name, which takes precedence. Golden logs vendored from Knope are
+> rewritten `knope` → `remeris` where the text names the program; `knope.toml` itself is left alone.
 
 ### F3.2 Logging
 
@@ -1222,7 +1228,7 @@ if REAL run && !allow_empty && len(PendingActions)==0 → error "No packages are
 - Implement both as `changes.Source` values (Phase 2 hook, E3), run in that fixed order in Phase 1.
 
 ### F13.2 Pre-releases
-- `prerelease_label` comes from the step, overridden at runtime by `--prerelease-label` / `REMERIS_PRERELEASE_LABEL` (fallback `KNOPE_PRERELEASE_LABEL`).
+- `prerelease_label` comes from the step, overridden at runtime by `--prerelease-label` / `REMERIS_PRERELEASE_LABEL` (or `KNOPE_PRERELEASE_LABEL`).
 - Change files are **kept** for pre-releases so that the final release picks them up again.
 - Commits are always counted from the last **stable** tag, so each pre-release changelog entry lists **all** changes
   since that stable release.
@@ -1824,7 +1830,7 @@ Recorded 2026-10-02.
 
 | ID | Question | Decision | Where |
 | --- | --- | --- | --- |
-| D1 | Name and config file | Keep reading `knope.toml`. Use `remeris` everywhere else (binary, messages, codes, env var, credential dir, User-Agent). | F3.1, F15 |
+| D1 | Name and config file | The program is `remeris` (binary, messages, codes, User-Agent, credential dir). Knope's configuration is the first supported one, not a legacy format: it keeps its own names (`knope.toml`, `KNOPE_*`), owned by the code that implements it. No global name package. | F3.1, F15 |
 | D2 | Git backend | `git` CLI first, go-git v5 fallback when `git` is not installed | F9.0 |
 | D3 | Knope Bot (GitHub App) | Out of scope for now | — |
 | D4 | Diagnostics | Match Knope's message and help text. No source snippets or docs URLs until the remeris docs exist. | F3.3 |

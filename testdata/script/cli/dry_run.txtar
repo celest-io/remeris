@@ -1,0 +1,42 @@
+# A dry run prints what each Command step would run, after substituting variables, and runs nothing.
+[windows] skip 'uses touch'
+
+exec remeris --dry-run greet
+cmp stdout stdout.log
+! exists should-not-exist
+
+# The flag is accepted after the workflow name too.
+exec remeris greet --dry-run
+cmp stdout stdout.log
+! exists should-not-exist
+
+# Quoting is left as written; it only matters when the command really runs.
+exec remeris --dry-run quoted
+cmp stdout quoted.log
+
+# Without --dry-run the commands run.
+exec remeris real
+exists created
+
+-- knope.toml --
+[[workflows]]
+name = "greet"
+[[workflows.steps]]
+type = "Command"
+command = "echo hello world"
+[[workflows.steps]]
+type = "Command"
+command = "touch should-not-exist"
+
+[[workflows]]
+name = "quoted"
+steps = [{ type = "Command", command = "git commit -m \"chore: prepare release 1.2.3\"" }]
+
+[[workflows]]
+name = "real"
+steps = [{ type = "Command", command = "touch created" }]
+-- stdout.log --
+Would run echo hello world
+Would run touch should-not-exist
+-- quoted.log --
+Would run git commit -m "chore: prepare release 1.2.3"
