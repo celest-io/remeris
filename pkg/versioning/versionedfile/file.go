@@ -32,7 +32,9 @@ func New(cfg Config, content string, gitTags []string) (File, error) {
 		return newCargoFile(cfg.Path, content)
 	case PyProject:
 		return newPyProjectFile(cfg.Path, content)
-	case PackageJson, GoMod:
+	case PackageJson:
+		return newPackageJSONFile(cfg.Path, content)
+	case GoMod:
 		return nil, notImplemented(cfg.Format, "M2")
 	default:
 		return nil, notImplemented(cfg.Format, "M9")
