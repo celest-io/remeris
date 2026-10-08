@@ -94,6 +94,10 @@ func TestRegexErrors(t *testing.T) {
 			`Regex pattern 'version:\s+(\d+\.\d+\.\d+)' must contain at least one named capture group called 'version'`,
 			`Use a named capture group like (?<version>\d+\.\d+\.\d+) in your regex`,
 		},
+		"duplicate group name": {
+			content123, []string{`(?<version>\d)(?<version>\d)`}, true, "remeris::text_file::invalid_pattern",
+			"duplicate capture group name version", "Check the regex pattern syntax",
+		},
 		"other named group": {
 			content123, []string{`(?<ver>\d+)`}, true, "remeris::text_file::missing_version_group",
 			"must contain at least one named capture group called 'version'", "Use a named capture group",

@@ -1,6 +1,7 @@
 package versionedfile
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 
@@ -29,7 +30,9 @@ type regexFile struct {
 	diff    string
 }
 
-// newRegexFile compiles cfg.Regex and checks every pattern has a "version" group. Like Knope, a nil pattern
+// newRegexFile compiles cfg.Regex and checks every pattern has a "version" group. Patterns use Go's RE2 syntax,
+// which differs from Rust's regex crate used by Knope: \d, \w, \s and \b are ASCII-only, and Rust-only syntax such
+// as (?x) or class set operations is rejected. Like Knope, a nil pattern
 // list is reported as a pattern that did not match.
 func newRegexFile(cfg Config, content string) (File, error) {
 	if cfg.Regex == nil {
@@ -38,6 +41,9 @@ func newRegexFile(cfg Config, content string) (File, error) {
 	res := make([]*regexp.Regexp, 0, len(cfg.Regex))
 	for _, pattern := range cfg.Regex {
 		re, err := regexp.Compile(pattern)
+		if err == nil {
+			err = duplicateGroupName(re)
+		}
 		if err != nil {
 			return nil, diag.New("Invalid regex pattern '" + pattern + "' for " + cfg.Path + ": " + err.Error()).
 				WithCode(codeInvalidPattern).
@@ -53,6 +59,22 @@ func newRegexFile(cfg Config, content string) (File, error) {
 		res = append(res, re)
 	}
 	return regexFile{path: cfg.Path, content: content, res: res}, nil
+}
+
+// duplicateGroupName rejects a pattern that names two groups alike. Rust's regex crate refuses such patterns, while
+// Go's accepts them and SubexpIndex would silently use the first group.
+func duplicateGroupName(re *regexp.Regexp) error {
+	seen := make(map[string]bool)
+	for _, name := range re.SubexpNames() {
+		if name == "" {
+			continue
+		}
+		if seen[name] {
+			return errors.New("duplicate capture group name " + name)
+		}
+		seen[name] = true
+	}
+	return nil
 }
 
 func noMatchError(pattern, path string) error {
@@ -154,9 +176,13 @@ func splitLines(s string) []string {
 	if s == "" {
 		return nil
 	}
+	// Like Rust's str::lines: a "\r" is part of the line ending only before "\n", so an unterminated last line keeps it.
+	terminated := strings.HasSuffix(s, "\n")
 	lines := strings.Split(strings.TrimSuffix(s, "\n"), "\n")
 	for i, l := range lines {
-		lines[i] = strings.TrimSuffix(l, "\r")
+		if i < len(lines)-1 || terminated {
+			lines[i] = strings.TrimSuffix(l, "\r")
+		}
 	}
 	return lines
 }
