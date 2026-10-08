@@ -284,3 +284,64 @@ func TestZeroValue(t *testing.T) {
 	v, ok := p.Latest()
 	checkOpt(t, whatLatest, v124rc0, v, ok)
 }
+
+// TestFromTagsThenFiles follows Knope's package loading: the history from tags is updated with the version read
+// from the package's files.
+func TestFromTagsThenFiles(t *testing.T) {
+	t.Parallel()
+	tags := []string{tag124rc0, tag123}
+	tests := map[string]struct {
+		files      string
+		wantStable string
+		wantLatest string
+	}{
+		"files newer than the stable tag clear pre-releases": {v130, v130, v130},
+		"files equal to the stable tag keep pre-releases":    {v123, v123, v124rc0},
+		"files older than the stable tag are ignored":        {v100, v123, v124rc0},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			p := semver.FromTags(nil, tags)
+			p.Update(semver.MustParse(tc.files))
+			v, ok := p.LastStable()
+			checkOpt(t, whatStable, tc.wantStable, v, ok)
+			v, ok = p.Latest()
+			checkOpt(t, whatLatest, tc.wantLatest, v, ok)
+		})
+	}
+}
+
+func TestCloneIsIndependent(t *testing.T) {
+	t.Parallel()
+	a := semver.FromTags(nil, []string{tag124rc0, tag123})
+	b := a.Clone()
+	b.Update(semver.MustParse(v124rc1))
+	b.Update(semver.MustParse(v130))
+	if v, _ := a.Latest(); v.String() != v124rc0 {
+		t.Errorf("original Latest() = %s after updating the clone, want %s", v, v124rc0)
+	}
+	if v, _ := a.LastStable(); v.String() != v123 {
+		t.Errorf("original LastStable() = %s after updating the clone, want %s", v, v123)
+	}
+}
+
+func TestUpdateCopiesTheVersion(t *testing.T) {
+	t.Parallel()
+	v := semver.MustParse(v124rc0)
+	p := semver.FromVersion(v)
+	v.Pre[0].Str = "changed"
+	if got, _ := p.Latest(); got.String() != v124rc0 {
+		t.Errorf("Latest() = %s after changing the caller's version, want %s", got, v124rc0)
+	}
+}
+
+func TestPreCounterOverflow(t *testing.T) {
+	t.Parallel()
+	p := semver.FromTags(nil, []string{"v1.0.0-rc.18446744073709551615"})
+	_, err := p.CalculateNewVersion(semver.PreBump("rc", semver.StablePatch))
+	var d diag.Diagnostic
+	if !errors.As(err, &d) || d.Code() != "remeris::pre_release_counter_overflow" {
+		t.Fatalf("CalculateNewVersion() error = %v, want the counter overflow diagnostic", err)
+	}
+}

@@ -1,6 +1,8 @@
 package semver
 
 import (
+	"math"
+	"slices"
 	"strings"
 
 	"github.com/celest-io/remeris/internal/diag"
@@ -13,7 +15,8 @@ var ErrPreReleaseNotFound error = diag.New("No prerelease version found, but a R
 
 // PackageVersions is the version history of a package that matters for the next bump (spec F1.3): the latest
 // stable version, if any, and the newest pre-release of each label for every core above it. So it can hold
-// 1.2.3, 1.2.4-rc.1, 1.3.0-beta.0 and 2.0.0-alpha.4. The zero value is an empty history.
+// 1.2.3, 1.2.4-rc.1, 1.3.0-beta.0 and 2.0.0-alpha.4. The zero value is an empty history. Copies share their
+// maps, so use Clone to get an independent history.
 type PackageVersions struct {
 	// stable has no pre-release. Build metadata is kept as it was read.
 	stable *Version
@@ -49,6 +52,26 @@ func FromTags(prefix *string, tags []string) PackageVersions {
 	return p
 }
 
+// Clone returns a deep copy of the history.
+func (p PackageVersions) Clone() PackageVersions {
+	var c PackageVersions
+	if p.stable != nil {
+		v := cloneVersion(*p.stable)
+		c.stable = &v
+	}
+	for core, labels := range p.prereleases {
+		for label, v := range labels {
+			c.setPre(core, label, cloneVersion(v))
+		}
+	}
+	return c
+}
+
+func cloneVersion(v Version) Version {
+	v.Pre, v.Build = slices.Clone(v.Pre), slices.Clone(v.Build)
+	return v
+}
+
 // FromVersion returns the history that holds only v (spec F7.4): a stable v is the stable version, a
 // pre-release is the only pre-release.
 func FromVersion(v Version) PackageVersions {
@@ -65,6 +88,7 @@ func (p *PackageVersions) Update(v Version) {
 		if p.stable != nil && Compare(*p.stable, v) >= 0 {
 			return
 		}
+		v = cloneVersion(v)
 		p.stable = &v
 		p.prereleases = nil
 		return
@@ -74,6 +98,10 @@ func (p *PackageVersions) Update(v Version) {
 	if old, ok := p.prereleases[core][label]; ok && Compare(old, v) >= 0 {
 		return
 	}
+	p.setPre(core, label, cloneVersion(v))
+}
+
+func (p *PackageVersions) setPre(core Core, label string, v Version) {
 	if p.prereleases == nil {
 		p.prereleases = make(map[Core]map[string]Version)
 	}
@@ -95,8 +123,9 @@ func (p PackageVersions) maxCore() (Core, bool) {
 	return best, found
 }
 
-// Latest returns the most recent version: the highest-precedence pre-release of the largest core above the
-// stable version, or else the stable version. The bool is false for an empty history.
+// Latest returns the most recent version: the highest-precedence pre-release of the largest core, or else the
+// stable version. Like Knope, pre-releases are not compared with the stable version: FromTags only keeps those
+// newer than the latest stable tag, and a newer stable Update clears them. The bool is false for an empty history.
 func (p PackageVersions) Latest() (Version, bool) {
 	if c, ok := p.maxCore(); ok {
 		var best Version
@@ -157,6 +186,10 @@ func (p PackageVersions) calculatePre(label string, r StableRule) (Version, erro
 	// Spec F1.3 step 2: an existing "1.2.4-beta" without a counter is followed by "1.2.4-beta.0".
 	if old, ok := p.prereleases[base][label]; ok {
 		if _, n, hasCounter := old.PreLabel(); hasCounter {
+			if n == math.MaxUint64 {
+				return Version{}, diag.Newf("The pre-release counter of %s cannot be increased", old).
+					WithCode("remeris::pre_release_counter_overflow")
+			}
 			counter = n + 1
 		}
 	}
