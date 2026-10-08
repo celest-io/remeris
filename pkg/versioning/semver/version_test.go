@@ -2,6 +2,7 @@ package semver_test
 
 import (
 	"errors"
+	"regexp"
 	"testing"
 
 	"github.com/celest-io/remeris/internal/diag"
@@ -20,32 +21,108 @@ const (
 )
 
 // validVersions and invalidVersions are the conformance lists from the semver.org test suites.
-var validVersions = []string{
-	"0.0.4", v123, "10.20.30", "1.1.2-prerelease+meta", "1.1.2+meta", "1.1.2+meta-valid",
-	"1.0.0-alpha", "1.0.0-beta", "1.0.0-alpha.beta", "1.0.0-alpha.beta.1", "1.0.0-alpha.1", "1.0.0-alpha0.valid",
-	"1.0.0-alpha.0valid", "1.0.0-alpha-a.b-c-somethinglong+build.1-aef.1-its-okay", "1.0.0-rc.1+build.1",
-	"2.0.0-rc.1+build.123", "1.2.3-beta", "10.2.3-DEV-SNAPSHOT", "1.2.3-SNAPSHOT-123", v100, "2.0.0",
-	"1.1.7", "2.0.0+build.1848", "2.0.1-alpha.1227", "1.0.0-alpha+beta", "1.2.3----RC-SNAPSHOT.12.9.1--.12+788",
-	"1.2.3----R-S.12.9.1--.12+meta", "1.2.3----RC-SNAPSHOT.12.9.1--.12", "1.0.0+0.build.1-rc.10000aaa-kk-0.1",
-	"18446744073709551615.18446744073709551615.18446744073709551615", "1.0.0-0A.is.legal",
-	"1.1.2+meta-valid-with-001", "1.0.0+001", "1.0.0-alpha+00.01",
+var validVersions = map[string]struct{}{
+	"0.0.4":                 {},
+	v123:                    {},
+	"10.20.30":              {},
+	"1.1.2-prerelease+meta": {},
+	"1.1.2+meta":            {},
+	"1.1.2+meta-valid":      {},
+	"1.0.0-alpha":           {},
+	"1.0.0-beta":            {},
+	"1.0.0-alpha.beta":      {},
+	"1.0.0-alpha.beta.1":    {},
+	"1.0.0-alpha.1":         {},
+	"1.0.0-alpha0.valid":    {},
+	"1.0.0-alpha.0valid":    {},
+	"1.0.0-alpha-a.b-c-somethinglong+build.1-aef.1-its-okay": {},
+	"1.0.0-rc.1+build.1":                   {},
+	"2.0.0-rc.1+build.123":                 {},
+	"1.2.3-beta":                           {},
+	"10.2.3-DEV-SNAPSHOT":                  {},
+	"1.2.3-SNAPSHOT-123":                   {},
+	v100:                                   {},
+	"2.0.0":                                {},
+	"1.1.7":                                {},
+	"2.0.0+build.1848":                     {},
+	"2.0.1-alpha.1227":                     {},
+	"1.0.0-alpha+beta":                     {},
+	"1.2.3----RC-SNAPSHOT.12.9.1--.12+788": {},
+	"1.2.3----R-S.12.9.1--.12+meta":        {},
+	"1.2.3----RC-SNAPSHOT.12.9.1--.12":     {},
+	"1.0.0+0.build.1-rc.10000aaa-kk-0.1":   {},
+	"18446744073709551615.18446744073709551615.18446744073709551615": {},
+	"1.0.0-0A.is.legal":         {},
+	"1.1.2+meta-valid-with-001": {},
+	"1.0.0+001":                 {},
+	"1.0.0-alpha+00.01":         {},
+	"1.0.0-0":                   {},
+	"1.2.3-a+b-c":               {},
 }
 
-var invalidVersions = []string{
-	"1", v12, "1.2.3-0123", "1.2.3-0123.0123", "1.1.2+.123", "+invalid", "-invalid", "-invalid+invalid",
-	"-invalid.01", "alpha", "alpha.beta", "alpha.beta.1", "alpha.1", "alpha+beta", "alpha_beta", "alpha.",
-	"alpha..", "beta", "1.0.0-alpha_beta", "-alpha.", "1.0.0-alpha..", "1.0.0-alpha..1", "1.0.0-alpha...1",
-	"1.0.0-alpha....1", "1.0.0-alpha.....1", "1.0.0-alpha......1", "1.0.0-alpha.......1", "01.1.1", "1.01.1",
-	"1.1.01", v12, "1.2.3.DEV", "1.2-SNAPSHOT", "1.2.31.2.3----RC-SNAPSHOT.12.09.1--..12+788", "1.2-RC-SNAPSHOT",
-	"-1.0.3-gamma+b7718", "+justmeta", "9.8.7+meta+meta", "9.8.7-whatever+meta+meta",
-	"99999999999999999999999.999999999999999999.99999999999999999",
-	"", "v1.2.3", " 1.2.3", "1.2.3 ", "1.2.3-", "1.2.3+", "1.2.3-a..b", "1.2.3+a..b", "1.2.3+a_b", "1.2.3-a+b+c",
-	"1.2.-3", "+1.2.3", "1.2.3-rc.01", "18446744073709551616.0.0", "1.2.3-18446744073709551616", "1.2.3-é",
+var invalidVersions = map[string]struct{}{
+	"1":                   {},
+	v12:                   {},
+	"1.2.3-0123":          {},
+	"1.2.3-0123.0123":     {},
+	"1.1.2+.123":          {},
+	"+invalid":            {},
+	"-invalid":            {},
+	"-invalid+invalid":    {},
+	"-invalid.01":         {},
+	"alpha":               {},
+	"alpha.beta":          {},
+	"alpha.beta.1":        {},
+	"alpha.1":             {},
+	"alpha+beta":          {},
+	"alpha_beta":          {},
+	"alpha.":              {},
+	"alpha..":             {},
+	"beta":                {},
+	"1.0.0-alpha_beta":    {},
+	"-alpha.":             {},
+	"1.0.0-alpha..":       {},
+	"1.0.0-alpha..1":      {},
+	"1.0.0-alpha...1":     {},
+	"1.0.0-alpha....1":    {},
+	"1.0.0-alpha.....1":   {},
+	"1.0.0-alpha......1":  {},
+	"1.0.0-alpha.......1": {},
+	"01.1.1":              {},
+	"1.01.1":              {},
+	"1.1.01":              {},
+	"1.2.3.DEV":           {},
+	"1.2-SNAPSHOT":        {},
+	"1.2.31.2.3----RC-SNAPSHOT.12.09.1--..12+788": {},
+	"1.2-RC-SNAPSHOT":          {},
+	"-1.0.3-gamma+b7718":       {},
+	"+justmeta":                {},
+	"9.8.7+meta+meta":          {},
+	"9.8.7-whatever+meta+meta": {},
+	"99999999999999999999999.999999999999999999.99999999999999999": {},
+	"":                           {},
+	"v1.2.3":                     {},
+	" 1.2.3":                     {},
+	"1.2.3 ":                     {},
+	"1.2.3-":                     {},
+	"1.2.3+":                     {},
+	"1.2.3-a..b":                 {},
+	"1.2.3+a..b":                 {},
+	"1.2.3+a_b":                  {},
+	"1.2.3-a+b+c":                {},
+	"1.2.-3":                     {},
+	"+1.2.3":                     {},
+	"1.2.3-rc.01":                {},
+	"18446744073709551616.0.0":   {},
+	"1.2.3-18446744073709551616": {},
+	"1.2.3-é":                    {},
+	"1.0.0-00":                   {},
+	"1.0.0-a.00":                 {},
 }
 
 func TestParseConformance(t *testing.T) {
 	t.Parallel()
-	for _, s := range validVersions {
+	for s := range validVersions {
 		t.Run("valid "+s, func(t *testing.T) {
 			t.Parallel()
 			v, err := semver.Parse(s)
@@ -57,7 +134,7 @@ func TestParseConformance(t *testing.T) {
 			}
 		})
 	}
-	for _, s := range invalidVersions {
+	for s := range invalidVersions {
 		t.Run("invalid "+s, func(t *testing.T) {
 			t.Parallel()
 			if v, err := semver.Parse(s); err == nil {
@@ -264,15 +341,27 @@ func TestIsPrerelease(t *testing.T) {
 	}
 }
 
+// official is the regular expression suggested by semver.org, used as an oracle.
+var official = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)` +
+	`(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?` +
+	`(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
+
 func FuzzParseRoundTrip(f *testing.F) {
-	for _, s := range validVersions {
+	for s := range validVersions {
 		f.Add(s)
 	}
-	for _, s := range invalidVersions {
+	for s := range invalidVersions {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
 		v, err := semver.Parse(s)
+		if official.MatchString(s) != (err == nil) {
+			var pe *semver.ParseError
+			// The grammar limits numeric identifiers to uint64 (spec F1.1); the official regex has no limit.
+			if !errors.As(err, &pe) || pe.Detail != "number too large to fit in target type" {
+				t.Fatalf("Parse(%q) error = %v, official regex match = %v", s, err, official.MatchString(s))
+			}
+		}
 		if err != nil {
 			return
 		}
