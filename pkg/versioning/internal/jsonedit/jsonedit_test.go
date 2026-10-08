@@ -11,7 +11,7 @@ import (
 
 const (
 	numOne     = "1.0"
-	numE16     = "1e16"
+	numE16     = "1e+16"
 	numNegZero = "-0.0"
 )
 
@@ -50,10 +50,10 @@ func TestRoundTrip(t *testing.T) {
 		"small":           {`1e-5`, `0.00001`},
 		"smaller":         {`1e-6`, `1e-6`},
 		"sci mantissa":    {`1.5e-7`, `1.5e-7`},
-		"big int":         {`18446744073709551616`, `1.8446744073709552e19`},
-		"big neg int":     {`-9223372036854775809`, `-9.223372036854776e18`},
+		"big int":         {`18446744073709551616`, `1.8446744073709552e+19`},
+		"big neg int":     {`-9223372036854775809`, `-9.223372036854776e+18`},
 		"1e15":            {`1e15`, `1000000000000000.0`},
-		"1e16":            {numE16, numE16},
+		"1e16":            {`1e16`, numE16},
 		"decimal":         {`123.456`, `123.456`},
 		"neg zero":        {`-0`, numNegZero},
 		"neg zero float":  {numNegZero, numNegZero},

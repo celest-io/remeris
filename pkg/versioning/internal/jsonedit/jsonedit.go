@@ -1,9 +1,9 @@
 // Package jsonedit is a small ordered JSON tree built on encoding/json/jsontext.
 //
-// It reproduces what Knope does with serde_json (feature preserve_order, no arbitrary_precision): objects keep
-// their member order, and Marshal prints like serde_json::to_string_pretty. It targets package.json,
-// package-lock.json and tauri.conf.json. Knope does not write deno.lock with serde_json (it uses deno_lockfile's
-// canonical writer), so this package is not meant for that file.
+// It reproduces what Knope does with serde_json 1.0.151 (features preserve_order; no arbitrary_precision, no
+// float_roundtrip): objects keep their member order, and Marshal prints like serde_json::to_string_pretty.
+// It targets package.json, package-lock.json and tauri.conf.json. Knope does not write deno.lock with
+// serde_json (it uses deno_lockfile's canonical writer), so this package is not meant for that file.
 //
 // Parsing accepts at most 127 nested containers (arrays and objects; scalars do not count) and fails at the
 // 128th, like serde_json's recursion limit.
@@ -13,8 +13,9 @@
 //   - strings escape only `"`, `\`, \b, \f, \n, \r, \t and the other control characters below U+0020 as
 //     \u00xx (lowercase hex); `/`, `<`, `>`, `&`, DEL and non-ASCII are written as they are;
 //   - numbers without a fraction or exponent that fit in uint64 (or int64 when negative) stay integers;
-//     everything else goes through float64 and prints in Rust's shortest form: 1e3 becomes 1000.0,
-//     1.0 stays 1.0, 1e16 becomes 1e16, 1e-7 becomes 1e-7, and -0 becomes -0.0;
+//     everything else goes through float64, parsed the way serde_json does (not always correctly rounded: see
+//     numberText) and printed like serde_json's zmij formatter, with an explicit sign on positive exponents:
+//     1e3 becomes 1000.0, 1.0 stays 1.0, 1e16 becomes 1e+16, 1e-7 becomes 1e-7, and -0 becomes -0.0;
 //   - duplicate member names are accepted: the last value wins at the position of the first occurrence.
 package jsonedit
 
