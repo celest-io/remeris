@@ -90,8 +90,13 @@ type node struct {
 	// inserted keys. dotted marks tables created by dotted keys, which may not be redefined by a header.
 	header, dotted bool
 	// lastEnd is where a key inserted into a header table goes: the end of the line of its last key-value
-	// pair, or of its header line. For an inline table it is the end of the last pair.
+	// pair, or of its header line. For a table that dotted keys define it is the end of the line of the last
+	// pair that belongs to it (nested dotted keys included). For an inline table it is the end of the last pair.
 	lastEnd int
+	// prefix is, for a table that dotted keys define in a header table or the root, the key text that reaches it
+	// from there, as the first dotted key wrote it ("a", "'a.b'" or "dependencies.a "), without the final dot.
+	// It is empty for dotted tables inside inline tables, which cannot take inserted keys.
+	prefix string
 }
 
 func newTable() *node { return &node{val: Value{Kind: Table}, kids: map[string]*node{}} }
@@ -219,9 +224,13 @@ func index(src []byte) (*node, error) {
 		case unstable.Table, unstable.ArrayTable:
 			cur, err = addHeader(root, expr, src)
 		case unstable.KeyValue:
-			err = addPair(cur, expr, src)
+			var dotted []*node
+			dotted, err = addPair(cur, expr, src)
 			if err == nil {
 				cur.lastEnd = lineEnd(src, rawEnd(expr))
+				for _, t := range dotted {
+					t.lastEnd = cur.lastEnd
+				}
 			}
 		}
 		if err != nil {
@@ -246,11 +255,18 @@ func lineEnd(src []byte, i int) int {
 
 // keyNames returns the decoded names of a key and the offset just after the last one.
 func keyNames(it unstable.Iterator) (names []string, end int) {
+	names, _, end = keyParts(it)
+	return names, end
+}
+
+// keyParts is keyNames that also returns, for each part, the raw start offset and the offset just after it.
+func keyParts(it unstable.Iterator) (names []string, spans [][2]int, end int) {
 	for it.Next() {
 		names = append(names, string(it.Node().Data))
+		spans = append(spans, [2]int{int(it.Node().Raw.Offset), rawEnd(it.Node())})
 		end = rawEnd(it.Node())
 	}
-	return names, end
+	return names, spans, end
 }
 
 // addHeader records a [table] or [[array]] header and returns the table that the pairs after it belong to.
@@ -296,31 +312,38 @@ func addHeader(root *node, expr *unstable.Node, src []byte) (*node, error) {
 	return kid, nil
 }
 
-// addPair records a key-value pair, dotted or not, in table.
-func addPair(table *node, kv *unstable.Node, src []byte) error {
-	names, end := keyNames(kv.Key())
-	for _, name := range names[:len(names)-1] {
+// addPair records a key-value pair, dotted or not, in table. It returns the tables that the dotted part of the
+// key goes through, outermost first.
+func addPair(table *node, kv *unstable.Node, src []byte) ([]*node, error) {
+	names, spans, end := keyParts(kv.Key())
+	var dotted []*node
+	owned := table.header
+	for i, name := range names[:len(names)-1] {
 		kid, ok := table.kids[name]
 		if !ok {
 			kid = newTable()
 			kid.dotted = true
+			if owned {
+				kid.prefix = string(src[spans[0][0]:skipSpace(src, spans[i][1])])
+			}
 			table.kids[name] = kid
 		}
 		if kid.val.Kind != Table || kid.header {
-			return fmt.Errorf("key %q is not a table that dotted keys can extend", name)
+			return nil, fmt.Errorf("key %q is not a table that dotted keys can extend", name)
 		}
+		dotted = append(dotted, kid)
 		table = kid
 	}
 	last := names[len(names)-1]
 	if _, dup := table.kids[last]; dup {
-		return fmt.Errorf("duplicate key %q", last)
+		return nil, fmt.Errorf("duplicate key %q", last)
 	}
 	n, err := valueNode(kv.Value(), end, rawEnd(kv), src)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	table.kids[last] = n
-	return nil
+	return dotted, nil
 }
 
 // valueNode builds the node of a value. The parser reports no range for arrays and only the opening brace of an
@@ -350,7 +373,7 @@ func valueNode(v *unstable.Node, keyEnd, end int, src []byte) (*node, error) {
 		n.lastEnd = start + 1
 		it := v.Children()
 		for it.Next() {
-			if err := addPair(n, it.Node(), src); err != nil {
+			if _, err := addPair(n, it.Node(), src); err != nil {
 				return nil, err
 			}
 			n.lastEnd = rawEnd(it.Node())

@@ -15,7 +15,7 @@ var (
 	// ErrNoParent means the table that should receive a new key does not exist.
 	ErrNoParent = errors.New("parent table not found")
 	// ErrNotInsertable means a key cannot be inserted into the parent: only the root, [table] headers,
-	// array-of-tables elements and inline tables accept new keys.
+	// array-of-tables elements, tables that dotted keys define and inline tables accept new keys.
 	ErrNotInsertable = errors.New("cannot insert a key into this kind of table")
 	// ErrNotString means the value to edit is not a string.
 	ErrNotString = errors.New("value is not a string")
@@ -28,10 +28,15 @@ var (
 // If the key exists and is not a table, the bytes of its value are replaced and nothing around them changes (a
 // trailing comment stays). If it does not exist, it is inserted the way toml_edit does it:
 //   - in the root table or a [table] or [[array]] element, as a new line `key = "v"` after the last key-value pair;
+//   - in a table that only dotted keys define (a.path = "p"), as a line `a.key = "v"` after the last line of
+//     that table, whose dotted prefix is spelled as the first of those lines spells it (bare, quoted, with the
+//     spaces around its dots), and which sits in the table that holds those lines, a header table or the root;
 //   - in an inline table, as `, key = "v" ` after the last pair, or ` key = "v" ` in an empty one.
 //
-// The last Key of path is the new key (its Index is ignored); the parent must exist, or the error wraps ErrNoParent.
-// Any other kind of parent, such as a table that only dotted keys define, wraps ErrNotInsertable.
+// New lines end with the line ending of the document (the first one it has). The last Key of path is the new key
+// (its Index is ignored); the parent must exist, or the error wraps ErrNoParent. A parent that cannot take keys
+// (a scalar, an array, a table that only a longer header implies, or dotted keys inside an inline table) wraps
+// ErrNotInsertable.
 func (d *Document) SetString(path []Key, v string) error {
 	if len(path) == 0 {
 		return fmt.Errorf("%w: empty path", ErrNoParent)
@@ -61,6 +66,8 @@ func (d *Document) SetString(path []Key, v string) error {
 		return d.insertInline(parent, pair)
 	case parent.val.Kind == Table && parent.header:
 		return d.insertLine(parent.lastEnd, pair)
+	case parent.val.Kind == Table && parent.dotted && parent.prefix != "":
+		return d.insertLine(parent.lastEnd, parent.prefix+"."+pair)
 	}
 	return fmt.Errorf("%w: %s", ErrNotInsertable, joinNames(path[:len(path)-1]))
 }

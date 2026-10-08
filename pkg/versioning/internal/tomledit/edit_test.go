@@ -113,6 +113,84 @@ func TestSetString(t *testing.T) {
 			value: "1",
 			want:  "[a]\nb.c = 1\nversion = \"1\"\n[z]\n",
 		},
+		"insert under dotted key parent": {
+			in:    "[dependencies]\na.path = \"x\"\nz = 1\n",
+			path:  k(keyDeps, "a", keyVersion),
+			value: newVersion,
+			want:  "[dependencies]\na.path = \"x\"\na.version = \"2.0.0\"\nz = 1\n",
+		},
+		"insert under dotted key parent after workspace flag": {
+			in:    "[dependencies]\na.workspace = true\n",
+			path:  k(keyDeps, "a", keyVersion),
+			value: newVersion,
+			want:  "[dependencies]\na.workspace = true\na.version = \"2.0.0\"\n",
+		},
+		"insert after the last line of the dotted parent": {
+			in:    "[dependencies]\na.git = \"u\"\nz = 1\na.branch = \"b\"\n# c\ny = 2\n",
+			path:  k(keyDeps, "a", keyVersion),
+			value: newVersion,
+			want:  "[dependencies]\na.git = \"u\"\nz = 1\na.branch = \"b\"\na.version = \"2.0.0\"\n# c\ny = 2\n",
+		},
+		"insert under quoted dotted parent": {
+			in:    "[dependencies]\n\"a.b\".path = \"x\"\n",
+			path:  k(keyDeps, "a.b", keyVersion),
+			value: newVersion,
+			want:  "[dependencies]\n\"a.b\".path = \"x\"\n\"a.b\".version = \"2.0.0\"\n",
+		},
+		"insert under literal quoted dotted parent": {
+			in:    "[dependencies]\n'a'.path = 'x'\n",
+			path:  k(keyDeps, "a", keyVersion),
+			value: newVersion,
+			want:  "[dependencies]\n'a'.path = 'x'\n'a'.version = \"2.0.0\"\n",
+		},
+		"insert under dotted parent at the root": {
+			in:    "package.name = \"t\"\ndependencies.a.path = \"x\"\nz = 1\n",
+			path:  k(keyDeps, "a", keyVersion),
+			value: newVersion,
+			want:  "package.name = \"t\"\ndependencies.a.path = \"x\"\ndependencies.a.version = \"2.0.0\"\nz = 1\n",
+		},
+		"insert under dotted parent in array of tables element": {
+			in:    "[[t]]\na.path = \"x\"\n[[t]]\na.path = \"y\"\nz = 1\n",
+			path:  []tomledit.Key{{Name: "t", Index: 1}, {Name: "a"}, {Name: keyVersion}},
+			value: newVersion,
+			want:  "[[t]]\na.path = \"x\"\n[[t]]\na.path = \"y\"\na.version = \"2.0.0\"\nz = 1\n",
+		},
+		"insert under nested dotted parent": {
+			in:    "[dependencies]\na.b.path = \"x\"\nz = 1\n",
+			path:  k(keyDeps, "a", keyVersion),
+			value: newVersion,
+			want:  "[dependencies]\na.b.path = \"x\"\na.version = \"2.0.0\"\nz = 1\n",
+		},
+		"insert under dotted parent keeps spaces around its dots": {
+			in:    "[dependencies]\n  a . path   =   \"x\"  # c\n\nz=1\n",
+			path:  k(keyDeps, "a", keyVersion),
+			value: newVersion,
+			want:  "[dependencies]\n  a . path   =   \"x\"  # c\na .version = \"2.0.0\"\n\nz=1\n",
+		},
+		"insert under dotted parent after a multi-line array": {
+			in:    "[d]\na.path = \"x\"\na.f = [\n 1,\n]\nz = 1\n",
+			path:  k("d", "a", keyVersion),
+			value: newVersion,
+			want:  "[d]\na.path = \"x\"\na.f = [\n 1,\n]\na.version = \"2.0.0\"\nz = 1\n",
+		},
+		"insert under dotted parent without final newline": {
+			in:    "[d]\na.path = \"x\"",
+			path:  k("d", "a", keyVersion),
+			value: newVersion,
+			want:  "[d]\na.path = \"x\"\na.version = \"2.0.0\"",
+		},
+		"insert under dotted parent in CRLF file": {
+			in:    "[d]\r\na.path = \"x\"\r\nz = 1\r\n",
+			path:  k("d", "a", keyVersion),
+			value: newVersion,
+			want:  "[d]\r\na.path = \"x\"\r\na.version = \"2.0.0\"\r\nz = 1\r\n",
+		},
+		"insert under dotted parent before the next table": {
+			in:    "[d]\na.path = \"x\"\n\n[e]\ny = 1\n",
+			path:  k("d", "a", keyVersion),
+			value: newVersion,
+			want:  "[d]\na.path = \"x\"\na.version = \"2.0.0\"\n\n[e]\ny = 1\n",
+		},
 		"insert without final newline": {
 			in:    "[a]\nx = 1",
 			path:  k("a", keyVersion),
@@ -265,7 +343,7 @@ func TestSetString(t *testing.T) {
 
 func TestSetStringErrors(t *testing.T) {
 	t.Parallel()
-	const src = "[a]\nx = 1\n[b.c]\ny = 1\n[d]\ne.f = 1\ng = [1]\n[[h]]\n"
+	const src = "[a]\nx = 1\n[b.c]\ny = 1\n[d]\ne.f = 1\ng = [1]\ni = { j.k = 1 }\n[[h]]\n"
 	tests := map[string]struct {
 		path []tomledit.Key
 		want error
@@ -273,7 +351,7 @@ func TestSetStringErrors(t *testing.T) {
 		"empty path":               {path: nil, want: tomledit.ErrNoParent},
 		"missing parent":           {path: k("zzz", keyVersion), want: tomledit.ErrNoParent},
 		"implicit parent":          {path: k("b", keyVersion), want: tomledit.ErrNotInsertable},
-		"dotted key parent":        {path: k("d", "e", keyVersion), want: tomledit.ErrNotInsertable},
+		"dotted key inside inline": {path: k("d", "i", "j", keyVersion), want: tomledit.ErrNotInsertable},
 		"scalar parent":            {path: k("a", "x", keyVersion), want: tomledit.ErrNotInsertable},
 		"array parent":             {path: k("d", "g", keyVersion), want: tomledit.ErrNotInsertable},
 		"existing table":           {path: k("b", "c"), want: tomledit.ErrNotValue},
