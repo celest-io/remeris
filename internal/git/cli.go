@@ -3,13 +3,13 @@ package git
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/celest-io/remeris/internal/diag"
 )
@@ -33,11 +33,37 @@ func NewCLI(dir string) (*CLI, error) {
 	return &CLI{Dir: dir, path: path}, nil
 }
 
+// waitDelay bounds how long run waits for git's I/O after a cancelled context.
+const waitDelay = 2 * time.Second
+
+// repoLocationVars are the variables that make git act on another repository than Dir. libgit2's
+// Repository::open ignores them, so they are dropped to keep the same behaviour.
+var repoLocationVars = []string{
+	"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+	"GIT_COMMON_DIR", "GIT_NAMESPACE", "GIT_CEILING_DIRECTORIES", "GIT_PREFIX", "GIT_INDEX_VERSION",
+}
+
+// gitEnv returns the inherited environment without the repository-location variables, plus the settings
+// that make git's output stable. The user's other git settings (config, credentials) are kept.
+func gitEnv(environ []string) []string {
+	env := make([]string, 0, len(environ)+2)
+	for _, kv := range environ {
+		name, _, _ := strings.Cut(kv, "=")
+		if !slices.Contains(repoLocationVars, name) {
+			env = append(env, kv)
+		}
+	}
+	return append(env, "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+}
+
 // run executes git with args in c.Dir and returns its standard output.
+//
+// --no-replace-objects keeps refs/replace out of the picture, as libgit2 ignores it.
 func (c *CLI) run(ctx context.Context, stdin string, args ...string) (string, error) {
-	full := append([]string{"-C", c.Dir}, args...)
+	full := append([]string{"--no-replace-objects", "-C", c.Dir}, args...)
 	cmd := exec.CommandContext(ctx, c.path, full...) //nolint:gosec // path comes from LookPath
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	cmd.Env = gitEnv(os.Environ())
+	cmd.WaitDelay = waitDelay
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}
@@ -48,7 +74,7 @@ func (c *CLI) run(ctx context.Context, stdin string, args ...string) (string, er
 			return "", ctx.Err()
 		}
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			err = errors.New(msg)
+			err = fmt.Errorf("%s: %w", msg, err)
 		}
 		return "", err
 	}
@@ -75,7 +101,8 @@ func unknownGitError(cause error) error {
 // A repository without commits is an error, as in Knope, whose revwalk cannot push an unborn HEAD.
 //
 // Commands: git rev-parse --git-dir; git for-each-ref --format=%(refname) refs/tags;
-// git cat-file --batch-check (stdin: refs/tags/<name>^{commit}); git rev-list HEAD.
+// git cat-file --batch-check (stdin: refs/tags/<name>^{commit}); git rev-list HEAD -- (the "--" avoids a clash with a file
+// named HEAD).
 func (c *CLI) AllTagsOnBranch(ctx context.Context) ([]string, error) {
 	if _, err := c.run(ctx, "", "rev-parse", "--git-dir"); err != nil {
 		return nil, openRepoError(err)
@@ -85,7 +112,7 @@ func (c *CLI) AllTagsOnBranch(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
-	walk, err := c.run(ctx, "", "rev-list", "HEAD")
+	walk, err := c.run(ctx, "", "rev-list", "HEAD", "--")
 	if err != nil {
 		return nil, unknownGitError(err)
 	}

@@ -6,7 +6,8 @@ package git
 
 import (
 	"context"
-	"errors"
+
+	"github.com/celest-io/remeris/internal/diag"
 )
 
 // Git is the repository access remeris needs. Methods are added milestone by milestone.
@@ -19,7 +20,10 @@ type Git interface {
 func Open(_ context.Context, dir string) (Git, error) {
 	cli, err := NewCLI(dir)
 	if err != nil {
-		return nil, errors.Join(errors.New("no Git backend is available"), err)
+		return nil, diag.New("Could not find the git command").
+			WithCode("remeris::git::no_backend").
+			WithHelp("Install git and make sure it is on PATH.").
+			WithCause(err)
 	}
 	return cli, nil
 }
