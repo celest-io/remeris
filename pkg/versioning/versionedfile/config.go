@@ -29,6 +29,9 @@ const (
 
 // NewConfig validates a versioned_files entry (F2.2 step 2). A non-nil regex (even empty) selects RegexFile.
 // It returns a diagnostic for an unknown file name, or when dependency and regex are both given.
+//
+// A nil regex means the key was absent; a non-nil empty slice means it was given, as Knope's Some(vec![]): the file
+// is then a regex file. Decoders must keep the two apart.
 func NewConfig(path string, dependency *string, regex []string) (Config, error) {
 	if dependency != nil && regex != nil {
 		return Config{}, diag.New("Cannot specify both 'dependency' and 'regex' for the same file: " + path).
@@ -54,11 +57,15 @@ func unknownFileHelp() string {
 	return "remeris identifies the type of file based on its name. Supported file names: " + strings.Join(names, ", ")
 }
 
-// Defaults returns one Config per supported file name, in FileNames order (default detection, F20).
+// Defaults returns one Config per supported file name, in FileNames order (default detection, F20). Like Knope's
+// Config::defaults it has no deno.jsonc: Quirk Q11 adds that name for explicit versioned_files only, and Deno
+// workspace discovery (F20.4) finds deno.jsonc files by itself.
 func Defaults() []Config {
-	out := make([]Config, len(FileNames))
-	for i, f := range FileNames {
-		out[i] = Config{Path: f.Name, Format: f.Format}
+	out := make([]Config, 0, len(FileNames))
+	for _, f := range FileNames {
+		if f.Name != denoJSONCName {
+			out = append(out, Config{Path: f.Name, Format: f.Format})
+		}
 	}
 	return out
 }

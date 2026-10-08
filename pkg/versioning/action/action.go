@@ -82,10 +82,12 @@ func RemoveFile(path string) Action { return Action{Kind: KindRemoveFile, Path: 
 // AddTag returns an action that creates a Git tag.
 func AddTag(tag string) Action { return Action{Kind: KindAddTag, Tag: tag} }
 
-// CreateRelease returns an action that publishes r.
+// CreateRelease returns an action that publishes r. The action keeps r's slices and pointers, so treat r as
+// immutable afterwards.
 func CreateRelease(r Release) Action { return Action{Kind: KindCreateRelease, Release: &r} }
 
-// Dedupe removes actions that are exactly equal to an earlier one, keeping the first (F13). The input is not modified.
+// Dedupe removes actions that are exactly equal to an earlier one, keeping the first (F13), like Knope's unique().
+// The input is not modified. It compares every pair, which is fine for the handful of actions a release has.
 func Dedupe(actions []Action) []Action {
 	var out []Action
 	for _, a := range actions {

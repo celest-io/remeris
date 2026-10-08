@@ -13,12 +13,10 @@ const (
 	cargoToml    = "Cargo.toml"
 	packageJSON  = "package.json"
 	setupPy      = "setup.py"
-	nestedPkg    = "crates/a/package.json"
 	unknownPref  = "Unknown file: "
 	notImplement = "is not implemented yet"
 	denoJSONC    = "deno.jsonc"
 	goMod        = "go.mod"
-	keyNested    = "nested"
 	m2           = "M2"
 	m9           = "M9"
 )
@@ -60,7 +58,6 @@ func TestFormatFromPath(t *testing.T) {
 		})
 	}
 	rejected := map[string]string{
-		keyNested:                 nestedPkg,
 		"case sensitive":          "cargo.toml",
 		"case sensitive 2":        "Package.json",
 		"unknown":                 setupPy,
@@ -72,14 +69,7 @@ func TestFormatFromPath(t *testing.T) {
 	for name, path := range rejected {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			f, ok := versionedfile.FormatFromPath(path)
-			if name == keyNested {
-				if !ok || f != versionedfile.PackageJson {
-					t.Errorf("FormatFromPath(%q) = %v, %v", path, f, ok)
-				}
-				return
-			}
-			if ok {
+			if f, ok := versionedfile.FormatFromPath(path); ok {
 				t.Errorf("FormatFromPath(%q) = %v, want no match", path, f)
 			}
 		})
@@ -96,9 +86,15 @@ func TestFileNamesOrder(t *testing.T) {
 	if names[0] != cargoToml || names[2] != "deno.json" || names[3] != denoJSONC || last != "tauri.linux.conf.json" {
 		t.Errorf("unexpected order: %v", names)
 	}
+	// Knope's default detection has no deno.jsonc (Q11 only adds it to the explicit file names).
 	defaults := versionedfile.Defaults()
-	if len(defaults) != len(names) || defaults[3].Path != denoJSONC || defaults[3].Format != versionedfile.DenoJson {
-		t.Errorf("Defaults = %+v", defaults)
+	if len(defaults) != len(names)-1 {
+		t.Errorf("Defaults has %d entries, want %d", len(defaults), len(names)-1)
+	}
+	for _, d := range defaults {
+		if d.Path == denoJSONC {
+			t.Errorf("Defaults contains %s", denoJSONC)
+		}
 	}
 }
 

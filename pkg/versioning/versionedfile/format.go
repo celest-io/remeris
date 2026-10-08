@@ -39,13 +39,16 @@ func (f Format) String() string {
 	return formatNames[f]
 }
 
+// denoJSONCName is in FileNames for explicit versioned_files (Quirk Q11) but not in Defaults.
+const denoJSONCName = "deno.jsonc"
+
 // FileNames lists the supported file names, matched exactly on the last path component. The order is also the
 // order of default detection (F20). deno.jsonc is added on top of Knope's table (Q11).
 var FileNames = []struct {
 	Name   string
 	Format Format
 }{
-	{"Cargo.toml", Cargo}, {"Cargo.lock", CargoLock}, {"deno.json", DenoJson}, {"deno.jsonc", DenoJson},
+	{"Cargo.toml", Cargo}, {"Cargo.lock", CargoLock}, {"deno.json", DenoJson}, {denoJSONCName, DenoJson},
 	{"deno.lock", DenoLock}, {"gleam.toml", Gleam}, {"go.mod", GoMod}, {"package.json", PackageJson},
 	{"package-lock.json", PackageLockJson}, {"pom.xml", MavenPom}, {"pubspec.yaml", PubSpec},
 	{"pyproject.toml", PyProject}, {"tauri.conf.json", TauriConf}, {"tauri.macos.conf.json", TauriConf},
