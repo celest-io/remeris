@@ -1,14 +1,19 @@
 // Package jsonedit is a small ordered JSON tree built on encoding/json/jsontext.
 //
 // It reproduces what Knope does with serde_json (feature preserve_order, no arbitrary_precision): objects keep
-// their member order, and Marshal prints like serde_json::to_string_pretty.
+// their member order, and Marshal prints like serde_json::to_string_pretty. It targets package.json,
+// package-lock.json and tauri.conf.json. Knope does not write deno.lock with serde_json (it uses deno_lockfile's
+// canonical writer), so this package is not meant for that file.
+//
+// Parsing accepts at most 127 nested containers (arrays and objects; scalars do not count) and fails at the
+// 128th, like serde_json's recursion limit.
 //
 // Output rules:
 //   - two-space indent, `"key": value`, `{}` and `[]` for empty containers, no trailing newline;
 //   - strings escape only `"`, `\`, \b, \f, \n, \r, \t and the other control characters below U+0020 as
 //     \u00xx (lowercase hex); `/`, `<`, `>`, `&`, DEL and non-ASCII are written as they are;
 //   - numbers without a fraction or exponent that fit in uint64 (or int64 when negative) stay integers;
-//     everything else goes through float64 and prints in Rust's shortest form (ryu): 1e3 becomes 1000.0,
+//     everything else goes through float64 and prints in Rust's shortest form: 1e3 becomes 1000.0,
 //     1.0 stays 1.0, 1e16 becomes 1e16, 1e-7 becomes 1e-7, and -0 becomes -0.0;
 //   - duplicate member names are accepted: the last value wins at the position of the first occurrence.
 package jsonedit
@@ -19,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 	"strings"
 )
@@ -40,7 +44,7 @@ const (
 const (
 	indent    = "  "
 	hexDigits = "0123456789abcdef"
-	maxDepth  = 128 // serde_json's recursion limit
+	maxDepth  = 128 // serde_json's recursion limit: the 128th nested container is an error
 )
 
 // Member is one name/value pair of an object.
@@ -69,11 +73,20 @@ func NewBool(b bool) *Value { return &Value{kind: KindBool, text: strconv.Format
 // NewInt returns an integer number.
 func NewInt(n int64) *Value { return &Value{kind: KindNumber, text: strconv.FormatInt(n, 10)} }
 
-// String returns a string value.
-func String(s string) *Value { return &Value{kind: KindString, text: s} }
+// String returns a string value. A Rust String cannot hold invalid UTF-8, so each run of invalid bytes in s is
+// replaced by one U+FFFD.
+func String(s string) *Value { return &Value{kind: KindString, text: strings.ToValidUTF8(s, "�")} }
+
+// orNull maps a nil value to JSON null, so a tree never holds a nil node.
+func orNull(v *Value) *Value {
+	if v == nil {
+		return NewNull()
+	}
+	return v
+}
 
 // NewObject returns an object with the given members, in order. A repeated name keeps the last value
-// at the first position.
+// at the first position. A nil value is stored as null.
 func NewObject(members ...Member) *Value {
 	o := &Value{kind: KindObject}
 	for _, m := range members {
@@ -82,9 +95,13 @@ func NewObject(members ...Member) *Value {
 	return o
 }
 
-// NewArray returns an array of the given elements.
+// NewArray returns an array of the given elements. A nil element is stored as null.
 func NewArray(elements ...*Value) *Value {
-	return &Value{kind: KindArray, elements: append([]*Value(nil), elements...)}
+	a := &Value{kind: KindArray, elements: make([]*Value, len(elements))}
+	for i, el := range elements {
+		a.elements[i] = orNull(el)
+	}
+	return a
 }
 
 // Str returns the decoded text of a string value.
@@ -128,16 +145,19 @@ func (v *Value) index(name string) int {
 	return -1
 }
 
-// Set replaces the member called name in place, or appends it at the end. It does nothing on a non-object.
-func (v *Value) Set(name string, val *Value) {
+// Set replaces the member called name in place, or appends it at the end. A nil val is stored as null. It reports
+// false, and changes nothing, when v is not an object.
+func (v *Value) Set(name string, val *Value) bool {
 	if v.kind != KindObject {
-		return
+		return false
 	}
+	val = orNull(val)
 	if i := v.index(name); i >= 0 {
 		v.members[i].Value = val
-		return
+		return true
 	}
 	v.members = append(v.members, Member{Name: name, Value: val})
+	return true
 }
 
 // Rename changes the name of a member without moving it. It reports false when oldName is absent or newName is
@@ -157,10 +177,10 @@ func (v *Value) Rename(oldName, newName string) bool {
 	return true
 }
 
-// Members returns the members of an object in order. The slice is a copy.
+// Members returns the members of an object in order. The slice is a copy, but the values are shared with v.
 func (v *Value) Members() []Member { return append([]Member(nil), v.members...) }
 
-// Elements returns the elements of an array. The slice is a copy.
+// Elements returns the elements of an array. The slice is a copy, but the values are shared with v.
 func (v *Value) Elements() []*Value { return append([]*Value(nil), v.elements...) }
 
 // Parse reads exactly one JSON value from src.
@@ -180,12 +200,12 @@ func Parse(src []byte) (*Value, error) {
 }
 
 func parseValue(dec *jsontext.Decoder, depth int) (*Value, error) {
-	if depth > maxDepth {
-		return nil, errors.New("recursion limit exceeded")
-	}
 	tok, err := dec.ReadToken()
 	if err != nil {
 		return nil, err
+	}
+	if k := tok.Kind(); (k == '[' || k == '{') && depth+1 >= maxDepth {
+		return nil, errors.New("recursion limit exceeded")
 	}
 	switch tok.Kind() {
 	case 'n':
@@ -229,59 +249,6 @@ func parseValue(dec *jsontext.Decoder, depth int) (*Value, error) {
 		return obj, err
 	}
 	return nil, fmt.Errorf("unexpected token %q", tok.String())
-}
-
-// numberText converts JSON number text to the form serde_json prints.
-func numberText(raw string) (string, error) {
-	if !strings.ContainsAny(raw, ".eE") {
-		if raw == "-0" {
-			return "-0.0", nil // serde_json parses "-0" as the float -0.0
-		}
-		if raw[0] == '-' {
-			if n, err := strconv.ParseInt(raw, 10, 64); err == nil {
-				return strconv.FormatInt(n, 10), nil
-			}
-		} else if n, err := strconv.ParseUint(raw, 10, 64); err == nil {
-			return strconv.FormatUint(n, 10), nil
-		}
-	}
-	f, err := strconv.ParseFloat(raw, 64)
-	if err != nil || math.IsInf(f, 0) {
-		return "", fmt.Errorf("number out of range: %s", raw)
-	}
-	return formatFloat(f), nil
-}
-
-// formatFloat prints f like Rust's ryu (the serde_json float formatter).
-func formatFloat(f float64) string {
-	sign := ""
-	if math.Signbit(f) {
-		sign = "-"
-		f = -f
-	}
-	if f == 0 {
-		return sign + "0.0"
-	}
-	// 'e' with -1 precision yields the shortest digits: d.ddde±XX
-	s := strconv.FormatFloat(f, 'e', -1, 64)
-	mant, expText, _ := strings.Cut(s, "e")
-	exp, _ := strconv.Atoi(expText)
-	digits := strings.Replace(mant, ".", "", 1)
-	n := len(digits)
-	exp10 := exp - (n - 1) // value = digits * 10^exp10
-	kk := n + exp10
-	switch {
-	case exp10 >= 0 && kk <= 16:
-		return sign + digits + strings.Repeat("0", exp10) + ".0"
-	case kk > 0 && kk <= 16:
-		return sign + digits[:kk] + "." + digits[kk:]
-	case kk > -5 && kk <= 0:
-		return sign + "0." + strings.Repeat("0", -kk) + digits
-	case n == 1:
-		return sign + digits + "e" + strconv.Itoa(kk-1)
-	default:
-		return sign + digits[:1] + "." + digits[1:] + "e" + strconv.Itoa(kk-1)
-	}
 }
 
 // Marshal prints v like serde_json::to_string_pretty.
