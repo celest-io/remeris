@@ -24,7 +24,6 @@ type File interface {
 
 // New parses content as the format named by cfg. gitTags is used by go.mod only.
 func New(cfg Config, content string, gitTags []string) (File, error) {
-	_, _ = content, gitTags
 	switch cfg.Format {
 	case RegexFile:
 		return newRegexFile(cfg, content)
@@ -35,7 +34,7 @@ func New(cfg Config, content string, gitTags []string) (File, error) {
 	case PackageJson:
 		return newPackageJSONFile(cfg.Path, content)
 	case GoMod:
-		return nil, notImplemented(cfg.Format, "M2")
+		return newGoModFile(cfg.Path, content, gitTags)
 	default:
 		return nil, notImplemented(cfg.Format, "M9")
 	}
