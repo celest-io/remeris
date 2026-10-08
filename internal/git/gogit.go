@@ -30,8 +30,14 @@ func NewGoGit(dir string) (*GoGit, error) {
 
 // open finds the repository from Dir or one of its parents. Like libgit2 and the CLI backend, it ignores GIT_DIR
 // and the other location variables: go-git does not read them.
+//
+// Linked worktrees (git worktree add) are supported through EnableDotGitCommonDir. Bare repositories are not
+// supported: releases run in a working tree.
 func (g *GoGit) open() (*gogit.Repository, error) {
-	repo, err := gogit.PlainOpenWithOptions(g.Dir, &gogit.PlainOpenOptions{DetectDotGit: true})
+	repo, err := gogit.PlainOpenWithOptions(g.Dir, &gogit.PlainOpenOptions{
+		DetectDotGit:          true,
+		EnableDotGitCommonDir: true,
+	})
 	if err != nil {
 		return nil, openRepoError(err)
 	}
@@ -42,7 +48,13 @@ func (g *GoGit) open() (*gogit.Repository, error) {
 //
 // go-git does not read refs/replace, so replaced objects are ignored as they are with the CLI. The walk is
 // implemented here so that equal commit times keep git's order.
+//
+// A cancelled context returns the context error itself. In a shallow clone the walk stops at the shallow
+// commits, as git does.
 func (g *GoGit) AllTagsOnBranch(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	repo, err := g.open()
 	if err != nil {
 		return nil, err
@@ -56,7 +68,11 @@ func (g *GoGit) AllTagsOnBranch(ctx context.Context) ([]string, error) {
 		return nil, unknownGitError(err) // an unborn HEAD, as in Knope's revwalk
 	}
 	tags := make([]string, 0, len(byCommit))
-	err = walkFromHead(ctx, repo, head.Hash(), func(h plumbing.Hash) {
+	shallow, err := repo.Storer.Shallow()
+	if err != nil {
+		return nil, unknownGitError(err)
+	}
+	err = walkFromHead(ctx, repo, head.Hash(), shallow, func(h plumbing.Hash) {
 		if t, ok := byCommit[h]; ok {
 			tags = append(tags, t...)
 			delete(byCommit, h)
@@ -162,8 +178,11 @@ func (f *frontier) Pop() any {
 }
 
 // walkFromHead calls visit for every commit reachable from start, in the order of git rev-list and libgit2's
-// default revwalk: the newest commit of the frontier first, parents in parent order.
-func walkFromHead(ctx context.Context, repo *gogit.Repository, start plumbing.Hash, visit func(plumbing.Hash)) error {
+// default revwalk: the newest commit of the frontier first, parents in parent order. The parents of the shallow
+// commits are not followed: a shallow clone does not have them.
+func walkFromHead(
+	ctx context.Context, repo *gogit.Repository, start plumbing.Hash, shallow []plumbing.Hash, visit func(plumbing.Hash),
+) error {
 	seen := map[plumbing.Hash]bool{start: true}
 	var queue frontier
 	seq := 0
@@ -185,6 +204,9 @@ func walkFromHead(ctx context.Context, repo *gogit.Repository, start plumbing.Ha
 		}
 		c := heap.Pop(&queue).(queued).commit //nolint:forcetypeassert // only queued values are pushed
 		visit(c.Hash)
+		if slices.Contains(shallow, c.Hash) {
+			continue
+		}
 		for _, p := range c.ParentHashes {
 			if seen[p] {
 				continue

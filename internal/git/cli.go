@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -81,6 +82,14 @@ func (c *CLI) run(ctx context.Context, stdin string, args ...string) (string, er
 	return stdout.String(), nil
 }
 
+// fail turns a command error into a diagnostic made by wrap, except a context error, which is returned as is.
+func fail(err error, wrap func(error) error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	return wrap(err)
+}
+
 func openRepoError(cause error) error {
 	return diag.Newf("Could not open Git repository: %w", cause).
 		WithCode("remeris::git::open_repo").
@@ -98,14 +107,15 @@ func unknownGitError(cause error) error {
 //
 // Tags are peeled to commits (annotated, lightweight and tags of tags). A tag that does not peel to a
 // commit is ignored, like Knope does. Tags on the same commit keep git's reference order (sorted by name).
-// A repository without commits is an error, as in Knope, whose revwalk cannot push an unborn HEAD.
+// A cancelled context returns the context error itself. A repository without commits is an error, as in Knope,
+// whose revwalk cannot push an unborn HEAD.
 //
 // Commands: git rev-parse --git-dir; git for-each-ref --format=%(refname) refs/tags;
 // git cat-file --batch-check (stdin: refs/tags/<name>^{commit}); git rev-list HEAD -- (the "--" avoids a clash with a file
 // named HEAD).
 func (c *CLI) AllTagsOnBranch(ctx context.Context) ([]string, error) {
 	if _, err := c.run(ctx, "", "rev-parse", "--git-dir"); err != nil {
-		return nil, openRepoError(err)
+		return nil, fail(err, openRepoError)
 	}
 	byCommit, err := c.tagsByCommit(ctx)
 	if err != nil {
@@ -114,7 +124,7 @@ func (c *CLI) AllTagsOnBranch(ctx context.Context) ([]string, error) {
 
 	walk, err := c.run(ctx, "", "rev-list", "HEAD", "--")
 	if err != nil {
-		return nil, unknownGitError(err)
+		return nil, fail(err, unknownGitError)
 	}
 	tags := make([]string, 0, len(byCommit))
 	for _, sha := range strings.Fields(walk) {
@@ -138,7 +148,7 @@ func (c *CLI) AllTagsOnBranch(ctx context.Context) ([]string, error) {
 func (c *CLI) tagsByCommit(ctx context.Context) (map[string][]string, error) {
 	refs, err := c.run(ctx, "", "for-each-ref", "--format=%(refname)", "refs/tags")
 	if err != nil {
-		return nil, unknownGitError(err)
+		return nil, fail(err, unknownGitError)
 	}
 	names := strings.Fields(refs)
 	byCommit := make(map[string][]string, len(names))
@@ -151,7 +161,7 @@ func (c *CLI) tagsByCommit(ctx context.Context) (map[string][]string, error) {
 	}
 	out, err := c.run(ctx, in.String(), "cat-file", "--batch-check")
 	if err != nil {
-		return nil, unknownGitError(err)
+		return nil, fail(err, unknownGitError)
 	}
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	if len(lines) != len(names) {

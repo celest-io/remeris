@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,8 +19,10 @@ import (
 
 // tagV1 is a tag name used by many cases.
 const (
-	tagV1 = "v1"
-	tagV2 = "v2"
+	tagV1   = "v1"
+	tagV2   = "v2"
+	tagV3   = "v3"
+	tagSide = "side-tag"
 )
 
 // gitBin is the real git binary, resolved once by absolute path so that repository setup does not depend on PATH
@@ -33,6 +36,8 @@ type testRepo struct {
 	clock int
 	// sameDate makes every command use the same date, to get commits with equal timestamps.
 	sameDate bool
+	// target, when set, is the directory the backend opens instead of dir (a linked worktree or a clone).
+	target string
 }
 
 func newTestRepo(t *testing.T, init bool) *testRepo {
@@ -96,6 +101,21 @@ func (r *testRepo) write(name, content string) {
 	}
 }
 
+// openDir is the directory the backend opens: target when a case set one, else the repository itself.
+func (r *testRepo) openDir() string {
+	if r.target != "" {
+		return r.target
+	}
+	return r.dir
+}
+
+// shallowClone clones the repository with the given depth and makes the clone the target.
+func (r *testRepo) shallowClone(depth int) {
+	r.t.Helper()
+	r.target = filepath.Join(r.t.TempDir(), "clone")
+	r.git("clone", "--quiet", "--depth", strconv.Itoa(depth), "file://"+r.dir, r.target)
+}
+
 func (r *testRepo) lightweight(name string) { r.t.Helper(); r.git("tag", name) }
 func (r *testRepo) annotated(name string) {
 	r.t.Helper()
@@ -108,12 +128,12 @@ func mergeHistory(r *testRepo) {
 	r.lightweight(tagV1)
 	r.git("checkout", "--quiet", "-b", "side")
 	r.commit("side")
-	r.annotated("side-tag")
+	r.annotated(tagSide)
 	r.git("checkout", "--quiet", "main")
 	r.commit("two")
 	r.lightweight(tagV2)
 	r.git("merge", "--quiet", "--no-ff", "-m", "merge", "side")
-	r.annotated("v3")
+	r.annotated(tagV3)
 }
 
 func runContract(t *testing.T, open func(t *testing.T, dir string) Git) {
@@ -168,11 +188,11 @@ func runContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 		},
 		"merge commit history": {
 			setup: mergeHistory,
-			want:  []string{"v3", tagV2, "side-tag", tagV1},
+			want:  []string{tagV3, tagV2, tagSide, tagV1},
 		},
 		"equal commit timestamps on a merge": {
 			setup: func(r *testRepo) { r.sameDate = true; mergeHistory(r) },
-			want:  []string{"v3", tagV2, "side-tag", tagV1},
+			want:  []string{tagV3, tagV2, tagSide, tagV1},
 		},
 		"packed and loose tags on one commit": {
 			setup: func(r *testRepo) {
@@ -230,13 +250,29 @@ func runContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 			setup:    func(*testRepo) {},
 			wantCode: "remeris::git::open_repo",
 		},
+		"linked worktree": {
+			setup: func(r *testRepo) {
+				mergeHistory(r)
+				r.target = filepath.Join(r.t.TempDir(), "linked")
+				r.git("worktree", "add", "--quiet", "--detach", r.target, "main~1")
+			},
+			want: []string{tagV2, tagV1},
+		},
+		"shallow clone of depth 1": {
+			setup: func(r *testRepo) { mergeHistory(r); r.shallowClone(1) },
+			want:  []string{tagV3},
+		},
+		"shallow clone of depth 2": {
+			setup: func(r *testRepo) { mergeHistory(r); r.shallowClone(2) },
+			want:  []string{tagV3, tagV2, tagSide},
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			r := newTestRepo(t, name != "not a repository")
 			tt.setup(r)
-			got, err := open(t, r.dir).AllTagsOnBranch(context.Background())
+			got, err := open(t, r.openDir()).AllTagsOnBranch(context.Background())
 			if tt.wantCode != "" {
 				if err == nil {
 					t.Fatalf("expected an error, got tags %v", got)
@@ -356,4 +392,40 @@ func TestGitEnv(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("gitEnv = %v, want %v", got, want)
 	}
+}
+
+// runCancelled checks that an already-cancelled context gives an error satisfying errors.Is(err, context.Canceled),
+// not a diagnostic about the repository.
+func runCancelled(t *testing.T, open func(t *testing.T, dir string) Git) {
+	t.Helper()
+	r := newTestRepo(t, true)
+	r.commit("one")
+	r.lightweight(tagV1)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	got, err := open(t, r.dir).AllTagsOnBranch(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v (tags %v), want context.Canceled", err, got)
+	}
+	var d diag.Diagnostic
+	if errors.As(err, &d) {
+		t.Fatalf("error = %v, want the plain context error, not a diagnostic", err)
+	}
+}
+
+func TestCLICancelledContext(t *testing.T) {
+	t.Parallel()
+	runCancelled(t, openGit)
+}
+
+func TestGoGitCancelledContext(t *testing.T) {
+	t.Parallel()
+	runCancelled(t, func(t *testing.T, dir string) Git {
+		t.Helper()
+		g, err := NewGoGit(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return g
+	})
 }
