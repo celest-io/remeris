@@ -179,8 +179,8 @@ func TestNotes(t *testing.T) {
 					str("Some details about the breaking change"),
 					gitInfo("Alice", "abc1234", nil, nil),
 				),
-				change(feature, "A simple feature", nil, nil),
 				change(feature, "Feature from commit", nil, gitInfo(sushi, "def5678", nil, nil)),
+				change(feature, "A simple feature", nil, nil),
 			},
 			sections: releasenotes.DefaultSections(),
 			templates: tpls(
@@ -191,18 +191,19 @@ func TestNotes(t *testing.T) {
 			),
 			want: "## Breaking Changes\n\n## A breaking change with the intentionally wrong header by Alice (abc1234)\n\n\n" +
 				"Some details about the breaking change\n\n" +
-				featuresHdr + "* A simple feature\n* Feature from commit by Sushi (def5678)",
+				featuresHdr + "* Feature from commit by Sushi (def5678)\n* A simple feature",
 		},
-		"knope with_fallback fixture": {
+		// The upstream with_fallback fixture is unused (not compiled by Knope), so its golden is stale.
+		"templates with fallback to the default rendering": {
 			changes: []changes.Change{
 				change(breaking, "A breaking change", str("Some details"), nil),
-				change(feature, "A simple feature", nil, nil),
 				change(feature, "Feature from commit", nil, gitInfo(sushi, "def5678", nil, nil)),
+				change(feature, "A simple feature", nil, nil),
 			},
 			sections:  releasenotes.DefaultSections(),
 			templates: tpls(sushiTpl),
 			want: "## Breaking Changes\n\n### A breaking change\n\nSome details\n\n" +
-				featuresHdr + "- A simple feature\n* Feature from commit by Sushi (def5678)",
+				featuresHdr + "* Feature from commit by Sushi (def5678)\n- A simple feature",
 		},
 	}
 	for name, tt := range tests {
