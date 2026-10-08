@@ -36,7 +36,14 @@ exec remeris --validate
 ! stderr .
 
 -- Cargo.toml --
+[package]
+name = "demo"
+version = "1.0.0"
+
+[dependencies]
+serde = "1.0.0"
 -- VERSION --
+v1.0.0 w1.0.0
 -- empty.toml --
 [packages]
 
@@ -77,7 +84,7 @@ versioned_files = [{ path = "Cargo.toml", dependency = "serde", regex = "x" }]
 versioned_files = [
   "Cargo.toml",
   { path = "Cargo.toml", dependency = "serde" },
-  { path = "VERSION", regex = ["v(?<version>\\d+)", "w(?<version>\\d+)"] },
+  { path = "VERSION", regex = ["v(?<version>\\d+\\.\\d+\\.\\d+)", "w(?<version>\\d+\\.\\d+\\.\\d+)"] },
 ]
 
 [[workflows]]

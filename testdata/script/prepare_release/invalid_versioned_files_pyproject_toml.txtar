@@ -1,0 +1,32 @@
+# Ported from knope crates/knope/tests/prepare_release/invalid_versioned_files/pyproject_toml
+# An empty pyproject.toml has no version. The error is raised while the packages are loaded, before any step
+# runs, so a real run and a dry run fail the same way.
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add knope.toml pyproject.toml
+exec git commit -m 'feat: Existing feature'
+exec git tag v1.0.0
+
+! exec remeris release
+! stdout .
+cmp stderr stderr.log
+
+! exec remeris --dry-run release
+! stdout .
+cmp stderr stderr.log
+
+-- knope.toml --
+[package]
+versioned_files = ["pyproject.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- pyproject.toml --
+-- stderr.log --
+Error: No versions were found in pyproject.toml
+  help: Make sure [project.version] or [tool.poetry.version] is set.

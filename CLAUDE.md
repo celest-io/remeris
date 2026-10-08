@@ -127,6 +127,8 @@ internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
 internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines
 internal/fsx/       dry-run aware file writes
+internal/git/       Git access: the Git interface, the git CLI backend, the go-git fallback, Open picks one
+internal/project/   reads the packages, versioned files and Git tags into a workflow.State
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
   semver/           full SemVer 2.0.0 Version: Parse, Compare, rules, bumps, PackageVersions
@@ -136,7 +138,8 @@ pkg/versioning/     pure core (the knope-versioning equivalent): no file system,
   internal/jsonedit/ ordered JSON tree printed exactly like serde_json to_string_pretty (package.json & co.)
 ```
 
-Imports flow one way: `workflow` imports only `diag`, then `variables`, `steps`, `config`, `cli`. Keep it so.
+Imports flow one way: `workflow` imports only `diag`, `internal/git` and `pkg/versioning/...`, then `variables`,
+`steps`, `config`, `project`, `cli`. Keep it so.
 `pkg/versioning` may import `internal/diag` (pure) and nothing else from `internal/`.
 Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.
 

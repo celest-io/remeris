@@ -11,6 +11,7 @@ import (
 	"github.com/celest-io/remeris/internal/app"
 	"github.com/celest-io/remeris/internal/config"
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/project"
 	"github.com/celest-io/remeris/internal/version"
 	"github.com/celest-io/remeris/internal/workflow"
 )
@@ -73,6 +74,10 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if handled, err := runSpecialMode(ctx, global, cfg); handled {
+				return err
+			}
+			// Knope builds the state, and so reports package errors, before it looks for the workflow.
+			if _, err := project.Load(ctx, cfg); err != nil {
 				return err
 			}
 			if cmd.Args().Present() {
@@ -146,7 +151,10 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 			if handled, err := runSpecialMode(ctx, global, cfg); handled {
 				return err
 			}
-			state := workflow.State{}
+			state, err := project.Load(ctx, cfg)
+			if err != nil {
+				return err
+			}
 			rt := workflow.Real(state)
 			if global.DryRun {
 				rt = workflow.DryRun(state)
@@ -157,11 +165,15 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 }
 
 // runSpecialMode handles --generate, --upgrade and --validate, which take precedence over a
-// workflow. handled is false when none of them was given.
+// workflow. handled is false when none of them was given. --validate loads the packages first, as Knope does.
 func runSpecialMode(ctx context.Context, global *app.GlobalOptions, cfg *config.Config) (handled bool, err error) {
 	switch {
 	case global.Validate:
-		return true, validate(ctx, cfg)
+		state, err := project.Load(ctx, cfg)
+		if err != nil {
+			return true, err
+		}
+		return true, validate(ctx, cfg, state)
 	case global.Generate:
 		return true, notImplemented("--generate", "M10")
 	case global.Upgrade:
@@ -176,10 +188,10 @@ func notImplemented(what, milestone string) error {
 }
 
 // validate runs every workflow as a dry run and reports all the problems at once (spec F21).
-func validate(ctx context.Context, cfg *config.Config) error {
+func validate(ctx context.Context, cfg *config.Config, state workflow.State) error {
 	var problems []error
 	for _, w := range cfg.Workflows {
-		if err := workflow.Run(ctx, w, workflow.DryRun(workflow.State{})); err != nil {
+		if err := workflow.Run(ctx, w, workflow.DryRun(state)); err != nil {
 			problems = append(problems, err)
 		}
 	}

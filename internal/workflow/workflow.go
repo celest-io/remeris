@@ -11,11 +11,26 @@ import (
 	"reflect"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/git"
+	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
-// State is what steps pass along a workflow (spec F4.3). Packages, versioned files, git tags and
-// the selected issue are added to it by later milestones.
-type State struct{}
+// State is what steps pass along a workflow (spec F4.3). It is a plain value: the internal/project package
+// builds it once per run, before the workflow starts. The selected issue, the forge clients and the pending
+// actions are added to it by later milestones.
+type State struct {
+	// Packages are the configured packages, in declaration order. Empty when there are none.
+	Packages []*versioning.Package
+	// AllVersionedFiles holds one parsed file per versioned_files entry of every package, in order (spec F7.1).
+	AllVersionedFiles []versionedfile.File
+	// AllGitTags are the tags reachable from HEAD, newest first. Empty without packages or when Git failed.
+	AllGitTags []string
+	// Git is the repository access, or nil when there is no package or Git could not be opened.
+	Git git.Git
+	// IgnoreConventionalCommits is the `ignore_conventional_commits` setting of `[changes]`.
+	IgnoreConventionalCommits bool
+}
 
 // RunType says whether a step may change the world. A dry run must do no writes, make no network
 // calls and run no external commands: it logs what it would have done instead.
