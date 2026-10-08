@@ -271,6 +271,37 @@ func TestCLIContract(t *testing.T) {
 	runContract(t, openGit)
 }
 
+func TestGoGitContract(t *testing.T) {
+	t.Parallel()
+	runContract(t, func(t *testing.T, dir string) Git {
+		t.Helper()
+		g, err := NewGoGit(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return g
+	})
+}
+
+// TestOpenFallsBackToGoGit cannot run in parallel: it sets PATH.
+func TestOpenFallsBackToGoGit(t *testing.T) {
+	r := newTestRepo(t, true) // repository setup uses the absolute gitBin, so an empty PATH is fine
+	r.commit("one")
+	r.lightweight(tagV1)
+	if _, ok := openGit(t, r.dir).(*CLI); !ok {
+		t.Fatal("Open should return the CLI backend when git is on PATH")
+	}
+	t.Setenv("PATH", t.TempDir())
+	g := openGit(t, r.dir)
+	if _, ok := g.(*GoGit); !ok {
+		t.Fatalf("Open returned %T, want *GoGit", g)
+	}
+	got, err := g.AllTagsOnBranch(context.Background())
+	if err != nil || !slices.Equal(got, []string{tagV1}) {
+		t.Fatalf("tags = %v, err = %v", got, err)
+	}
+}
+
 // snapshot lists the files under dir with their sizes and modification times.
 func snapshot(t *testing.T, dir string) []string {
 	t.Helper()
