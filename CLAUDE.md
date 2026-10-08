@@ -132,6 +132,7 @@ pkg/versioning/     pure core (the knope-versioning equivalent): no file system,
   semver/           full SemVer 2.0.0 Version: Parse, Compare, rules, bumps, PackageVersions
   action/           Action (WriteToFile, RemoveFile, AddTag, CreateRelease), Release, ReleaseTag: a leaf package
   versionedfile/    Format table, Config, the File interface and one file per format
+  internal/tomledit/ format-preserving TOML editor on go-toml/v2 unstable: key lookup, byte-span edits
 ```
 
 Imports flow one way: `workflow` imports only `diag`, then `variables`, `steps`, `config`, `cli`. Keep it so.
