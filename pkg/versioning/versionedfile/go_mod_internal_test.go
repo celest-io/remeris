@@ -32,6 +32,12 @@ func TestModuleLine(t *testing.T) {
 			moduleLine{module: modRepoPath, major: 2, hasMajor: true, version: &v314},
 			modRepo + "/v2 // v3.1.4",
 		},
+		"plus sign in the major suffix, like Rust's u64 parsing": {
+			modRepo + "/v+2", moduleLine{module: modRepoPath, major: 2, hasMajor: true}, modRepo + "/v2",
+		},
+		"lone plus sign is part of the path": {
+			modRepo + "/v+", moduleLine{module: modRepoPath + "/v+"}, modRepo + "/v+",
+		},
 		"random comment": {
 			modRepo + "/v2 // comment that is not the thing you expect",
 			moduleLine{module: modRepoPath, major: 2, hasMajor: true},

@@ -52,7 +52,8 @@ func parseModuleLine(line string) (moduleLine, error) {
 	ml := moduleLine{module: parts[1]}
 	if i := strings.LastIndexByte(ml.module, '/'); i >= 0 {
 		if digits, ok := strings.CutPrefix(ml.module[i+1:], "v"); ok {
-			if n, err := strconv.ParseUint(digits, 10, 64); err == nil {
+			// Like Rust's u64 parsing in Knope, a leading "+" is accepted ("v+2" is major 2).
+			if n, err := strconv.ParseUint(strings.TrimPrefix(digits, "+"), 10, 64); err == nil && digits != "+" {
 				ml.major, ml.hasMajor = n, true
 				ml.module = ml.module[:i]
 			}
