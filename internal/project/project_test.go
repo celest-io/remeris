@@ -194,6 +194,28 @@ func TestState(t *testing.T) {
 	}
 }
 
+func TestStateInvalidUTF8(t *testing.T) {
+	t.Parallel()
+	l := Loader{
+		ReadFile: func(string) (string, error) { return "v1.0.0\xff", nil },
+		OpenGit:  func(context.Context) (git.Git, error) { return nil, errors.New("no git") },
+	}
+	_, err := l.State(context.Background(), []config.PackageConfig{
+		pkgCfg(versioning.DefaultName(), regexCfg(t, versionTxt)),
+	}, false)
+
+	var d diag.Diagnostic
+	if !errors.As(err, &d) {
+		t.Fatalf("err = %v, want a diagnostic", err)
+	}
+	if want := "Error reading from VERSION.txt: stream did not contain valid UTF-8"; d.Error() != want {
+		t.Errorf("message = %q, want %q", d.Error(), want)
+	}
+	if d.Code() != codeRead || d.Help() == "" {
+		t.Errorf("code = %q, help = %q", d.Code(), d.Help())
+	}
+}
+
 func TestStateUsesTagsAndGoVersioning(t *testing.T) {
 	t.Parallel()
 	cfg, err := versionedfile.NewConfig(goModPath, nil, nil)

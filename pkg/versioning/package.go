@@ -77,6 +77,26 @@ type Package struct {
 	Scopes []string
 }
 
+// Clone returns a deep copy of the package: changing the copy (SetVersion, the history, the slices) does not
+// change p. Workflows run on clones so that one cannot see another's changes (--validate).
+func (p *Package) Clone() *Package {
+	c := *p
+	c.Files = slices.Clone(p.Files)
+	for i, f := range c.Files {
+		if f.Dependency != nil {
+			d := *f.Dependency
+			c.Files[i].Dependency = &d
+		}
+		c.Files[i].Regex = slices.Clone(f.Regex)
+	}
+	c.Versions = p.Versions.Clone()
+	c.Scopes = slices.Clone(p.Scopes)
+	if p.Name.custom != nil {
+		c.Name = CustomName(*p.Name.custom)
+	}
+	return &c
+}
+
 func findFile(all []versionedfile.File, path string) (versionedfile.File, bool) {
 	idx := slices.IndexFunc(all, func(f versionedfile.File) bool { return f.Path() == path })
 	if idx < 0 {

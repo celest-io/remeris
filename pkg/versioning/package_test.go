@@ -27,6 +27,7 @@ const (
 	tagV123     = "v1.2.3"
 	fooTagV123  = "foo/v1.2.3"
 	tagV100     = "v1.0.0"
+	valChanged  = "changed"
 )
 
 func strp(s string) *string { return &s }
@@ -344,7 +345,7 @@ func TestNewPackage(t *testing.T) {
 			if p.GoVersioning != versionedfile.IgnoreMajorRules || !p.Name.Equal(tc.name) {
 				t.Errorf("settings not kept: %+v", p)
 			}
-			scopes[0] = "changed"
+			scopes[0] = valChanged
 			if p.Scopes[0] != "a" {
 				t.Error("Scopes shares memory with the argument")
 			}
@@ -533,12 +534,48 @@ func TestPackageName(t *testing.T) {
 	if c := foo.Custom(); c == nil || *c != fooDep || foo.String() != fooDep {
 		t.Errorf("custom = %v, %q", c, foo)
 	}
-	*foo.Custom() = "changed"
+	*foo.Custom() = valChanged
 	if foo.String() != "foo" {
 		t.Error("Custom() exposes the name")
 	}
 	if !def.Equal(versioning.PackageName{}) || def.Equal(foo) || foo.Equal(def) || !foo.Equal(versioning.CustomName("foo")) ||
 		versioning.CustomName("default").Equal(def) {
 		t.Error("Equal is wrong")
+	}
+}
+
+func TestPackageClone(t *testing.T) {
+	t.Parallel()
+	dep := fooDep
+	orig := &versioning.Package{
+		Name: versioning.CustomName("foo"),
+		Files: []versionedfile.Config{
+			{Path: packageJSON, Format: versionedfile.PackageJson, Dependency: &dep, Regex: []string{"a"}},
+		},
+		Versions: semver.FromVersion(mustVersion(t, v100)),
+		Scopes:   []string{"core"},
+	}
+
+	c := orig.Clone()
+	*c.Files[0].Dependency = valChanged
+	c.Files[0].Regex[0] = valChanged
+	c.Files[0].Path = valChanged
+	c.Scopes[0] = valChanged
+	c.Versions.Update(mustVersion(t, v200))
+
+	if *orig.Files[0].Dependency != fooDep || orig.Files[0].Regex[0] != "a" || orig.Files[0].Path != packageJSON {
+		t.Errorf("files changed through the clone: %+v", orig.Files[0])
+	}
+	if orig.Scopes[0] != "core" {
+		t.Errorf("scopes changed through the clone: %v", orig.Scopes)
+	}
+	if got, _ := orig.LatestVersion(); got.String() != v100 {
+		t.Errorf("version changed through the clone: %s", got)
+	}
+	if got, _ := c.LatestVersion(); got.String() != v200 {
+		t.Errorf("clone version = %s, want %s", got, v200)
+	}
+	if !c.Name.Equal(orig.Name) {
+		t.Errorf("clone name = %s, want %s", c.Name, orig.Name)
 	}
 }

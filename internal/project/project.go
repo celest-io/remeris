@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"unicode/utf8"
 
 	"github.com/celest-io/remeris/internal/config"
 	"github.com/celest-io/remeris/internal/diag"
@@ -22,6 +23,9 @@ import (
 )
 
 const codeRead = "remeris::fs::read"
+
+// errInvalidUTF8 is the cause of a read of a file that is not UTF-8, worded as Knope's.
+var errInvalidUTF8 = errors.New("stream did not contain valid UTF-8")
 
 // Loader reads the project. The zero value reads the working directory; tests replace the two seams.
 type Loader struct {
@@ -113,6 +117,10 @@ func (l Loader) read(path string) (string, error) {
 		var b []byte
 		b, err = os.ReadFile(filepath.FromSlash(path))
 		content = string(b)
+	}
+	if err == nil && !utf8.ValidString(content) {
+		// Rust's fs::read_to_string fails the same way, with this text.
+		err = errInvalidUTF8
 	}
 	if err != nil {
 		cause := err

@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/semver"
 )
 
 type fakeStep struct {
@@ -87,5 +89,38 @@ func TestHasStep(t *testing.T) {
 func TestRunTypeConstructors(t *testing.T) {
 	if Real(State{}).DryRun || !DryRun(State{}).DryRun {
 		t.Error("Real and DryRun set the wrong flag")
+	}
+}
+
+func TestStateCloneIsolatesPackages(t *testing.T) {
+	t.Parallel()
+	v1, err := semver.Parse("1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := State{
+		Packages:   []*versioning.Package{{Name: versioning.DefaultName(), Versions: semver.FromVersion(v1)}},
+		AllGitTags: []string{"v1.0.0"},
+	}
+
+	c := orig.Clone()
+	v2, err := semver.Parse("2.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Packages[0].Versions = semver.FromVersion(v2)
+	c.Packages[0].Versions.Update(v2)
+
+	if got, _ := orig.Packages[0].LatestVersion(); got.String() != "1.0.0" {
+		t.Errorf("original package version = %s, want 1.0.0", got)
+	}
+	if got, _ := c.Packages[0].LatestVersion(); got.String() != "2.0.0" {
+		t.Errorf("cloned package version = %s, want 2.0.0", got)
+	}
+	if len(c.AllGitTags) != 1 {
+		t.Errorf("tags = %v, want them carried over", c.AllGitTags)
+	}
+	if empty := (State{}).Clone(); empty.Packages != nil {
+		t.Errorf("a state without packages must stay without: %v", empty.Packages)
 	}
 }

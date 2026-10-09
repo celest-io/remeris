@@ -112,10 +112,11 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 
 ## Code layout
 
-Milestone M0 is in place: `remeris <workflow>` runs `Command` steps and every other step fails with
-`Step X is not implemented yet (milestone Mx)`. The pure versioning core is growing under
-`pkg/versioning` (milestones M1 to M5, tracked in issue #5). Not built yet: versioned files, packages, git,
-changes, forges, prompts, discovery, `--generate`, `--upgrade` (see spec section 1).
+Milestones M0 to M3 are in place: `remeris <workflow>` runs `Command` and `BumpVersion` steps, with the
+SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod, regex), packages, Git tags and
+the `Version` variable. Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`.
+Changes and `PrepareRelease` are in progress in the stack of open PRs (issue #5); forges, prompts, discovery,
+`--generate` and `--upgrade` come later (see spec section 1).
 
 ```
 cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests

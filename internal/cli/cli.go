@@ -187,11 +187,12 @@ func notImplemented(what, milestone string) error {
 		WithCode(name + "::not_implemented")
 }
 
-// validate runs every workflow as a dry run and reports all the problems at once (spec F21).
+// validate runs every workflow as a dry run, each on its own copy of the state, and reports all the problems at
+// once (spec F21).
 func validate(ctx context.Context, cfg *config.Config, state workflow.State) error {
 	var problems []error
 	for _, w := range cfg.Workflows {
-		if err := workflow.Run(ctx, w, workflow.DryRun(state)); err != nil {
+		if err := workflow.Run(ctx, w, workflow.DryRun(state.Clone())); err != nil {
 			problems = append(problems, err)
 		}
 	}

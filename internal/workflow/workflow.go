@@ -26,7 +26,9 @@ type State struct {
 	AllVersionedFiles []versionedfile.File
 	// AllGitTags are the tags reachable from HEAD, newest first. Empty without packages or when Git failed.
 	AllGitTags []string
-	// Git is the repository access, or nil when there is no package or Git could not be opened.
+	// Git is the repository access, or nil when there is no package or opening it failed. Opening fails only when
+	// neither the git command is on PATH nor the built-in backend can open the directory: with the git command
+	// it does not fail outside a repository, and reading the tags then does (their failure leaves AllGitTags empty).
 	Git git.Git
 	// IgnoreConventionalCommits is the `ignore_conventional_commits` setting of `[changes]`.
 	IgnoreConventionalCommits bool
@@ -91,4 +93,18 @@ func describe(step Step) string {
 // cause and the related error, so it renders beneath the workflow's message.
 func Problem(name string, err error) error {
 	return diag.New("Problem with workflow " + name).WithRelated(err).WithCause(err)
+}
+
+// Clone returns a copy of the state that a workflow can change without the others seeing it: the packages are
+// deep copies. The parsed files are immutable values (SetVersion returns new ones) and the tags, the repository
+// handle and the settings are only read, so they are shared.
+func (s State) Clone() State {
+	if s.Packages != nil {
+		pkgs := make([]*versioning.Package, len(s.Packages))
+		for i, p := range s.Packages {
+			pkgs[i] = p.Clone()
+		}
+		s.Packages = pkgs
+	}
+	return s
 }
