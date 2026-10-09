@@ -65,7 +65,7 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | Fixture | Status |
 | --- | --- |
 | `shell` | Ported: `script/command/shell.txtar`. |
-| `replace_version` | Ported but skipped: needs `Cargo.toml` (M2), packages, the `Version` variable and `--override-version` (M3), and `PrepareRelease` (M5). |
+| `replace_version` | Ported but skipped: needs `PrepareRelease` (M5). Packages, `Cargo.toml`, the `Version` variable and `--override-version` are done. |
 
 ### Status of `crates/knope/tests/bump_version/*`
 
@@ -74,7 +74,7 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | `single_package/{major,minor,patch,release}`, `single_package/pre/{from_full,from_pre,increment_pre}` | Ported: `script/bump_version/single_package_*.txtar`. |
 | `multiple_packages/{major,minor,patch,release}`, `multiple_packages/pre/{from_full,from_pre}` | Ported: `script/bump_version/multiple_packages_*.txtar`. |
 | `text_file/minor` | Ported: `script/bump_version/text_file_minor.txtar`. |
-| `single_package/override`, `multiple_packages/override` | Ported but skipped: need `--override-version` (PR 18, M3). |
+| `single_package/override`, `multiple_packages/override` | Ported: `script/bump_version/{single,multiple}_package*_override.txtar`. |
 | `maven` | Ported but skipped: needs `pom.xml` (M9). |
 
 Other Knope suites ( `prepare_release`, `default_workflows`, `validate`, ...) are ported
