@@ -73,7 +73,7 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 			return ctx, nil
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			if handled, err := runSpecialMode(ctx, global, cfg); handled {
+			if handled, err := runSpecialMode(ctx, global, cfg, nil); handled {
 				return err
 			}
 			// Knope builds the state, and so reports package errors, before it looks for the workflow.
@@ -141,13 +141,15 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 		Name:  w.Name,
 		Usage: w.HelpText,
 		Flags: flags,
+		// A comma is not a separator: "a=2.0.0,b=3.0.0" is one (invalid) value, as in Knope.
+		DisableSliceFlagSeparator: true,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			// The override versions are stored on the packages and used by BumpVersion and PrepareRelease.
 			opts := app.DefaultWorkflowOptions()
 			if err := app.LoadConfig(cmd, opts); err != nil {
 				return err
 			}
-			if handled, err := runSpecialMode(ctx, global, cfg); handled {
+			if handled, err := runSpecialMode(ctx, global, cfg, opts.OverrideVersion); handled {
 				return err
 			}
 			state, err := project.Load(ctx, cfg)
@@ -167,12 +169,18 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 }
 
 // runSpecialMode handles --generate, --upgrade and --validate, which take precedence over a
-// workflow. handled is false when none of them was given. --validate loads the packages first, as Knope does.
-func runSpecialMode(ctx context.Context, global *app.GlobalOptions, cfg *config.Config) (handled bool, err error) {
+// workflow. handled is false when none of them was given. --validate loads the packages and applies the
+// --override-version values (those of the workflow command, if one was given) first, as Knope does.
+func runSpecialMode(
+	ctx context.Context, global *app.GlobalOptions, cfg *config.Config, overrides []string,
+) (handled bool, err error) {
 	switch {
 	case global.Validate:
 		state, err := project.Load(ctx, cfg)
 		if err != nil {
+			return true, err
+		}
+		if err := applyOverrides(state.Packages, overrides); err != nil {
 			return true, err
 		}
 		return true, validate(ctx, cfg, state)

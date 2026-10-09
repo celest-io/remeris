@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -96,5 +98,55 @@ func TestApplyOverrides(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+const twoPackageConfig = `
+[packages.a]
+versioned_files = ["a/Cargo.toml"]
+
+[packages.b]
+versioned_files = ["b/Cargo.toml"]
+
+[[workflows]]
+name = "x"
+steps = [{ type = "BumpVersion", rule = "Major" }]
+`
+
+func writeTwoPackages(t *testing.T) {
+	t.Helper()
+	t.Chdir(t.TempDir())
+	for _, name := range []string{"a", "b"} {
+		if err := os.MkdirAll(name, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		content := "[package]\nname = \"" + name + "\"\nversion = \"1.0.0\"\n"
+		if err := os.WriteFile(filepath.Join(name, "Cargo.toml"), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestOverrideVersionValueIsNotSplitOnCommas(t *testing.T) {
+	writeTwoPackages(t)
+
+	_, err := run(t, loadConfig(t, twoPackageConfig), "--dry-run", "x", "--override-version=a=2.0.0,b=3.0.0")
+
+	if err == nil || !strings.Contains(err.Error(), "invalid digit found in string") {
+		t.Fatalf("err = %v, want an invalid version", err)
+	}
+}
+
+func TestValidateAppliesOverrides(t *testing.T) {
+	writeTwoPackages(t)
+	cfg := loadConfig(t, twoPackageConfig)
+
+	_, err := run(t, cfg, "--validate", "x", "--override-version=zz=1.0.0")
+	if err == nil || err.Error() != "Unknown package(s) to override: zz" {
+		t.Errorf("unknown package: err = %v", err)
+	}
+
+	if _, err := run(t, cfg, "--validate", "x", "--override-version=a=2.0.0", "--override-version=b=3.0.0"); err != nil {
+		t.Errorf("valid overrides: err = %v", err)
 	}
 }
