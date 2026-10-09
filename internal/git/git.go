@@ -26,6 +26,12 @@ type Git interface {
 	// Like Knope, the first commit found for a path ends its search: when that commit's author name is not valid
 	// UTF-8 (Knope's commit info is None), the path is absent from the map and later commits are not tried.
 	FirstCommitsForFiles(ctx context.Context, paths []string) map[string]*CommitInfo
+	// AddFiles stages paths, which are slash-separated and relative to the root of the working tree (spec F9.4).
+	// It is Knope's index.add_all with the default flags: a modified or untracked file is added, a tracked file
+	// that was deleted is staged as a deletion, a directory adds the files under it, and nothing else is staged.
+	// Like Knope, paths that match nothing, and untracked files that are ignored, are skipped without an error.
+	// Paths are literal names, not patterns. An empty list does nothing, not even opening the repository.
+	AddFiles(ctx context.Context, paths []string) error
 }
 
 // Commit is a commit with its full message, as returned by CommitMessagesAfterTag.

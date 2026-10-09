@@ -23,9 +23,10 @@ const (
 )
 
 type fakeGit struct {
-	tags  []string
-	err   error
-	calls *int
+	git.Git // the methods other than AllTagsOnBranch are not used and panic if called
+	tags    []string
+	err     error
+	calls   *int
 }
 
 func (f fakeGit) AllTagsOnBranch(context.Context) ([]string, error) {

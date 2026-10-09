@@ -320,3 +320,38 @@ func (c *CLI) FirstCommitsForFiles(ctx context.Context, paths []string) map[stri
 	}
 	return results
 }
+
+// AddFiles stages paths (spec F9.4), with the semantics of libgit2's index add_all with default flags.
+//
+// git add alone fails on a path that matches nothing and on an ignored file, which libgit2 skips silently. So
+// git ls-files first lists what can be staged under the paths: tracked files (including the deleted ones) and
+// untracked files that are not ignored. Then git add -A stages exactly that list, deletions included. Both run
+// from the root of the working tree, with literal pathspecs.
+//
+// Commands: git rev-parse --show-toplevel; git --literal-pathspecs ls-files -z --cached --others --exclude-standard -- paths;
+// git --literal-pathspecs add -A --pathspec-from-file=- --pathspec-file-nul.
+func (c *CLI) AddFiles(ctx context.Context, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	out, err := c.run(ctx, "", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return fail(err, openRepoError)
+	}
+	root := &CLI{Dir: strings.TrimRight(out, "\n"), path: c.path}
+	args := append(
+		[]string{"--literal-pathspecs", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--"},
+		paths...)
+	listed, err := root.run(ctx, "", args...)
+	if err != nil {
+		return fail(err, unknownGitError)
+	}
+	if listed == "" {
+		return nil
+	}
+	if _, err := root.run(ctx, listed, "--literal-pathspecs", "add", "-A",
+		"--pathspec-from-file=-", "--pathspec-file-nul"); err != nil {
+		return fail(err, unknownGitError)
+	}
+	return nil
+}
