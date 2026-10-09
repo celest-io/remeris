@@ -5,6 +5,9 @@ import (
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/pkg/versioning/action"
+	"github.com/celest-io/remeris/pkg/versioning/changes"
+	"github.com/celest-io/remeris/pkg/versioning/changesets"
+	"github.com/celest-io/remeris/pkg/versioning/releasenotes"
 	"github.com/celest-io/remeris/pkg/versioning/semver"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
@@ -62,8 +65,30 @@ var ErrCargoLockNoDependency error = diag.New("Cargo.lock must specify a depende
 	WithHelp("To use `Cargo.lock` in `versioned_files`, you must either manually specify `dependency` or define a " +
 		"`Cargo.toml` with a `package.name` in the same array.")
 
+// ReleaseNotes is the release-note configuration and state of a package (spec F7.1, F12): Knope's ReleaseNotes.
+// The zero value means the default sections (releasenotes.DefaultSections), no changelog file and no change
+// templates. The loader fills it in: Sections from extra_changelog_sections (releasenotes.ConvertSections) and
+// the changelog from the configured path.
+type ReleaseNotes struct {
+	// Sections are the changelog sections; nil means the default sections.
+	Sections releasenotes.Sections
+	// Changelog is the changelog file with its current content, or nil when the package has none. ApplyChanges
+	// replaces it with the updated changelog, so the next release of the same run sees the new content.
+	Changelog *releasenotes.Changelog
+	// ChangeTemplates render the changes, the first that applies wins.
+	ChangeTemplates []releasenotes.ChangeTemplate
+}
+
+// sections returns Sections, or the defaults when none are set.
+func (n ReleaseNotes) sections() releasenotes.Sections {
+	if n.Sections == nil {
+		return releasenotes.DefaultSections()
+	}
+	return n.Sections
+}
+
 // Package is a logical package: the versioned files that hold its version, its version history and the settings
-// that depend on its name. Release notes and the changelog are added by a later change; this is the seam.
+// that depend on its name.
 type Package struct {
 	// Name is the package name; it decides the tag prefix.
 	Name PackageName
@@ -78,6 +103,8 @@ type Package struct {
 	// Override is the version given with --override-version, or nil. BumpVersion uses it as given; PrepareRelease
 	// takes it once (F13).
 	Override *semver.Version
+	// ReleaseNotes is how the package's releases are written; the zero value is the default.
+	ReleaseNotes ReleaseNotes
 }
 
 // TakeOverride returns the override and clears it, so that it is used once.
@@ -274,3 +301,82 @@ func (p *Package) ReleaseTag(v semver.Version) string { return action.ReleaseTag
 
 // IsReleaseTag reports whether tag is a release tag of this package (F7.5).
 func (p *Package) IsReleaseTag(tag string) bool { return action.IsReleaseTag(tag, p.Name.custom) }
+
+// ChangeConfig says how ApplyChanges picks the new version: Knope's ChangeConfig. When Force is set it is used
+// as given and the other fields are ignored; otherwise the version is calculated from the changes.
+type ChangeConfig struct {
+	// Force is the version to use, from --override-version (take it with TakeOverride). go.mod files then get
+	// versionedfile.BumpMajor, whatever GoVersioning says.
+	Force *semver.Version
+	// PrereleaseLabel, when not nil, makes the new version a pre-release with that label.
+	PrereleaseLabel *string
+	// GoVersioning is how go.mod files handle major versions for a calculated version.
+	GoVersioning versionedfile.GoVersioning
+}
+
+// ApplyChanges is the per-package part of PrepareRelease (spec F13, F7.4, F12.6): Knope's Package::apply_changes
+// together with the empty check of the CLI. all are the parsed versioned files and date is today's UTC date as
+// "YYYY-MM-DD" (the core reads no clock).
+//
+// With no changes and no Force there is nothing to release: all is returned as it is, with no actions. Otherwise
+// the new version is Force, or the history bumped by the strongest rule of the changes (semver.MaxStableRule
+// of each change type's rule, patch when there are none), as a pre-release when PrereleaseLabel is set. It is set
+// in every file of the package (SetVersion) and the history becomes that version.
+//
+// The actions are, in this order: a RemoveFile for ".changeset/{id}.md" of each change from a change file (none
+// when the new version is a pre-release, so the files stay for the final release; a file shared by two packages
+// gives the same action in both: dedupe with action.Dedupe), the WriteToFile of the changelog when the package has
+// one, and the CreateRelease. The changelog of ReleaseNotes is replaced with the updated one. On error the package
+// is unchanged.
+func (p *Package) ApplyChanges(
+	list []changes.Change, all []versionedfile.File, cfg ChangeConfig, date string,
+) ([]versionedfile.File, []action.Action, error) {
+	if len(list) == 0 && cfg.Force == nil {
+		return all, nil, nil
+	}
+
+	var (
+		version semver.Version
+		gv      = cfg.GoVersioning
+	)
+	if cfg.Force != nil {
+		version, gv = *cfg.Force, versionedfile.BumpMajor
+	} else {
+		rules := make([]semver.StableRule, len(list))
+		for i, c := range list {
+			rules[i] = c.Type.Rule()
+		}
+		rule := semver.StableBump(semver.MaxStableRule(rules...))
+		if cfg.PrereleaseLabel != nil {
+			rule = semver.PreBump(*cfg.PrereleaseLabel, rule.Stable)
+		}
+		var err error
+		if version, err = p.Versions.CalculateNewVersion(rule); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	updated, err := p.SetVersion(version, gv, all)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var actions []action.Action
+	if !version.IsPrerelease() {
+		for _, c := range list {
+			if c.Origin.Kind == changes.ChangeFile {
+				actions = append(actions, action.RemoveFile(changesets.Path(changesets.UniqueID(c.Origin.ID))))
+			}
+		}
+	}
+
+	notes := p.ReleaseNotes
+	release := releasenotes.CreateRelease(version, date, list, notes.sections(), notes.ChangeTemplates, p.Name.Custom())
+	if notes.Changelog != nil {
+		changelog, write := notes.Changelog.WithRelease(release)
+		p.ReleaseNotes.Changelog = &changelog
+		actions = append(actions, write)
+	}
+	actions = append(actions, action.CreateRelease(release))
+	return updated, actions, nil
+}
