@@ -80,9 +80,12 @@ func (s *BumpVersion) Run(_ context.Context, rt workflow.RunType[workflow.State]
 	return rt, nil
 }
 
-// nextVersion is the version a package gets and how go.mod files treat it. PR 18 (--override-version) plugs in
-// here: a package with an override returns it with versionedfile.BumpMajor instead of calculating one.
+// nextVersion is the version a package gets and how go.mod files treat it. An override is used as given and
+// bumps the major version in go.mod files (spec F8).
 func nextVersion(pkg *versioning.Package, rule semver.Rule) (semver.Version, versionedfile.GoVersioning, error) {
+	if pkg.Override != nil {
+		return *pkg.Override, versionedfile.BumpMajor, nil
+	}
 	v, err := pkg.Versions.CalculateNewVersion(rule)
 	return v, pkg.GoVersioning, err
 }

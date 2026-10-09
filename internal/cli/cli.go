@@ -142,8 +142,7 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 		Usage: w.HelpText,
 		Flags: flags,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			// Parsed now so the values are validated and ready; they take effect with
-			// BumpVersion (M3) and PrepareRelease (M5).
+			// The override versions are stored on the packages and used by BumpVersion and PrepareRelease.
 			opts := app.DefaultWorkflowOptions()
 			if err := app.LoadConfig(cmd, opts); err != nil {
 				return err
@@ -153,6 +152,9 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 			}
 			state, err := project.Load(ctx, cfg)
 			if err != nil {
+				return err
+			}
+			if err := applyOverrides(state.Packages, opts.OverrideVersion); err != nil {
 				return err
 			}
 			rt := workflow.Real(state)

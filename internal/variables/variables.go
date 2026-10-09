@@ -6,6 +6,7 @@ import (
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/workflow"
+	"github.com/celest-io/remeris/pkg/versioning"
 )
 
 // Variable names a value remeris can compute. Exactly these three exist.
@@ -79,19 +80,47 @@ type PackageScope struct{}
 
 // Resolve computes the value of v.
 //
-// Milestone M0 has no packages and no selected issue, so every variable fails with the error it
-// would give in that situation.
-func Resolve(_ workflow.State, v Variable, _ *PackageScope) (string, error) {
+// Version needs exactly one package and is that package's latest version (spec F4.4). A nil scope means the
+// single-package rules; a scope is the hook for per-package variables (Phase 2). ChangelogEntry applies the same
+// package rules, then fails until the changelog lands (milestone M5). There is no selected issue yet.
+func Resolve(state workflow.State, v Variable, _ *PackageScope) (string, error) {
 	switch v {
-	case Version, ChangelogEntry:
-		return "", diag.New("No packages to operate on").
-			WithCode("remeris::no_defined_packages").
-			WithHelp("There must be at least one package for remeris to work with, " +
-				"no supported package files were found in this directory.")
+	case Version:
+		pkg, err := onlyPackage(state)
+		if err != nil {
+			return "", err
+		}
+		latest, ok := pkg.LatestVersion()
+		if !ok {
+			return "", diag.New("Could not determine version of package").WithCode("remeris::variables::no_version")
+		}
+		return latest.String(), nil
+	case ChangelogEntry:
+		if _, err := onlyPackage(state); err != nil {
+			return "", err
+		}
+		return "", diag.New("The ChangelogEntry variable is not implemented yet (milestone M5)").
+			WithCode("remeris::not_implemented")
 	case IssueBranch:
 		return "", diag.New("No issue selected").
 			WithCode("remeris::no_issue_selected").
 			WithHelp("You must select an issue with a Select*Issue step before using the IssueBranch variable.")
 	}
 	return "", diag.Newf("Unknown variable %q", string(v))
+}
+
+// onlyPackage returns the single package of the state, or the error Knope gives for none or several.
+func onlyPackage(state workflow.State) (*versioning.Package, error) {
+	switch len(state.Packages) {
+	case 0:
+		return nil, diag.New("No packages to operate on").
+			WithCode("remeris::no_defined_packages").
+			WithHelp("There must be at least one package for remeris to work with, " +
+				"no supported package files were found in this directory.")
+	case 1:
+		return state.Packages[0], nil
+	}
+	return nil, diag.New("Too many packages defined").
+		WithCode("remeris::variables::too_many_packages").
+		WithHelp("The Version and Changelog variables can only be used with a single [package].")
 }

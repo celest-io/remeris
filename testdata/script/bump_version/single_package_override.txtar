@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/bump_version/single_package/override (MIT, see testdata/README.md).
-skip 'needs --override-version (PR 18, M3)'
 
 exec git init
 exec git config user.email fake@remeris.dev

@@ -75,6 +75,16 @@ type Package struct {
 	GoVersioning versionedfile.GoVersioning
 	// Scopes limits the conventional commit scopes that belong to the package; nil means all scopes.
 	Scopes []string
+	// Override is the version given with --override-version, or nil. BumpVersion uses it as given; PrepareRelease
+	// takes it once (F13).
+	Override *semver.Version
+}
+
+// TakeOverride returns the override and clears it, so that it is used once.
+func (p *Package) TakeOverride() *semver.Version {
+	o := p.Override
+	p.Override = nil
+	return o
 }
 
 // Clone returns a deep copy of the package: changing the copy (SetVersion, the history, the slices) does not
