@@ -105,6 +105,14 @@ type Document struct {
 // bom is the UTF-8 byte order mark, which some editors put at the start of a file.
 var bom = []byte{0xEF, 0xBB, 0xBF}
 
+// bomLen returns the length of the byte order mark at the start of src, or 0.
+func bomLen(src []byte) int {
+	if bytes.HasPrefix(src, bom) {
+		return len(bom)
+	}
+	return 0
+}
+
 // withoutBOM returns src as the TOML parsers can read it. They do not take a byte order mark, so it is replaced by
 // as many spaces: whitespace is valid at the start of a document and keeps every offset equal to the offset in src.
 // src itself is not changed.
@@ -202,9 +210,7 @@ func index(src []byte) (*node, error) {
 	p.Reset(withoutBOM(src))
 	root := newTable()
 	root.header = true
-	if bytes.HasPrefix(src, bom) {
-		root.lastEnd = len(bom) // a key inserted into an empty root goes after the mark
-	}
+	root.lastEnd = bomLen(src) // a key inserted into an empty root goes after the mark
 	cur := root
 	for p.NextExpression() {
 		expr := p.Expression()
