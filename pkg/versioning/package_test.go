@@ -554,6 +554,7 @@ func TestPackageClone(t *testing.T) {
 		},
 		Versions: semver.FromVersion(mustVersion(t, v100)),
 		Scopes:   []string{"core"},
+		Override: ptr(mustVersion(t, "3.0.0-rc.1")),
 	}
 
 	c := orig.Clone()
@@ -562,6 +563,13 @@ func TestPackageClone(t *testing.T) {
 	c.Files[0].Path = valChanged
 	c.Scopes[0] = valChanged
 	c.Versions.Update(mustVersion(t, v200))
+	if c.Override == nil || c.Override.String() != "3.0.0-rc.1" {
+		t.Errorf("clone override = %v, want 3.0.0-rc.1", c.Override)
+	}
+	c.TakeOverride()
+	if orig.Override == nil {
+		t.Error("taking the override from the clone took it from the original")
+	}
 
 	if *orig.Files[0].Dependency != fooDep || orig.Files[0].Regex[0] != "a" || orig.Files[0].Path != packageJSON {
 		t.Errorf("files changed through the clone: %+v", orig.Files[0])
@@ -579,3 +587,5 @@ func TestPackageClone(t *testing.T) {
 		t.Errorf("clone name = %s, want %s", c.Name, orig.Name)
 	}
 }
+
+func ptr[T any](v T) *T { return &v }

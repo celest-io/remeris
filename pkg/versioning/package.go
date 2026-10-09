@@ -101,6 +101,11 @@ func (p *Package) Clone() *Package {
 	}
 	c.Versions = p.Versions.Clone()
 	c.Scopes = slices.Clone(p.Scopes)
+	if p.Override != nil {
+		o := *p.Override
+		o.Pre, o.Build = slices.Clone(o.Pre), slices.Clone(o.Build)
+		c.Override = &o
+	}
 	if p.Name.custom != nil {
 		c.Name = CustomName(*p.Name.custom)
 	}
