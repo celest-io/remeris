@@ -1,0 +1,43 @@
+# Ported from knope-dev/knope, crates/knope/tests/bump_version/maven (MIT, see testdata/README.md).
+skip 'needs pom.xml versioned files (M9)'
+
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add knope.toml pom.xml
+exec git commit -m 'Initial commit'
+exec git tag v1.2.3
+
+exec remeris --dry-run bump
+cmp stdout dryrun_stdout.log
+
+exec remeris bump
+! stdout .
+cmp pom.xml out/pom.xml
+
+-- knope.toml --
+[packages.maven]
+versioned_files = ["pom.xml"]
+
+[[workflows]]
+name = "bump"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Major"
+-- pom.xml --
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.mycompany.app</groupId>
+  <artifactId>my-app</artifactId>
+  <version>1.2.3</version>
+</project>
+-- dryrun_stdout.log --
+Would add the following to pom.xml: project.version = 2.0.0
+-- out/pom.xml --
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.mycompany.app</groupId>
+  <artifactId>my-app</artifactId>
+  <version>2.0.0</version>
+</project>

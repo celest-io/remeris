@@ -1,0 +1,36 @@
+# Ported from knope-dev/knope, crates/knope/tests/bump_version/single_package/override (MIT, see testdata/README.md).
+skip 'needs --override-version (PR 18, M3)'
+
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add Cargo.toml knope.toml
+exec git commit -m 'Initial commit'
+
+exec remeris --dry-run bump --override-version=1.0.0
+cmp stdout dryrun_stdout.log
+
+exec remeris bump --override-version=1.0.0
+! stdout .
+cmp Cargo.toml out/Cargo.toml
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "0.1.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+
+[[workflows]]
+name = "bump"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Major"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.0.0
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"

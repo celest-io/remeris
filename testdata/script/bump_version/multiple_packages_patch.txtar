@@ -1,0 +1,59 @@
+# Ported from knope-dev/knope, crates/knope/tests/bump_version/multiple_packages/patch (MIT, see testdata/README.md).
+
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add Cargo.toml knope.toml package.json pyproject.toml
+exec git commit -m 'Initial commit'
+exec git tag v1.2.3
+
+exec remeris --dry-run bump
+cmp stdout dryrun_stdout.log
+
+exec remeris bump
+! stdout .
+cmp Cargo.toml out/Cargo.toml
+# The output has no final newline (Q10) and txtar cannot say so, so check the diff.
+exec git diff --unified=0 package.json
+stdout '(?m)^\+  "version": "6\.7\.9"$'
+stdout '(?m)^\+\}\n\\ No newline at end of file'
+cmp pyproject.toml out/pyproject.toml
+
+-- Cargo.toml --
+[package]
+name = "multiple-packages"
+version = "0.1.2"
+-- knope.toml --
+[packages.rust]
+versioned_files = ["Cargo.toml"]
+
+[packages.javascript]
+versioned_files = ["package.json"]
+
+[packages.python]
+versioned_files = ["pyproject.toml"]
+
+[[workflows]]
+name = "bump"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Patch"
+-- package.json --
+{
+  "version": "6.7.8"
+}
+-- pyproject.toml --
+[tool.poetry]
+version = "3.4.5"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 0.1.3
+Would add the following to package.json: version = 6.7.9
+Would add the following to pyproject.toml: 3.4.6
+-- out/Cargo.toml --
+[package]
+name = "multiple-packages"
+version = "0.1.3"
+-- out/pyproject.toml --
+[tool.poetry]
+version = "3.4.6"

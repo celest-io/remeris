@@ -4,11 +4,16 @@ import (
 	"context"
 
 	"github.com/celest-io/remeris/internal/workflow"
+	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/action"
+	"github.com/celest-io/remeris/pkg/versioning/semver"
+	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
 // BumpVersionRule is the `rule` of a BumpVersion step.
 type BumpVersionRule string
 
+// The rules a BumpVersion step accepts.
 const (
 	RuleMajor   BumpVersionRule = "Major"
 	RuleMinor   BumpVersionRule = "Minor"
@@ -17,16 +22,67 @@ const (
 	RuleRelease BumpVersionRule = "Release"
 )
 
-// BumpVersion bumps the version of the packages (milestone M3).
+// BumpVersion bumps the version of every package and writes the versioned files (spec F8). It stages nothing
+// and writes no changelog.
 type BumpVersion struct {
 	Rule BumpVersionRule `toml:"rule"`
 	// Label is the pre-release label. It is set if and only if Rule is RulePre.
 	Label string `toml:"label"`
 }
 
+// Type returns "BumpVersion".
 func (*BumpVersion) Type() string { return "BumpVersion" }
 
-// Run fails until the step is implemented, in a dry run too, so --validate reports it.
+// SemverRule maps the TOML rule to the versioning core's rule. Pre is based on a patch bump.
+func (s *BumpVersion) SemverRule() semver.Rule {
+	switch s.Rule {
+	case RuleMajor:
+		return semver.StableBump(semver.StableMajor)
+	case RuleMinor:
+		return semver.StableBump(semver.StableMinor)
+	case RulePre:
+		return semver.PreBump(s.Label, semver.StablePatch)
+	case RuleRelease:
+		return semver.ReleaseBump()
+	default:
+		return semver.StableBump(semver.StablePatch)
+	}
+}
+
+// Run sets the new version in every package, then executes the writes of the versioned files. Files are drained
+// from the state afterwards, as in Knope, so a later step does not write them again. With no package it does
+// nothing.
 func (s *BumpVersion) Run(_ context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
-	return rt, notImplemented(s, "M3")
+	state := rt.State
+	rule := s.SemverRule()
+	for _, pkg := range state.Packages {
+		v, gv, err := nextVersion(pkg, rule)
+		if err != nil {
+			return rt, err
+		}
+		if state.AllVersionedFiles, err = pkg.SetVersion(v, gv, state.AllVersionedFiles); err != nil {
+			return rt, err
+		}
+	}
+
+	var actions []action.Action
+	for _, f := range state.AllVersionedFiles {
+		actions = append(actions, f.Write()...)
+	}
+	state.AllVersionedFiles = nil
+
+	pending, err := ExecuteActions(rt.DryRun, actions)
+	if err != nil {
+		return rt, err
+	}
+	state.PendingActions = append(state.PendingActions, pending...)
+	rt.State = state
+	return rt, nil
+}
+
+// nextVersion is the version a package gets and how go.mod files treat it. PR 18 (--override-version) plugs in
+// here: a package with an override returns it with versionedfile.BumpMajor instead of calculating one.
+func nextVersion(pkg *versioning.Package, rule semver.Rule) (semver.Version, versionedfile.GoVersioning, error) {
+	v, err := pkg.Versions.CalculateNewVersion(rule)
+	return v, pkg.GoVersioning, err
 }

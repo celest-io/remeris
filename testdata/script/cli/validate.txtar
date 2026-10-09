@@ -53,8 +53,6 @@ Error: There are problems with the defined workflows
       ╰─▶ Step Release is not implemented yet (milestone M6)
 -- many.log --
 Error: There are problems with the defined workflows
-  ╰─▶ Problem with workflow first
-      ╰─▶ Step BumpVersion is not implemented yet (milestone M3)
   ╰─▶ Problem with workflow second
       ╰─▶ No packages to operate on
           help: There must be at least one package for remeris to work with, no supported package files were found in this directory.
