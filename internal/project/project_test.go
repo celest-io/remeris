@@ -33,6 +33,12 @@ func (f fakeGit) AllTagsOnBranch(context.Context) ([]string, error) {
 	return f.tags, f.err
 }
 
+// CommitMessagesAfterTag is not used by package loading.
+func (fakeGit) CommitMessagesAfterTag(context.Context, *string) ([]git.Commit, error) { return nil, nil }
+
+// FirstCommitsForFiles is not used by package loading.
+func (fakeGit) FirstCommitsForFiles(context.Context, []string) map[string]*git.CommitInfo { return nil }
+
 func regexCfg(t *testing.T, path string) versionedfile.Config {
 	t.Helper()
 	cfg, err := versionedfile.NewConfig(path, nil, []string{`v(?<version>\d+\.\d+\.\d+)`})
