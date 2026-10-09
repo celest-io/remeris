@@ -19,6 +19,7 @@ import (
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/releasenotes"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
@@ -82,9 +83,19 @@ func (l Loader) State(
 		if err != nil {
 			return workflow.State{}, err
 		}
+		pkg.ReleaseNotes.Sections = releasenotes.ConvertSections(extraSections(p.ExtraChangelogSections))
 		state.Packages = append(state.Packages, pkg)
 	}
 	return state, nil
+}
+
+// extraSections converts the extra_changelog_sections of a package to the versioning core's type (F7.1, F12.1).
+func extraSections(in []config.ExtraSection) []releasenotes.ChangelogSectionConfig {
+	out := make([]releasenotes.ChangelogSectionConfig, 0, len(in))
+	for _, s := range in {
+		out = append(out, releasenotes.ChangelogSectionConfig{Name: s.Name, Footers: s.Footers, Types: s.Types})
+	}
+	return out
 }
 
 // readTags opens Git and lists its tags. Errors are logged and swallowed, as Knope does (unwrap_or_default).

@@ -256,3 +256,21 @@ func TestStateUsesTagsAndGoVersioning(t *testing.T) {
 		t.Errorf("latest = %v (%t), want 2.1.0 from the go.mod tags", latest, ok)
 	}
 }
+
+func TestStateLoadsSections(t *testing.T) {
+	t.Parallel()
+	cfg := pkgCfg(versioning.DefaultName(), regexCfg(t, versionTxt))
+	cfg.ExtraChangelogSections = []config.ExtraSection{{Name: "Docs", Types: []string{"docs"}}}
+	l := Loader{
+		ReadFile: func(string) (string, error) { return versionBody, nil },
+		OpenGit:  func(context.Context) (git.Git, error) { return nil, errors.New("no git") },
+	}
+	state, err := l.State(context.Background(), []config.PackageConfig{cfg}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := state.Packages[0].ReleaseNotes.Sections.ChangesetTypes()
+	if want := []string{"major", "minor", "patch", "docs"}; !slices.Equal(got, want) {
+		t.Errorf("change types = %v, want %v", got, want)
+	}
+}

@@ -20,8 +20,8 @@ stderr 'flag provided but not defined: -validate'
 # The default release workflow starts with PrepareRelease.
 ! exec remeris --dry-run release
 cmp stderr release.log
-! exec remeris --dry-run document-change
-cmp stderr document-change.log
+exec remeris --dry-run document-change
+stdout 'Would create a new change file'
 
 # No --override-version without packages; --prerelease-label because release has PrepareRelease.
 exec remeris release --help
@@ -33,6 +33,3 @@ Error: --generate is not implemented yet (milestone M10)
 -- release.log --
 Error: Problem with workflow release
   ╰─▶ Step PrepareRelease is not implemented yet (milestone M5)
--- document-change.log --
-Error: Problem with workflow document-change
-  ╰─▶ Step CreateChangeFile is not implemented yet (milestone M4)

@@ -5,10 +5,9 @@ stdout 'document-change'
 stdout '--validate'
 ! stdout '--generate'
 
-# Both default workflows fail validation until their steps exist.
+# The release workflow fails validation until PrepareRelease exists; document-change is valid.
 ! exec remeris --validate
 stderr 'Problem with workflow release'
-stderr 'Problem with workflow document-change'
 
 -- knope.toml --
 [github]
