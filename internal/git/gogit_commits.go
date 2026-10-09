@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"slices"
+	"unicode/utf8"
 
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -25,19 +26,23 @@ func (g *GoGit) CommitMessagesAfterTag(ctx context.Context, tag *string) ([]Comm
 	exclude := map[plumbing.Hash]bool{}
 	if tag == nil {
 		slog.DebugContext(ctx, "Using ALL commits")
-	} else if tagCommit, ok := resolveTagCommit(repo, *tag); ok {
-		slog.DebugContext(ctx, "Using commits since tag "+*tag)
-		err = walkFromHead(ctx, repo, tagCommit, func(c *object.Commit) { exclude[c.Hash] = true })
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	} else if tagCommit, found, peeled := resolveTagCommit(repo, *tag); !found {
 		slog.DebugContext(ctx, "Tag "+*tag+" not found, using ALL commits")
+	} else {
+		// Knope logs this even when the tag does not peel to a commit, and then uses every commit.
+		slog.DebugContext(ctx, "Using commits since tag "+*tag)
+		if peeled {
+			err = walkFromHead(ctx, repo, tagCommit, func(c *object.Commit) { exclude[c.Hash] = true })
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	var commits []Commit
 	err = walkFromHead(ctx, repo, head.Hash(), func(c *object.Commit) {
-		if !exclude[c.Hash] {
-			commits = append(commits, Commit{Message: c.Message, Info: newCommitInfo(c.Hash.String(), c.Author.Name)})
+		// Knope skips a commit whose message is not valid UTF-8.
+		if !exclude[c.Hash] && utf8.ValidString(c.Message) {
+			commits = append(commits, Commit{Message: c.Message, Info: commitInfoFor(c.Hash.String(), c.Author.Name)})
 		}
 	})
 	if err != nil {
@@ -47,14 +52,15 @@ func (g *GoGit) CommitMessagesAfterTag(ctx context.Context, tag *string) ([]Comm
 	return commits, nil
 }
 
-// resolveTagCommit returns the commit that refs/tags/<tag> peels to.
-func resolveTagCommit(repo *gogit.Repository, tag string) (plumbing.Hash, bool) {
+// resolveTagCommit looks up refs/tags/<tag>. found tells whether the reference exists, peeled whether it
+// peels to a commit, which is then returned.
+func resolveTagCommit(repo *gogit.Repository, tag string) (commit plumbing.Hash, found, peeled bool) {
 	ref, err := repo.Reference(plumbing.NewTagReferenceName(tag), true)
 	if err != nil {
-		return plumbing.ZeroHash, false
+		return plumbing.ZeroHash, false, false
 	}
 	commit, ok, err := peelToCommit(repo, ref.Hash())
-	return commit, ok && err == nil
+	return commit, true, ok && err == nil
 }
 
 // topoReverse returns the commits reachable from start, parents before children. It follows git's
@@ -121,8 +127,9 @@ func (g *GoGit) FirstCommitsForFiles(ctx context.Context, paths []string) map[st
 			if err != nil || entry.Mode == filemode.Dir {
 				return false
 			}
-			info := newCommitInfo(c.Hash.String(), c.Author.Name)
-			results[path] = &info
+			if info := commitInfoFor(c.Hash.String(), c.Author.Name); info != nil {
+				results[path] = info
+			}
 			return true
 		})
 	}

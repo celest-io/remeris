@@ -70,6 +70,12 @@ func cleanEnv() []string {
 
 func (r *testRepo) git(args ...string) string {
 	r.t.Helper()
+	return r.gitIn("", args...)
+}
+
+// gitIn runs git with stdin.
+func (r *testRepo) gitIn(stdin string, args ...string) string {
+	r.t.Helper()
 	if !r.sameDate {
 		r.clock++
 	}
@@ -82,6 +88,7 @@ func (r *testRepo) git(args ...string) string {
 		"GIT_AUTHOR_NAME=Test Author", "GIT_AUTHOR_EMAIL=author@example.com", "GIT_AUTHOR_DATE="+date,
 		"GIT_COMMITTER_NAME=Test Committer", "GIT_COMMITTER_EMAIL=committer@example.com", "GIT_COMMITTER_DATE="+date,
 	)
+	cmd.Stdin = strings.NewReader(stdin)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		r.t.Fatalf("git %v: %v: %s", args, err, out)

@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -36,6 +37,36 @@ func (r *testRepo) commitFiles(msg, author string, files map[string]string) {
 	r.git("add", "-A")
 	r.git("commit", "--quiet", "--allow-empty", "--cleanup=verbatim", "--author="+author+" <a@example.com>", "-m", msg)
 }
+
+// rawCommit writes files, stages everything and commits with a hand-made commit object, so that the author name
+// and the message can hold bytes that are not UTF-8. A non-empty encoding adds an encoding header.
+func (r *testRepo) rawCommit(author, encoding, msg string, files map[string]string) {
+	r.t.Helper()
+	for name, content := range files {
+		r.write(name, content)
+	}
+	r.git("add", "-A")
+	r.clock++
+	sig := fmt.Sprintf("%s <a@example.com> %d +0000", author, 1700000000+r.clock*60)
+	var obj strings.Builder
+	obj.WriteString("tree " + strings.TrimSpace(r.git("write-tree")) + "\n")
+	if r.git("rev-list", "-n1", "--all") != "" {
+		obj.WriteString("parent " + strings.TrimSpace(r.git("rev-parse", "HEAD")) + "\n")
+	}
+	obj.WriteString("author " + sig + "\ncommitter " + sig + "\n")
+	if encoding != "" {
+		obj.WriteString("encoding " + encoding + "\n")
+	}
+	obj.WriteString("\n" + msg)
+	hash := strings.TrimSpace(r.gitIn(obj.String(), "hash-object", "-t", "commit", "-w", "--stdin"))
+	r.git("update-ref", "HEAD", hash)
+}
+
+const (
+	latin1Name = "Zo\xe9"
+	latin1Msg  = "caf\xe9\n"
+	noInfo     = "<no info>"
+)
 
 // commitWant is the expected message and author of a commit.
 type commitWant struct{ msg, author string }
@@ -102,6 +133,34 @@ func runCommitsAfterTagContract(t *testing.T, open func(t *testing.T, dir string
 				{"no newline\n", authorTest},
 			},
 		},
+		"message that is not UTF-8 is skipped": {
+			setup: func(r *testRepo) {
+				plain(r, msgOne)
+				r.rawCommit(authorTest, "ISO-8859-1", latin1Msg, nil)
+				plain(r, msgTwo)
+			},
+			want: []commitWant{{msgOne, authorTest}, {msgTwo, authorTest}},
+		},
+		"message that is not UTF-8 without an encoding header is skipped": {
+			setup: func(r *testRepo) { plain(r, msgOne); r.rawCommit(authorTest, "", latin1Msg, nil) },
+			want:  []commitWant{{msgOne, authorTest}},
+		},
+		"author name that is not UTF-8 keeps the commit without info": {
+			setup: func(r *testRepo) {
+				plain(r, msgOne)
+				r.rawCommit(latin1Name, "ISO-8859-1", msgTwo, nil)
+			},
+			want: []commitWant{{msgOne, authorTest}, {msgTwo, noInfo}},
+		},
+		"tag on a tree is used but selects every commit": {
+			setup: func(r *testRepo) {
+				plain(r, msgOne)
+				r.git("tag", "treetag", "HEAD^{tree}")
+				plain(r, msgTwo)
+			},
+			tag:  ptr("treetag"),
+			want: []commitWant{{msgOne, authorTest}, {msgTwo, authorTest}},
+		},
 		"non-ASCII author and message": {
 			setup: func(r *testRepo) { r.commitFiles("fix: café ☕\n", authorUnicode, nil) },
 			want:  []commitWant{{"fix: café ☕\n", authorUnicode}},
@@ -118,13 +177,19 @@ func runCommitsAfterTagContract(t *testing.T, open func(t *testing.T, dir string
 			}
 			want := make([]commitWant, len(got))
 			for i, c := range got {
-				want[i] = commitWant{c.Message, c.Info.AuthorName}
+				want[i] = commitWant{c.Message, noInfo}
+				if c.Info != nil {
+					want[i].author = c.Info.AuthorName
+				}
 			}
 			if !slices.Equal(want, tt.want) && (len(got) != 0 || len(tt.want) != 0) {
 				t.Fatalf("commits = %q, want %q", want, tt.want)
 			}
 			all := r.git("rev-list", "--all")
 			for _, c := range got {
+				if c.Info == nil {
+					continue
+				}
 				if len(c.Info.Hash) != shortHashLen || !strings.Contains(all, c.Info.Hash) {
 					t.Fatalf("hash %q is not the first 7 characters of a commit id", c.Info.Hash)
 				}
@@ -216,6 +281,14 @@ func runFirstCommitsContract(t *testing.T, open func(t *testing.T, dir string) G
 			},
 			paths: []string{fileA, fileC},
 			want:  map[string]string{fileA: "side\n", fileC: msgTwo},
+		},
+		"author name that is not UTF-8 is not found and ends the search": {
+			setup: func(r *testRepo) {
+				r.rawCommit(latin1Name, "ISO-8859-1", msgOne, map[string]string{fileA: "1"})
+				r.commitFiles(msgTwo, authorTest, map[string]string{fileA: "2", fileB: "1"})
+			},
+			paths: []string{fileA, fileB},
+			want:  map[string]string{fileB: msgTwo},
 		},
 		"empty path list": {
 			setup: func(r *testRepo) { r.commitFiles(msgOne, authorTest, map[string]string{fileA: "1"}) },
