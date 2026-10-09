@@ -32,7 +32,8 @@ type State struct {
 	// it does not fail outside a repository, and reading the tags then does (their failure leaves AllGitTags empty).
 	Git git.Git
 	// PendingActions are the AddTag and CreateRelease actions that earlier steps returned and a later Release step
-	// executes (spec F4.3, F13.4). Writes and removals are executed by the step that produced them.
+	// executes (spec F4.3, F13.4). Writes and removals are executed by the step that produced them. Only
+	// PrepareRelease (M5) fills it; BumpVersion discards what it gets back, as Knope does.
 	PendingActions []action.Action
 	// IgnoreConventionalCommits is the `ignore_conventional_commits` setting of `[changes]`.
 	IgnoreConventionalCommits bool

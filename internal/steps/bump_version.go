@@ -71,11 +71,11 @@ func (s *BumpVersion) Run(_ context.Context, rt workflow.RunType[workflow.State]
 	}
 	state.AllVersionedFiles = nil
 
-	pending, err := ExecuteActions(rt.DryRun, actions)
-	if err != nil {
+	// The AddTag and CreateRelease actions that come back are dropped, as Knope's semver.rs does: BumpVersion
+	// never tags or releases (spec F8), and keeping them would change what a later Release step does.
+	if _, err := ExecuteActions(rt.DryRun, actions); err != nil {
 		return rt, err
 	}
-	state.PendingActions = append(state.PendingActions, pending...)
 	rt.State = state
 	return rt, nil
 }

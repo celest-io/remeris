@@ -15,7 +15,8 @@ import (
 const codeFsWrite = "fs::write"
 
 // ExecuteActions runs the file actions in order (spec F13.4) and returns the others, AddTag and CreateRelease,
-// in order, for the caller to keep as pending actions.
+// in order. The caller decides what to do with them: PrepareRelease (M5) keeps them as State.PendingActions for a
+// later Release step; BumpVersion drops them.
 //
 // In a dry run nothing is changed: a write logs "Would add the following to {path}: {diff}" and a removal logs
 // "Would delete {path}". A real write stores the content as given. A failed removal is ignored, because the same

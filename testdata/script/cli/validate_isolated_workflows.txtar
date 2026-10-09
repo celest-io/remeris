@@ -1,0 +1,39 @@
+# --validate runs each workflow on its own copy of the state, as Knope does. Workflow a bumps the package to
+# 1.0.1-rc.0 in its copy; workflow b must not see that pre-release, so its Release rule fails.
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add knope.toml go.mod
+exec git commit -m 'feat: Existing feature'
+exec git tag v1.0.0
+
+! exec remeris --validate
+! stdout .
+cmp stderr stderr.log
+
+-- knope.toml --
+[package]
+versioned_files = ["go.mod"]
+
+[[workflows]]
+name = "a"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Pre"
+label = "rc"
+
+[[workflows]]
+name = "b"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Release"
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- stderr.log --
+Error: There are problems with the defined workflows
+  ╰─▶ Problem with workflow b
+      ╰─▶ No prerelease version found, but a Release rule was requested

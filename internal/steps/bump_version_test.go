@@ -10,6 +10,7 @@ import (
 	"github.com/celest-io/remeris/internal/steps"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/action"
 	"github.com/celest-io/remeris/pkg/versioning/semver"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
@@ -147,5 +148,71 @@ func TestBumpVersionPackagesSharingAFile(t *testing.T) {
 	}
 	if logs.Len() != 0 || len(rt.State.PendingActions) != 0 {
 		t.Errorf("logs %q, pending %v", logs, rt.State.PendingActions)
+	}
+}
+
+func TestBumpVersionLeavesPendingActionsEmpty(t *testing.T) {
+	t.Chdir(t.TempDir())
+	const goMod = "module example.com/m\n\ngo 1.22\n"
+	if err := os.WriteFile("go.mod", []byte(goMod), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := versionedfile.Config{Path: "go.mod", Format: versionedfile.GoMod}
+	f, err := versionedfile.New(cfg, goMod, []string{tagV123})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := []versionedfile.File{f}
+	pkg, err := versioning.NewPackage(
+		versioning.DefaultName(), []versionedfile.Config{cfg}, all, []string{tagV123}, versionedfile.Standard, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := workflow.State{Packages: []*versioning.Package{pkg}, AllVersionedFiles: all}
+
+	rt, err := (&steps.BumpVersion{Rule: steps.RuleMinor}).Run(context.Background(), workflow.Real(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rt.State.PendingActions) != 0 {
+		t.Errorf("PendingActions = %v, want none", rt.State.PendingActions)
+	}
+}
+
+// taggingFile is a versioned file whose Write also returns an AddTag action.
+type taggingFile struct{ versionedfile.File }
+
+func (f taggingFile) SetVersion(v semver.Version, dep *string, gv versionedfile.GoVersioning) (versionedfile.File, error) {
+	inner, err := f.File.SetVersion(v, dep, gv)
+	return taggingFile{inner}, err
+}
+
+func (f taggingFile) Write() []action.Action { return append(f.File.Write(), action.AddTag("v9.9.9")) }
+
+func TestBumpVersionDropsTagActions(t *testing.T) {
+	t.Chdir(t.TempDir())
+	cfg := versionedfile.Config{Path: cargoFile, Format: versionedfile.Cargo}
+	inner, err := versionedfile.New(cfg, cargo(v123), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := []versionedfile.File{taggingFile{inner}}
+	pkg, err := versioning.NewPackage(
+		versioning.DefaultName(), []versionedfile.Config{cfg}, all, nil, versionedfile.Standard, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := workflow.State{Packages: []*versioning.Package{pkg}, AllVersionedFiles: all}
+
+	rt, err := (&steps.BumpVersion{Rule: steps.RulePatch}).Run(context.Background(), workflow.DryRun(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rt.State.PendingActions) != 0 {
+		t.Errorf("PendingActions = %v, want none", rt.State.PendingActions)
 	}
 }
