@@ -17,6 +17,24 @@ func TestSetString(t *testing.T) {
 		value string
 		want  string
 	}{
+		"byte order mark: replace keeps the mark": {
+			in:    "\ufeff[package]\nversion = \"1.0.0\" # c\n",
+			path:  k(keyPackage, keyVersion),
+			value: newVersion,
+			want:  "\ufeff[package]\nversion = \"2.0.0\" # c\n",
+		},
+		"byte order mark only: insert after the mark": {
+			in:    "\ufeff",
+			path:  k("a"),
+			value: "x",
+			want:  "\ufeffa = \"x\"\n",
+		},
+		"byte order mark and comment: insert on its own line": {
+			in:    "\ufeff# c\n",
+			path:  k("a"),
+			value: "x",
+			want:  "\ufeffa = \"x\"\n# c\n",
+		},
 		"replace string keeps comment and spacing": {
 			in:    "[package]\nname = \"x\"\nversion   =   \"1.0.0\"   # keep me\n\n[dependencies]\n",
 			path:  k(keyPackage, keyVersion),

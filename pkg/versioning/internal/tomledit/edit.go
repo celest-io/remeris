@@ -112,7 +112,7 @@ func keepLeadingNewline(text, v string) string {
 // document ends without a line break there, the new line follows a new break and has none of its own.
 func (d *Document) insertLine(pos int, pair string) error {
 	eol := d.lineEnding()
-	if pos > 0 && d.src[pos-1] != '\n' {
+	if pos > bomLen(d.src) && d.src[pos-1] != '\n' {
 		return d.splice(pos, pos, eol+pair)
 	}
 	return d.splice(pos, pos, pair+eol)
