@@ -156,6 +156,14 @@ func (f cargoFile) edit(path []tomledit.Key, version string) error {
 	return nil
 }
 
+// PackageNamer is a versioned file that names its package, like Cargo.toml's package.name. A package uses the
+// name to default the dependency of a Cargo.lock (spec F7.2).
+type PackageNamer interface {
+	PackageName() (string, bool)
+}
+
+var _ PackageNamer = cargoFile{}
+
 // PackageName returns the package.name of the file and whether it has one. A package uses it to default the
 // dependency of a Cargo.lock (spec F7.2).
 func (f cargoFile) PackageName() (string, bool) {

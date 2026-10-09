@@ -62,11 +62,6 @@ var ErrCargoLockNoDependency error = diag.New("Cargo.lock must specify a depende
 	WithHelp("To use `Cargo.lock` in `versioned_files`, you must either manually specify `dependency` or define a " +
 		"`Cargo.toml` with a `package.name` in the same array.")
 
-// packageNamer is implemented by the Cargo.toml file: Cargo.lock defaults its dependency to that name.
-type packageNamer interface {
-	PackageName() (string, bool)
-}
-
 // Package is a logical package: the versioned files that hold its version, its version history and the settings
 // that depend on its name. Release notes and the changelog are added by a later change; this is the seam.
 type Package struct {
@@ -174,7 +169,7 @@ func cargoPackageName(configs []versionedfile.Config, all []versionedfile.File) 
 		if !ok {
 			continue
 		}
-		if n, ok := f.(packageNamer); ok {
+		if n, ok := f.(versionedfile.PackageNamer); ok {
 			if name, found := n.PackageName(); found {
 				return name, true
 			}
