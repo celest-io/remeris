@@ -34,7 +34,9 @@ func (f fakeGit) AllTagsOnBranch(context.Context) ([]string, error) {
 }
 
 // CommitMessagesAfterTag is not used by package loading.
-func (fakeGit) CommitMessagesAfterTag(context.Context, *string) ([]git.Commit, error) { return nil, nil }
+func (fakeGit) CommitMessagesAfterTag(context.Context, *string) ([]git.Commit, error) {
+	return nil, nil
+}
 
 // FirstCommitsForFiles is not used by package loading.
 func (fakeGit) FirstCommitsForFiles(context.Context, []string) map[string]*git.CommitInfo { return nil }
