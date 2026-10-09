@@ -23,10 +23,9 @@ const (
 )
 
 type fakeGit struct {
-	git.Git // the methods other than AllTagsOnBranch are not used and panic if called
-	tags    []string
-	err     error
-	calls   *int
+	tags  []string
+	err   error
+	calls *int
 }
 
 func (f fakeGit) AllTagsOnBranch(context.Context) ([]string, error) {
@@ -41,6 +40,9 @@ func (fakeGit) CommitMessagesAfterTag(context.Context, *string) ([]git.Commit, e
 
 // FirstCommitsForFiles is not used by package loading.
 func (fakeGit) FirstCommitsForFiles(context.Context, []string) map[string]*git.CommitInfo { return nil }
+
+// AddFiles is not used by package loading.
+func (fakeGit) AddFiles(context.Context, []string) error { return nil }
 
 func regexCfg(t *testing.T, path string) versionedfile.Config {
 	t.Helper()
