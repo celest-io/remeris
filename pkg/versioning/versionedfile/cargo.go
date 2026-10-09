@@ -1,8 +1,6 @@
 package versionedfile
 
 import (
-	"errors"
-
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/pkg/versioning/action"
 	"github.com/celest-io/remeris/pkg/versioning/internal/tomledit"
@@ -11,11 +9,9 @@ import (
 
 // Error codes and keys of Cargo.toml files.
 const (
-	codeCargoTOML             = "remeris::cargo::toml"
-	codeCargoMissingProperty  = "remeris::cargo::missing_property"
-	codeCargoDependencyInsert = "remeris::cargo::dependency_not_insertable"
-	codeCargoEdit             = "remeris::cargo::edit"
-	cargoConfigURL            = "https://knope.tech/reference/config-file/packages/#cargotoml"
+	codeCargoTOML            = "remeris::cargo::toml"
+	codeCargoMissingProperty = "remeris::cargo::missing_property"
+	codeCargoEdit            = "remeris::cargo::edit"
 
 	keyPackage   = "package"
 	keyVersion   = "version"
@@ -45,7 +41,7 @@ func newCargoFile(path, content string) (File, error) {
 func parseCargo(path, content string) (*tomledit.Document, error) {
 	doc, err := tomledit.Parse([]byte(content))
 	if err != nil {
-		return nil, diag.New("Invalid TOML in " + path).WithCode(codeCargoTOML).WithCause(err)
+		return nil, diag.New("Invalid TOML in " + path + ": " + err.Error()).WithCode(codeCargoTOML).WithCause(err)
 	}
 	return doc, nil
 }
@@ -97,8 +93,7 @@ func (f cargoFile) Version() (semver.Version, error) {
 		}
 	}
 	return semver.Version{}, diag.New(f.path + cargoMissingVersion).
-		WithCode(codeCargoMissingProperty).
-		WithURL(cargoConfigURL)
+		WithCode(codeCargoMissingProperty)
 }
 
 // SetVersion sets package.version (or workspace.package.version when the package inherits it), or the version of
@@ -141,7 +136,7 @@ func (f cargoFile) setDependency(dependency, version string) error {
 		switch {
 		case !ok || entry.Kind == tomledit.ArrayOfTables:
 		case entry.Kind == tomledit.Table || entry.Kind == tomledit.InlineTable:
-			if err := f.editDependency(dependency, append(path, keyVersion), version); err != nil {
+			if err := f.edit(tomledit.Keys(append(path, keyVersion)...), version); err != nil {
 				return err
 			}
 		default:
@@ -153,27 +148,12 @@ func (f cargoFile) setDependency(dependency, version string) error {
 	return nil
 }
 
-// editDependency inserts or sets the version key of a dependency table. Known gap: Knope also inserts it into a
-// table written with dotted keys, which the editor cannot do.
-func (f cargoFile) editDependency(dependency string, path []string, version string) error {
-	err := f.edit(tomledit.Keys(path...), version)
-	if errors.Is(err, tomledit.ErrNotInsertable) {
-		return diag.New("Cannot add a version to dependency " + dependency + " in " + f.path).
-			WithCode(codeCargoDependencyInsert).
-			WithHelp("The dependency is written with dotted keys. Add a version key to it, or write it as an inline " +
-				"table or as a [dependencies." + dependency + "] table.").
-			WithCause(err)
-	}
-	return err
-}
-
-// edit sets the string at path, turning editor errors into diagnostics. ErrNotInsertable is returned as is.
+// edit sets the string at path, turning editor errors into diagnostics.
 func (f cargoFile) edit(path []tomledit.Key, version string) error {
-	err := f.doc.SetString(path, version)
-	if err == nil || errors.Is(err, tomledit.ErrNotInsertable) {
-		return err
+	if err := f.doc.SetString(path, version); err != nil {
+		return diag.New("Could not update " + f.path + ": " + err.Error()).WithCode(codeCargoEdit).WithCause(err)
 	}
-	return diag.New("Could not update " + f.path + ": " + err.Error()).WithCode(codeCargoEdit).WithCause(err)
+	return nil
 }
 
 // Write returns the write action, or nil if SetVersion was never called.

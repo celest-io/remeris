@@ -89,7 +89,7 @@ func TestCargoErrors(t *testing.T) {
 		"empty file":         {"", false, missing, codeMissing},
 		"inherited only":     {"[package]\nversion.workspace = true\n", false, missing, codeMissing},
 		"non-string version": {"[package]\nversion = 1\n", false, missing, codeMissing},
-		"invalid toml":       {"[package\nname = ", true, "Invalid TOML in " + cargoPath, "remeris::cargo::toml"},
+		"invalid toml":       {"[package\nname = ", true, "Invalid TOML in " + cargoPath + ": ", "remeris::cargo::toml"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -104,7 +104,12 @@ func TestCargoErrors(t *testing.T) {
 			if !errors.As(err, &d) {
 				t.Fatalf("want a diagnostic, got %v", err)
 			}
-			if err.Error() != tc.want || d.Code() != tc.code {
+			msg := err.Error()
+			if tc.build {
+				// Invalid TOML in {path}: {parse error}
+				msg = msg[:min(len(msg), len(tc.want))]
+			}
+			if msg != tc.want || d.Code() != tc.code {
 				t.Errorf("got %q (%s), want %q (%s)", err.Error(), d.Code(), tc.want, tc.code)
 			}
 			if tc.build && errors.Unwrap(err) == nil {
@@ -325,22 +330,42 @@ func TestCargoImmutable(t *testing.T) {
 	}
 }
 
+// TestCargoDottedDependency checks the placement Knope's toml_edit gives to a version added to a dependency written
+// with dotted keys.
 func TestCargoDottedDependency(t *testing.T) {
 	t.Parallel()
-	content := cargoTester + cargoDepsHdr + "d.path = \"../d\"\n"
-	_, err := newCargo(t, content).SetVersion(mustVersion(t, v020), strp("d"), versionedfile.Standard)
-	var d diag.Diagnostic
-	if !errors.As(err, &d) {
-		t.Fatalf("want a diagnostic, got %v", err)
+	const (
+		ver020 = "d.version = \"0.2.0\"\n"
+		pathD  = "d.path = \"../d\"\n"
+	)
+	tests := map[string]struct {
+		deps string
+		name string
+		want string
+	}{
+		"path":      {pathD + "z = 1\n", "d", pathD + ver020 + "z = 1\n"},
+		"workspace": {"d.workspace = true\n", "d", "d.workspace = true\n" + ver020},
+		"after the last line": {
+			"d.git = \"u\"\nd.branch = \"b\"\nz = 1\n",
+			"d",
+			"d.git = \"u\"\nd.branch = \"b\"\n" + ver020 + "z = 1\n",
+		},
+		"interleaved": {
+			pathD + "z = 1\nd.branch = \"b\"\ny = 2\n",
+			"d",
+			pathD + "z = 1\nd.branch = \"b\"\n" + ver020 + "y = 2\n",
+		},
+		"quoted name":      {"\"a.b\".path = \"p\"\n", "a.b", "\"a.b\".path = \"p\"\n\"a.b\".version = \"0.2.0\"\n"},
+		"existing version": {"d.version = \"1\"\n", "d", ver020},
 	}
-	if want := "Cannot add a version to dependency d in " + cargoPath; err.Error() != want ||
-		d.Code() != "remeris::cargo::dependency_not_insertable" {
-		t.Errorf("got %q (%s)", err.Error(), d.Code())
-	}
-	// A dotted dependency that already has a version can be edited.
-	f := applySteps(t, newCargo(t, cargoTester+cargoDepsHdr+"d.version = \"1\"\n"), []cargoStep{{v020, strp("d")}})
-	if got := f.Write()[0].Content; got != cargoTester+cargoDepsHdr+"d.version = \"0.2.0\"\n" {
-		t.Errorf("got %q", got)
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			f := applySteps(t, newCargo(t, cargoTester+cargoDepsHdr+tc.deps), []cargoStep{{v020, strp(tc.name)}})
+			if got := f.Write()[0].Content; got != cargoTester+cargoDepsHdr+tc.want {
+				t.Errorf("got %q", got)
+			}
+		})
 	}
 }
 
