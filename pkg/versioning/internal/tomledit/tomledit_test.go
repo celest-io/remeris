@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/celest-io/remeris/pkg/versioning/internal/tomledit"
 )
 
@@ -216,5 +218,46 @@ func TestParseKeepsBytes(t *testing.T) {
 	const src = "# c\r\n[a]\r\nb = 1\r\n"
 	if got := string(mustParse(t, src).Bytes()); got != src {
 		t.Errorf("Bytes() = %q, want %q", got, src)
+	}
+}
+
+const bomMark = "\xEF\xBB\xBF"
+
+func TestParseByteOrderMark(t *testing.T) {
+	t.Parallel()
+	const body = "[package]\nversion = \"1.0.0\"\n"
+	doc := mustParse(t, bomMark+body)
+	if got := string(doc.Bytes()); got != bomMark+body {
+		t.Errorf("Bytes() = %q, want the document with its byte order mark", got)
+	}
+	v, ok := doc.Lookup(keyPackage, keyVersion)
+	if !ok || v.Str != "1.0.0" {
+		t.Fatalf("Lookup = %+v, %v", v, ok)
+	}
+	// Spans are offsets in the bytes given to Parse, so they count the mark.
+	if got := (bomMark + body)[v.Span[0]:v.Span[1]]; got != `"1.0.0"` {
+		t.Errorf("span %v selects %q", v.Span, got)
+	}
+	mustParse(t, bomMark)
+}
+
+func TestParseByteOrderMarkErrors(t *testing.T) {
+	t.Parallel()
+	tests := map[string]string{"bad key": "a = 1\n= 2\n", "bad value": "a = 1\nb = =\n"}
+	for name, src := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var plain, marked *toml.DecodeError
+			_, errPlain := tomledit.Parse([]byte(src))
+			_, errMarked := tomledit.Parse([]byte(bomMark + src))
+			if !errors.As(errPlain, &plain) || !errors.As(errMarked, &marked) {
+				t.Fatalf("errors %v, %v do not wrap a DecodeError", errPlain, errMarked)
+			}
+			pr, _ := plain.Position()
+			mr, _ := marked.Position()
+			if pr != mr || plain.Error() != marked.Error() {
+				t.Errorf("row %d (%q) with a byte order mark, want %d (%q)", mr, marked, pr, plain)
+			}
+		})
 	}
 }

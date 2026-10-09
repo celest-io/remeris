@@ -12,6 +12,7 @@
 package tomledit
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"slices"
@@ -101,12 +102,30 @@ type Document struct {
 	root *node
 }
 
+// bom is the UTF-8 byte order mark, which some editors put at the start of a file.
+var bom = []byte{0xEF, 0xBB, 0xBF}
+
+// withoutBOM returns src as the TOML parsers can read it. They do not take a byte order mark, so it is replaced by
+// as many spaces: whitespace is valid at the start of a document and keeps every offset equal to the offset in src.
+// src itself is not changed.
+func withoutBOM(src []byte) []byte {
+	if !bytes.HasPrefix(src, bom) {
+		return src
+	}
+	view := slices.Clone(src)
+	copy(view, "   ")
+	return view
+}
+
 // Parse parses src, which must be valid TOML. The error wraps ErrSyntax.
+//
+// A UTF-8 byte order mark at the start is accepted, as toml_edit does. Spans and error positions are offsets in
+// src, so they count the mark, and Bytes returns it unchanged.
 func Parse(src []byte) (*Document, error) {
 	src = slices.Clone(src)
 	// The unstable parser used by index does not validate every scalar (it accepts 0=0000-), so a full parse
 	// decides validity.
-	if err := toml.Unmarshal(src, &map[string]any{}); err != nil {
+	if err := toml.Unmarshal(withoutBOM(src), &map[string]any{}); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrSyntax, err)
 	}
 	root, err := index(src)
@@ -176,12 +195,16 @@ func (d *Document) ArrayOfTablesLen(path ...string) int {
 	return len(n.elems)
 }
 
-// index parses src into a tree of nodes with spans.
+// index parses src into a tree of nodes with spans, which are offsets in src even when it starts with a byte
+// order mark. The Document edits call it again after each splice.
 func index(src []byte) (*node, error) {
 	p := unstable.Parser{}
-	p.Reset(src)
+	p.Reset(withoutBOM(src))
 	root := newTable()
 	root.header = true
+	if bytes.HasPrefix(src, bom) {
+		root.lastEnd = len(bom) // a key inserted into an empty root goes after the mark
+	}
 	cur := root
 	for p.NextExpression() {
 		expr := p.Expression()
