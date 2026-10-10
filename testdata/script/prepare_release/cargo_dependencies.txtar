@@ -1,0 +1,54 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/cargo/dependencies (MIT, see testdata/README.md).
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Add new feature' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp Cargo.toml out/Cargo.toml
+
+-- Cargo.toml --
+[package]
+name = "test-package"
+version = "1.0.0"
+
+[dependencies]
+dependency-name = "1.0.0"
+
+[dev-dependencies]
+dev-dependency-name = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = [
+  "Cargo.toml",
+  { path = "Cargo.toml", dependency = "dependency-name" },
+  { path = "Cargo.toml", dependency = "dev-dependency-name" },
+]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.1.0, dependency-name.version = 1.1.0, dev-dependency-name.version = 1.1.0
+Would add files to git:
+  Cargo.toml
+-- out/Cargo.toml --
+[package]
+name = "test-package"
+version = "1.1.0"
+
+[dependencies]
+dependency-name = "1.1.0"
+
+[dev-dependencies]
+dev-dependency-name = "1.1.0"

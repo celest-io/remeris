@@ -1,0 +1,75 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/pubspec_yaml (MIT, see testdata/README.md).
+skip 'needs pubspec.yaml support (milestone M9)'
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat!: New feature' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp pubspec.yaml out/pubspec.yaml
+
+-- knope.toml --
+[package]
+versioned_files = ["pubspec.yaml"]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- pubspec.yaml --
+# Copied from https://dart.dev/tools/pub/pubspec#example
+name: newtify
+description: >-
+  Have you been turned into a newt?  Would you like to be?
+  This package can help. It has all of the
+  newt-transmogrification functionality you have been looking
+  for.
+version: 1.0.0
+homepage: https://example-pet-store.com/newtify
+documentation: https://example-pet-store.com/newtify/docs
+
+environment:
+  sdk: '>=2.12.0 <3.0.0'
+
+dependencies:
+  efts: ^2.0.4
+  transmogrify: ^0.4.0
+
+dev_dependencies:
+  test: '>=1.15.0 <2.0.0'
+-- dryrun_stdout.log --
+Would add the following to pubspec.yaml: 2.0.0
+Would add files to git:
+  pubspec.yaml
+-- out/pubspec.yaml --
+# Copied from https://dart.dev/tools/pub/pubspec#example
+name: newtify
+description: >-
+  Have you been turned into a newt?  Would you like to be?
+  This package can help. It has all of the
+  newt-transmogrification functionality you have been looking
+  for.
+version: 2.0.0
+homepage: https://example-pet-store.com/newtify
+documentation: https://example-pet-store.com/newtify/docs
+
+environment:
+  sdk: '>=2.12.0 <3.0.0'
+
+dependencies:
+  efts: ^2.0.4
+  transmogrify: ^0.4.0
+
+dev_dependencies:
+  test: '>=1.15.0 <2.0.0'

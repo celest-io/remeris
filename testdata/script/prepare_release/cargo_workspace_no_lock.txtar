@@ -1,0 +1,80 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/cargo/workspace/no_lock (MIT, see testdata/README.md).
+skip 'needs package discovery (milestone M10)'
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit' --author 'Knope <knope@example.com>'
+exec git tag first-package/v1.0.0
+exec git tag second-package/v0.1.0
+exec git commit --allow-empty -m 'feat(first-package): A feature' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'feat(second-package)!: A breaking feature' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp Cargo.toml out/Cargo.toml
+cmp first/Cargo.toml out/first/Cargo.toml
+cmp second/Cargo.toml out/second/Cargo.toml
+
+-- Cargo.toml --
+[workspace]
+members = ["first", "second"]
+
+[workspace.dependencies]
+first-package = { path = "first", version = "1.0.0" }
+second-package = "0.1.0"
+-- first/Cargo.toml --
+[package]
+name = "first-package"
+version = "1.0.0"
+
+[dependencies]
+second-package = "0.1.0"
+
+[dev-dependencies]
+second-package = { path = "../second", version = "0.1.0" }
+-- knope.toml --
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- second/Cargo.toml --
+[package]
+name = "second-package"
+version = "0.1.0"
+-- dryrun_stdout.log --
+Would add the following to first/Cargo.toml: version = 1.1.0, second-package.version = 0.2.0
+Would add the following to Cargo.toml: first-package.version = 1.1.0, second-package.version = 0.2.0
+Would add the following to second/Cargo.toml: version = 0.2.0
+Would add files to git:
+  first/Cargo.toml
+  Cargo.toml
+  second/Cargo.toml
+-- out/Cargo.toml --
+[workspace]
+members = ["first", "second"]
+
+[workspace.dependencies]
+first-package = { path = "first", version = "1.1.0" }
+second-package = "0.2.0"
+-- out/first/Cargo.toml --
+[package]
+name = "first-package"
+version = "1.1.0"
+
+[dependencies]
+second-package = "0.2.0"
+
+[dev-dependencies]
+second-package = { path = "../second", version = "0.2.0" }
+-- out/second/Cargo.toml --
+[package]
+name = "second-package"
+version = "0.2.0"

@@ -1,0 +1,166 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/deno/workspaces (MIT, see testdata/README.md).
+skip 'needs package discovery (milestone M10) and deno.json support (milestone M9)'
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat(@scope/first-package): Add new feature' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'fix(@scope/second-package): A bug fix' --author 'Knope <knope@example.com>'
+
+cp deno.json deno.json.orig
+
+exec remeris release
+! stdout .
+! stderr .
+cmp deno.lock out/deno.lock
+cmp deno.json deno.json.orig
+exec sh -c 'printf %s "$(cat out/first/deno.json)" > first/deno.json.want'
+cmp first/deno.json first/deno.json.want
+exec sh -c 'printf %s "$(cat out/second/deno.json)" > second/deno.json.want'
+cmp second/deno.json second/deno.json.want
+
+-- deno.json --
+{
+  "workspace": [
+    "first",
+    "second"
+  ]
+}
+-- deno.lock --
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@scope/first-package@^1.0.0": "1.0.0",
+    "jsr:@scope/second-package@^0.1.0": "0.1.0"
+  },
+  "jsr": {
+    "@scope/first-package@1.0.0": {
+      "integrity": "sha256-first",
+      "dependencies": []
+    },
+    "@scope/second-package@0.1.0": {
+      "integrity": "sha256-second",
+      "dependencies": [
+        "jsr:@scope/first-package@^1.0.0"
+      ]
+    }
+  },
+  "npm": {},
+  "redirects": {},
+  "remote": {},
+  "workspace": {
+    "dependencies": [
+      "jsr:@scope/first-package@1.0.0",
+      "jsr:@scope/second-package@0.1.0"
+    ],
+    "packageJson": {
+      "dependencies": [
+        "jsr:@scope/first-package@^1.0.0"
+      ]
+    },
+    "members": {
+      "second": {
+        "dependencies": [
+          "jsr:@scope/first-package@1.0.0"
+        ],
+        "packageJson": {
+          "dependencies": [
+            "jsr:@scope/first-package@^1.0.0"
+          ]
+        }
+      }
+    },
+    "links": {
+      "jsr:@scope/first-package@1.0.0": {
+        "dependencies": [
+          "jsr:@scope/second-package@^0.1.0"
+        ]
+      }
+    }
+  }
+}
+-- first/deno.json --
+{
+  "name": "@scope/first-package",
+  "version": "1.0.0",
+  "exports": "./mod.ts"
+}
+-- knope.toml --
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- second/deno.json --
+{
+  "name": "@scope/second-package",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
+  "imports": {
+    "@scope/first-package": "jsr:@scope/first-package@^1.0.0"
+  }
+}
+-- out/deno.lock --
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@scope/first-package@1": "1.1.0",
+    "jsr:@scope/second-package@0.1": "0.1.1"
+  },
+  "jsr": {
+    "@scope/first-package@1.1.0": {
+      "integrity": "sha256-first"
+    },
+    "@scope/second-package@0.1.1": {
+      "integrity": "sha256-second",
+      "dependencies": [
+        "jsr:@scope/first-package"
+      ]
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@scope/first-package@1.1.0",
+      "jsr:@scope/second-package@0.1.1"
+    ],
+    "packageJson": {
+      "dependencies": [
+        "jsr:@scope/first-package@1.1.0"
+      ]
+    },
+    "members": {
+      "second": {
+        "dependencies": [
+          "jsr:@scope/first-package@1.1.0"
+        ],
+        "packageJson": {
+          "dependencies": [
+            "jsr:@scope/first-package@1.1.0"
+          ]
+        }
+      }
+    },
+    "links": {
+      "jsr:@scope/first-package@1.1.0": {
+        "dependencies": [
+          "jsr:@scope/second-package@0.1"
+        ]
+      }
+    }
+  }
+}
+-- out/first/deno.json --
+{
+  "name": "@scope/first-package",
+  "version": "1.1.0",
+  "exports": "./mod.ts"
+}
+-- out/second/deno.json --
+{
+  "name": "@scope/second-package",
+  "version": "0.1.1",
+  "exports": "./mod.ts",
+  "imports": {
+    "@scope/first-package": "jsr:@scope/first-package@^1.0.0"
+  }
+}

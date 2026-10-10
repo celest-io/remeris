@@ -1,0 +1,216 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/npm/workspaces (MIT, see testdata/README.md).
+skip 'needs package discovery (milestone M10) and package-lock.json support (milestone M9)'
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat(firstPackage)!: Breaking' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'feat(secondPackage): Add new feature' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'fix(thirdPackage): A fix' --author 'Knope <knope@example.com>'
+
+cp package.json package.json.orig
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+exec sh -c 'printf %s "$(cat out/package-lock.json)" > package-lock.json.want'
+cmp package-lock.json package-lock.json.want
+cmp package.json package.json.orig
+exec sh -c 'printf %s "$(cat out/first/package.json)" > first/package.json.want'
+cmp first/package.json first/package.json.want
+exec sh -c 'printf %s "$(cat out/others/second/package.json)" > others/second/package.json.want'
+cmp others/second/package.json others/second/package.json.want
+exec sh -c 'printf %s "$(cat out/others/third/package.json)" > others/third/package.json.want'
+cmp others/third/package.json others/third/package.json.want
+
+-- first/package.json --
+{
+  "name": "firstPackage",
+  "version": "0.1.0",
+  "dependencies": {
+    "secondPackage": "2.0.0",
+    "thirdPackage": "3.0.0"
+  }
+}
+-- knope.toml --
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- others/second/package.json --
+{
+  "name": "secondPackage",
+  "version": "2.0.0",
+  "devDependencies": {
+    "thirdPackage": "3.0.0"
+  }
+}
+-- others/third/package.json --
+{
+  "name": "thirdPackage",
+  "version": "3.0.0"
+}
+-- package-lock.json --
+{
+  "name": "monorepo",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "monorepo",
+      "workspaces": [
+        "first",
+        "others/*"
+      ]
+    },
+    "first": {
+      "name": "firstPackage",
+      "version": "0.1.0",
+      "dependencies": {
+        "secondPackage": "2.0.0",
+        "thirdPackage": "3.0.0"
+      }
+    },
+    "node_modules/firstPackage": {
+      "resolved": "first",
+      "link": true
+    },
+    "node_modules/secondPackage": {
+      "resolved": "others/second",
+      "link": true
+    },
+    "node_modules/thirdPackage": {
+      "resolved": "others/third",
+      "link": true
+    },
+    "others/second": {
+      "name": "secondPackage",
+      "version": "2.0.0",
+      "devDependencies": {
+        "thirdPackage": "3.0.0"
+      }
+    },
+    "others/third": {
+      "name": "thirdPackage",
+      "version": "3.0.0"
+    }
+  }
+}
+-- package.json --
+{
+  "name": "monorepo",
+  "workspaces": [
+    "first",
+    "others/*"
+  ]
+}
+-- dryrun_stdout.log --
+Would add the following to first/package.json: version = 0.2.0, secondPackage = 2.1.0, thirdPackage = 3.0.1
+Would add the following to package-lock.json: firstPackage = 0.2.0, secondPackage = 2.1.0, thirdPackage = 3.0.1
+Would add the following to others/second/package.json: version = 2.1.0, thirdPackage = 3.0.1
+Would add the following to others/third/package.json: version = 3.0.1
+Would add the following to first/CHANGELOG.md:
+## 0.2.0 (2026-01-01)
+
+### Breaking Changes
+
+- Breaking
+
+Would add the following to others/second/CHANGELOG.md:
+## 2.1.0 (2026-01-01)
+
+### Features
+
+- Add new feature
+
+Would add the following to others/third/CHANGELOG.md:
+## 3.0.1 (2026-01-01)
+
+### Fixes
+
+- A fix
+
+Would add files to git:
+  first/package.json
+  package-lock.json
+  others/second/package.json
+  others/third/package.json
+  first/CHANGELOG.md
+  others/second/CHANGELOG.md
+  others/third/CHANGELOG.md
+-- out/first/package.json --
+{
+  "name": "firstPackage",
+  "version": "0.2.0",
+  "dependencies": {
+    "secondPackage": "2.1.0",
+    "thirdPackage": "3.0.1"
+  }
+}
+-- out/others/second/package.json --
+{
+  "name": "secondPackage",
+  "version": "2.1.0",
+  "devDependencies": {
+    "thirdPackage": "3.0.1"
+  }
+}
+-- out/others/third/package.json --
+{
+  "name": "thirdPackage",
+  "version": "3.0.1"
+}
+-- out/package-lock.json --
+{
+  "name": "monorepo",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "monorepo",
+      "workspaces": [
+        "first",
+        "others/*"
+      ]
+    },
+    "first": {
+      "name": "firstPackage",
+      "version": "0.2.0",
+      "dependencies": {
+        "secondPackage": "2.1.0",
+        "thirdPackage": "3.0.1"
+      }
+    },
+    "node_modules/firstPackage": {
+      "resolved": "first",
+      "link": true
+    },
+    "node_modules/secondPackage": {
+      "resolved": "others/second",
+      "link": true
+    },
+    "node_modules/thirdPackage": {
+      "resolved": "others/third",
+      "link": true
+    },
+    "others/second": {
+      "name": "secondPackage",
+      "version": "2.1.0",
+      "devDependencies": {
+        "thirdPackage": "3.0.1"
+      }
+    },
+    "others/third": {
+      "name": "thirdPackage",
+      "version": "3.0.1"
+    }
+  }
+}

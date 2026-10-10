@@ -1,0 +1,70 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/branching_history/pick_correct_tag (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit' --author 'Knope <knope@knope.tech>'
+exec git tag v1.0.0
+exec git switch -c v2
+exec git commit --allow-empty -m 'feat!: Something new' --author 'Knope <knope@knope.tech>'
+exec git tag v2.0.0
+exec git switch main
+exec git commit --allow-empty -m 'fix: A bug' --author 'Knope <knope@knope.tech>'
+
+exec remeris --dry-run prepare-release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris prepare-release
+! stdout .
+! stderr .
+cmp Cargo.toml out/Cargo.toml
+cmp CHANGELOG.md out/CHANGELOG.md
+
+-- CHANGELOG.md --
+# Changelog
+
+## 1.0.0
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.0.1
+Would add the following to CHANGELOG.md:
+## 1.0.1 (2026-01-01)
+
+### Fixes
+
+- A bug
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+-- out/CHANGELOG.md --
+# Changelog
+
+## 1.0.1 (2026-01-01)
+
+### Fixes
+
+- A bug
+
+## 1.0.0
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.0.1"

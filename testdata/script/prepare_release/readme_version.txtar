@@ -1,0 +1,70 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/readme_version (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'initial commit' --author 'Knope <knope@example.com>'
+exec git tag 0.1.0
+exec git commit --allow-empty -m 'feat: A new feature' --author 'Knope <knope@example.com>'
+
+exec remeris release
+! stdout .
+! stderr .
+cmp Cargo.toml out/Cargo.toml
+cmp README.md out/README.md
+cmp CHANGELOG.md out/CHANGELOG.md
+
+-- CHANGELOG.md --
+# Changelog
+-- Cargo.toml --
+[package]
+name = "my-package"
+version = "0.1.0"
+-- README.md --
+# My Package
+
+Install using:
+
+```yaml
+steps:
+  - uses: knope-dev/action@v1
+    with:
+      version: 0.1.0
+```
+-- knope.toml --
+[package]
+versioned_files = [
+  "Cargo.toml",
+  { path = "README.md", regex = "version:\\s+(?<version>\\d+\\.\\d+\\.\\d+)" },
+]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- out/CHANGELOG.md --
+# Changelog
+## 0.1.1 (2026-01-01)
+
+### Features
+
+- A new feature
+-- out/Cargo.toml --
+[package]
+name = "my-package"
+version = "0.1.1"
+-- out/README.md --
+# My Package
+
+Install using:
+
+```yaml
+steps:
+  - uses: knope-dev/action@v1
+    with:
+      version: 0.1.1
+```

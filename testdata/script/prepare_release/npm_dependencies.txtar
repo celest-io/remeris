@@ -1,0 +1,105 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/npm/dependencies (MIT, see testdata/README.md).
+skip 'needs package-lock.json support (milestone M9)'
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'initial' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: Add new feature' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+exec sh -c 'printf %s "$(cat out/package-lock.json)" > package-lock.json.want'
+cmp package-lock.json package-lock.json.want
+exec sh -c 'printf %s "$(cat out/package.json)" > package.json.want'
+cmp package.json package.json.want
+
+-- knope.toml --
+[package]
+versioned_files = [
+  { path = "package.json", dependency = "dependency-name" },
+  { path = "package.json", dependency = "dev-dependency-name" },
+  { path = "package-lock.json", dependency = "dependency-name" },
+  { path = "package-lock.json", dependency = "dev-dependency-name" },
+]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- package-lock.json --
+{
+  "name": "test-package",
+  "version": "1.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "test-package",
+      "version": "1.0.0",
+      "license": "ISC",
+      "dependencies": {
+        "dependency-name": "1.0.0"
+      },
+      "devDependencies": {
+        "dev-dependency-name": "1.0.0"
+      }
+    }
+  }
+}
+-- package.json --
+{
+  "name": "test-package",
+  "version": "1.0.0",
+  "dependencies": {
+    "dependency-name": "1.0.0"
+  },
+  "devDependencies": {
+    "dev-dependency-name": "1.0.0"
+  }
+}
+-- dryrun_stdout.log --
+Would add the following to package.json: dependency-name = 1.1.0, dev-dependency-name = 1.1.0
+Would add the following to package-lock.json: dependency-name = 1.1.0, dev-dependency-name = 1.1.0
+Would add files to git:
+  package.json
+  package-lock.json
+-- out/package-lock.json --
+{
+  "name": "test-package",
+  "version": "1.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "test-package",
+      "version": "1.0.0",
+      "license": "ISC",
+      "dependencies": {
+        "dependency-name": "1.1.0"
+      },
+      "devDependencies": {
+        "dev-dependency-name": "1.1.0"
+      }
+    }
+  }
+}
+-- out/package.json --
+{
+  "name": "test-package",
+  "version": "1.0.0",
+  "dependencies": {
+    "dependency-name": "1.1.0"
+  },
+  "devDependencies": {
+    "dev-dependency-name": "1.1.0"
+  }
+}

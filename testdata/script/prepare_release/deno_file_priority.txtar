@@ -1,0 +1,114 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/deno/file_priority (MIT, see testdata/README.md).
+skip 'needs package discovery (milestone M10) and deno.json support (milestone M9)'
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'fix(@scope/test-package): A bug fix' --author 'Knope <knope@example.com>'
+
+cp deno.json deno.json.orig
+cp packages/test-package/deno.jsonc packages/test-package/deno.jsonc.orig
+cp packages/test-package/package.json packages/test-package/package.json.orig
+
+exec remeris release
+! stdout .
+! stderr .
+cmp deno.lock out/deno.lock
+cmp deno.json deno.json.orig
+cmp packages/test-package/deno.jsonc packages/test-package/deno.jsonc.orig
+cmp packages/test-package/package.json packages/test-package/package.json.orig
+exec sh -c 'printf %s "$(cat out/packages/test-package/deno.json)" > packages/test-package/deno.json.want'
+cmp packages/test-package/deno.json packages/test-package/deno.json.want
+
+-- deno.json --
+{
+  "workspace": [
+    "packages/*"
+  ]
+}
+-- deno.lock --
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@scope/test-package@^1.0.0": "1.0.0"
+  },
+  "jsr": {
+    "@scope/test-package@1.0.0": {
+      "integrity": "sha256-test",
+      "dependencies": []
+    }
+  },
+  "npm": {},
+  "redirects": {},
+  "remote": {},
+  "workspace": {
+    "members": {
+      "packages/test-package": {
+        "dependencies": [
+          "jsr:@scope/test-package@1.0.0"
+        ],
+        "packageJson": {
+          "dependencies": [
+            "jsr:@scope/test-package@^1.0.0"
+          ]
+        }
+      }
+    }
+  }
+}
+-- knope.toml --
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- packages/test-package/deno.json --
+{
+  "name": "@scope/test-package",
+  "version": "1.0.0",
+  "exports": "./mod.ts"
+}
+-- packages/test-package/deno.jsonc --
+{
+  // This should be ignored since deno.json takes priority
+  "name": "@scope/wrong-package",
+  "version": "2.0.0",
+  "exports": "./mod.ts"
+}
+-- packages/test-package/package.json --
+{
+  "name": "@scope/also-wrong-package",
+  "version": "3.0.0"
+}
+-- out/deno.lock --
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@scope/test-package@1": "1.0.1"
+  },
+  "jsr": {
+    "@scope/test-package@1.0.1": {
+      "integrity": "sha256-test"
+    }
+  },
+  "workspace": {
+    "members": {
+      "packages/test-package": {
+        "dependencies": [
+          "jsr:@scope/test-package@1.0.1"
+        ],
+        "packageJson": {
+          "dependencies": [
+            "jsr:@scope/test-package@1.0.1"
+          ]
+        }
+      }
+    }
+  }
+}
+-- out/packages/test-package/deno.json --
+{
+  "name": "@scope/test-package",
+  "version": "1.0.1",
+  "exports": "./mod.ts"
+}

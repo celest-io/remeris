@@ -1,0 +1,118 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/changelog/extra_changelog_sections (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Existing versions' --author 'Knope <knope@example.com>'
+exec git tag first/v1.0.0
+exec git tag second/v0.1.0
+exec git commit --allow-empty -m 'chore: something' -m 'Changelog-Note: A standard note' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'chore(first): something' -m 'Changelog-Note: Standard note first only' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'chore(second): something' -m 'Changelog-Note: Standard note second only' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'chore: something' -m 'Changelog-First-Note: A custom note' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'chore: something' -m 'Special: Special note' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'chore: something' -m 'Whatever: Whatever note' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp Cargo.toml out/Cargo.toml
+cmp FIRST_CHANGELOG.md out/FIRST_CHANGELOG.md
+cmp SECOND_CHANGELOG.md out/SECOND_CHANGELOG.md
+cmp pyproject.toml out/pyproject.toml
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[packages.first]
+versioned_files = ["Cargo.toml"]
+changelog = "FIRST_CHANGELOG.md"
+scopes = ["first", "both"]
+
+[[packages.first.extra_changelog_sections]]
+name = "Notes"
+footers = ["Changelog-First-Note"]
+
+[[packages.first.extra_changelog_sections]]
+name = "Something Special 🚀"
+footers = ["Special", "Whatever"]
+
+[packages.second]
+versioned_files = ["pyproject.toml"]
+changelog = "SECOND_CHANGELOG.md"
+scopes = ["second", "both"]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- pyproject.toml --
+[tool.poetry]
+version = "0.1.0"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.0.1
+Would add the following to pyproject.toml: 0.1.1
+Would add the following to FIRST_CHANGELOG.md:
+## 1.0.1 (2026-01-01)
+
+### Notes
+
+- A standard note
+- Standard note first only
+- A custom note
+
+### Something Special 🚀
+
+- Special note
+- Whatever note
+
+Would add the following to SECOND_CHANGELOG.md:
+## 0.1.1 (2026-01-01)
+
+### Notes
+
+- A standard note
+- Standard note second only
+
+Would add files to git:
+  Cargo.toml
+  pyproject.toml
+  FIRST_CHANGELOG.md
+  SECOND_CHANGELOG.md
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.0.1"
+-- out/FIRST_CHANGELOG.md --
+## 1.0.1 (2026-01-01)
+
+### Notes
+
+- A standard note
+- Standard note first only
+- A custom note
+
+### Something Special 🚀
+
+- Special note
+- Whatever note
+-- out/SECOND_CHANGELOG.md --
+## 0.1.1 (2026-01-01)
+
+### Notes
+
+- A standard note
+- Standard note second only
+-- out/pyproject.toml --
+[tool.poetry]
+version = "0.1.1"

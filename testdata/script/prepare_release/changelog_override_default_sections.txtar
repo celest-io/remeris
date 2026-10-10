@@ -1,0 +1,103 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/changelog/override_default_sections (MIT, see testdata/README.md).
+skip 'needs the Release step (milestone M6)'
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'fix!: Something you hopefully don''t care about' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'fix: Something you do care about' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'feat: Something new' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp CHANGELOG.md out/CHANGELOG.md
+
+-- CHANGELOG.md --
+# Changelog
+
+# 1.0.0 - 2023-01-01
+
+## Added
+
+### Some code
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+extra_changelog_sections = [
+  { name = "🐣 Broke", types = [
+    "major",
+  ] },
+  { name = "🔧 Fixed", types = [
+    "patch",
+  ] }, # Order intentially different than normal
+  { name = "➕ Added", types = [
+    "minor",
+  ] },
+]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 2.0.0
+Would add the following to CHANGELOG.md:
+# 2.0.0 (2026-01-01)
+
+## 🐣 Broke
+
+- Something you hopefully don't care about
+
+## 🔧 Fixed
+
+- Something you do care about
+
+## ➕ Added
+
+- Something new
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+Would create Git tag v2.0.0
+-- out/CHANGELOG.md --
+# Changelog
+
+# 2.0.0 (2026-01-01)
+
+## 🐣 Broke
+
+- Something you hopefully don't care about
+
+## 🔧 Fixed
+
+- Something you do care about
+
+## ➕ Added
+
+- Something new
+
+# 1.0.0 - 2023-01-01
+
+## Added
+
+### Some code
