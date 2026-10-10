@@ -34,8 +34,8 @@ type CreateChangeFile struct{}
 // Type returns "CreateChangeFile".
 func (*CreateChangeFile) Type() string { return "CreateChangeFile" }
 
-// Run asks the questions and writes the file. Packages are written to the front matter in the order they were
-// selected (quirk Q5); an existing file with the same name is overwritten.
+// Run asks the questions and writes the file. Packages are written to the front matter in the order the prompter
+// returns them, which is option order (quirk Q5); an existing file with the same name is overwritten.
 func (*CreateChangeFile) Run(
 	ctx context.Context,
 	rt workflow.RunType[workflow.State],
