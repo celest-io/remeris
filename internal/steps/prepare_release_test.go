@@ -62,7 +62,9 @@ func commits(messages ...string) []git.Commit {
 func prepareDir(t *testing.T, changeFiles map[string]string) {
 	t.Helper()
 	t.Chdir(t.TempDir())
-	t.Setenv("REMERIS_FAKE_DATE", fakeDate)
+	today := steps.Today
+	steps.Today = func() string { return fakeDate }
+	t.Cleanup(func() { steps.Today = today })
 	if err := os.WriteFile(cargoFile, []byte(cargo(v123)), 0o600); err != nil {
 		t.Fatal(err)
 	}

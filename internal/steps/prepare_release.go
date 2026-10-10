@@ -20,9 +20,7 @@ import (
 
 // Names, codes and texts of PrepareRelease, word for word as Knope has them (spec F13).
 const (
-	// fakeDateEnv is the test hook that fixes the date of a release. It is read by releaseDate and nowhere else.
-	fakeDateEnv = "REMERIS_FAKE_DATE"
-	dateLayout  = "2006-01-02"
+	dateLayout = "2006-01-02"
 
 	codeNoPackages = "remeris::no_defined_packages"
 	codeNoRelease  = "remeris::releases::no_release"
@@ -71,7 +69,7 @@ func (s *PrepareRelease) Run(
 		return rt, err
 	}
 
-	date := releaseDate()
+	date := Today()
 	for _, pkg := range state.Packages {
 		list, err := s.gatherChanges(ctx, state, pkg, set)
 		if err != nil {
@@ -125,14 +123,10 @@ func errNoPackages() error {
 			"no supported package files were found in this directory.")
 }
 
-// releaseDate is today's date in UTC as YYYY-MM-DD. Tests fix it with REMERIS_FAKE_DATE; this is the only place
-// that variable is read.
-func releaseDate() string {
-	if fake := os.Getenv(fakeDateEnv); fake != "" {
-		return fake
-	}
-	return time.Now().UTC().Format(dateLayout)
-}
+// Today returns the date of a release: today's date in UTC as YYYY-MM-DD, like Knope. It is a variable so that
+// tests can fix the date; the golden tests set it from REMERIS_FAKE_DATE in cmd/remeris/main_test.go, and the
+// binary itself reads no such variable.
+var Today = func() string { return time.Now().UTC().Format(dateLayout) }
 
 // loadChangeSet reads ".changeset/" when it exists. A file that cannot be read or parsed fails the step.
 func loadChangeSet() (changesets.ChangeSet, error) {

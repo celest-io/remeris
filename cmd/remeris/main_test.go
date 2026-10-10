@@ -7,16 +7,26 @@ import (
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
+
+	"github.com/celest-io/remeris/internal/steps"
 )
 
 // scriptDir holds one directory per suite of golden scripts. Fixtures ported from Knope keep the
 // name of their Knope suite (see testdata/README.md).
 const scriptDir = "../../testdata/script"
 
+// fakeDateEnv fixes the date of a release in the scripts. Only this test hook reads it (spec, testing strategy).
+const fakeDateEnv = "REMERIS_FAKE_DATE"
+
 // TestMain registers the binary as the `remeris` command of the scripts, so no build step is
 // needed and the code under test is the code in this module.
 func TestMain(m *testing.M) {
-	testscript.Main(m, map[string]func(){"remeris": main})
+	testscript.Main(m, map[string]func(){"remeris": func() {
+		if date := os.Getenv(fakeDateEnv); date != "" {
+			steps.Today = func() string { return date }
+		}
+		main()
+	}})
 }
 
 func TestScripts(t *testing.T) {
