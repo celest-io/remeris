@@ -85,8 +85,12 @@ func TestResolveChangelogEntry(t *testing.T) {
 		want    string
 		wantMsg string
 	}{
-		"no packages":  {workflow.State{}, "", msgNoPackages},
-		"two packages": {workflow.State{Packages: []*versioning.Package{pkgWith(), pkgWith()}}, "", "Too many packages defined"},
+		"no packages": {workflow.State{}, "", msgNoPackages},
+		"two packages": {
+			workflow.State{Packages: []*versioning.Package{pkgWith(), pkgWith()}},
+			"",
+			"Too many packages defined",
+		},
 		"pending wins": {
 			workflow.State{Packages: []*versioning.Package{pkgWith()}, PendingActions: pending("first", "second")},
 			"first", "",
