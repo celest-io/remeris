@@ -76,18 +76,18 @@ func TestCreateChangeFile(t *testing.T) {
 				{Kind: prompt.KindSelect, Message: "What type of change is this for foo?", Options: builtins}, summary,
 			},
 		},
-		"selection order and custom types": {
+		"selection in option order and custom types": {
 			names:    []string{"a", "b", "c"},
 			sections: custom,
 			answers:  []prompt.Answer{{Indexes: []int{2, 0}}, {Index: 3}, {Index: 0}, {Text: changeSummary}},
-			want:     "---\nc: docs\na: major\n---\n\n# Add a thing!\n",
+			want:     "---\na: docs\nc: major\n---\n\n# Add a thing!\n",
 			asked: []prompt.Asked{
 				{
 					Kind: prompt.KindMultiSelect, Message: "Which packages does this change affect?",
 					Options: []string{"a", "b", "c"}, AtLeastOne: "At least one package must be selected",
 				},
-				{Kind: prompt.KindSelect, Message: "What type of change is this for c?", Options: withDocs},
 				{Kind: prompt.KindSelect, Message: "What type of change is this for a?", Options: withDocs},
+				{Kind: prompt.KindSelect, Message: "What type of change is this for c?", Options: withDocs},
 				summary,
 			},
 		},
