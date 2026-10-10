@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	addA    = "a.txt"
-	addB    = "b.txt"
-	addDirA = "dir/a.txt"
+	addA     = "a.txt"
+	addB     = "b.txt"
+	addDirA  = "dir/a.txt"
+	addDeepD = "sub/deep/d.txt"
 )
 
 // runAddFilesContract stages paths in a repository prepared by setup and compares `git diff --cached --name-status`.
@@ -167,6 +168,42 @@ func runAddFilesContract(t *testing.T, open func(t *testing.T, dir string) Git) 
 			paths:   []string{"top.txt", addDirA},
 			want:    "M\tdir/a.txt\nM\ttop.txt\n",
 		},
+		"file replaced by a directory": {
+			setup: func(r *testRepo) {
+				r.commitFiles("one", authorTest, map[string]string{addB: "b", addA: "a"})
+				r.removeAll(addB)
+				r.mkdirWrite("b.txt/inner.txt", "inner")
+			},
+			paths: []string{addB, "b.txt/inner.txt"},
+			want:  "D\tb.txt\nA\tb.txt/inner.txt\n",
+		},
+		"file replaced by a directory, staged by the file path, which covers the directory now at it": {
+			setup: func(r *testRepo) {
+				r.commitFiles("one", authorTest, map[string]string{addB: "b", addA: "a"})
+				r.removeAll(addB)
+				r.mkdirWrite("b.txt/inner.txt", "inner")
+			},
+			paths: []string{addB},
+			want:  "D\tb.txt\nA\tb.txt/inner.txt\n",
+		},
+		"directory replaced by a file, staged by the parent": {
+			setup: func(r *testRepo) {
+				r.commitFiles("one", authorTest, map[string]string{addDeepD: "d", "sub/keep.txt": "k"})
+				r.removeAll("sub/deep")
+				r.write("sub/deep", "now a file")
+			},
+			paths: []string{"sub"},
+			want:  "A\tsub/deep\nD\tsub/deep/d.txt\n",
+		},
+		"directory replaced by a file, staged by the old file path": {
+			setup: func(r *testRepo) {
+				r.commitFiles("one", authorTest, map[string]string{addDeepD: "d", "sub/keep.txt": "k"})
+				r.removeAll("sub/deep")
+				r.write("sub/deep", "now a file")
+			},
+			paths: []string{addDeepD},
+			want:  "D\tsub/deep/d.txt\n",
+		},
 		"repository without commits": {
 			setup: func(r *testRepo) { r.write(addA, "a") },
 			paths: []string{addA},
@@ -182,6 +219,7 @@ func runAddFilesContract(t *testing.T, open func(t *testing.T, dir string) Git) 
 			if err := open(t, dir).AddFiles(context.Background(), tt.paths); err != nil {
 				t.Fatalf("AddFiles: %v", err)
 			}
+			r.git("write-tree") // the index must stay valid: no file and directory entries with the same name
 			got := r.git("-c", "core.quotepath=false", "diff", "--cached", "--name-status", "--no-renames")
 			if got != tt.want {
 				t.Fatalf("staged = %q, want %q", got, tt.want)
@@ -234,4 +272,21 @@ func TestGoGitAddFiles(t *testing.T) {
 	t.Parallel()
 	runAddFilesContract(t, openGoGit)
 	runAddFilesErrors(t, openGoGit)
+}
+
+// removeAll deletes a file or a directory tree of the working tree.
+func (r *testRepo) removeAll(name string) {
+	r.t.Helper()
+	if err := os.RemoveAll(filepath.Join(r.dir, name)); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+// mkdirWrite writes a file, creating its parent directories.
+func (r *testRepo) mkdirWrite(name, content string) {
+	r.t.Helper()
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(r.dir, name)), 0o700); err != nil {
+		r.t.Fatal(err)
+	}
+	r.write(name, content)
 }

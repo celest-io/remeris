@@ -2,19 +2,20 @@ package git
 
 import (
 	"context"
+	"errors"
 	"path"
 	"slices"
 	"strings"
 
 	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/format/index"
 )
 
 // AddFiles stages paths (spec F9.4) like the CLI backend: modified and untracked files are added, deleted tracked
 // files are removed from the index, and ignored untracked files and paths that match nothing are skipped.
 //
 // go-git's status already leaves out the ignored untracked files, so the staged entries are the status entries
-// found under the paths. Worktree.Add is called per file and Worktree.Remove for the deleted ones (the file is
-// already gone, so only the index changes).
+// found under the paths. Worktree.Add is called per file; the deleted ones are removed from the index first.
 func (g *GoGit) AddFiles(ctx context.Context, paths []string) error {
 	if len(paths) == 0 {
 		return nil
@@ -43,21 +44,50 @@ func (g *GoGit) AddFiles(ctx context.Context, paths []string) error {
 		names = append(names, name)
 	}
 	slices.Sort(names) // a stable order for the index writes
+	var deleted, changed []string
 	for _, name := range names {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
 		if status[name].Worktree == gogit.Unmodified || !underAny(name, roots) {
 			continue
 		}
 		if status[name].Worktree == gogit.Deleted {
-			_, err = wt.Remove(name)
+			deleted = append(deleted, name)
 		} else {
-			_, err = wt.Add(name)
+			changed = append(changed, name)
 		}
-		if err != nil {
+	}
+	// Deleted entries go first, straight out of the index: when a path swaps between file and directory
+	// (b.txt gone, b.txt/inner.txt new), the stale entry must not be in the index when its replacement is added,
+	// and Worktree.Remove would try to delete the parents of a file that is already gone.
+	if err := removeFromIndex(repo, deleted); err != nil {
+		return err
+	}
+	for _, name := range changed {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, err := wt.Add(name); err != nil {
 			return unknownGitError(err)
 		}
+	}
+	return nil
+}
+
+// removeFromIndex drops the entries for names in one index write. Names that are not in the index are ignored.
+func removeFromIndex(repo *gogit.Repository, names []string) error {
+	if len(names) == 0 {
+		return nil
+	}
+	idx, err := repo.Storer.Index()
+	if err != nil {
+		return unknownGitError(err)
+	}
+	for _, name := range names {
+		if _, err := idx.Remove(name); err != nil && !errors.Is(err, index.ErrEntryNotFound) {
+			return unknownGitError(err)
+		}
+	}
+	if err := repo.Storer.SetIndex(idx); err != nil {
+		return unknownGitError(err)
 	}
 	return nil
 }
