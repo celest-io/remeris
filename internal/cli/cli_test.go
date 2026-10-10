@@ -320,7 +320,9 @@ func TestMainRendersErrors(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := Main(context.Background(), []string{rootName, wfPrep}, &out, &errOut)
 
-	want := "Error: Problem with workflow prep\n  ╰─▶ Step PrepareRelease is not implemented yet (milestone M5)\n"
+	want := "Error: Problem with workflow prep\n  ╰─▶ No packages to operate on\n" +
+		"      help: There must be at least one package for remeris to work with, " +
+		"no supported package files were found in this directory.\n"
 	if code != 1 || errOut.String() != want {
 		t.Errorf("code = %d, stderr = %q, want %q", code, errOut.String(), want)
 	}

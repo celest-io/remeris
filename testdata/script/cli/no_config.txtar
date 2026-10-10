@@ -32,4 +32,5 @@ stdout '--prerelease-label'
 Error: --generate is not implemented yet (milestone M10)
 -- release.log --
 Error: Problem with workflow release
-  ╰─▶ Step PrepareRelease is not implemented yet (milestone M5)
+  ╰─▶ No packages to operate on
+      help: There must be at least one package for remeris to work with, no supported package files were found in this directory.

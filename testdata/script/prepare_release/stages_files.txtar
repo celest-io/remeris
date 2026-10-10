@@ -1,0 +1,68 @@
+# Remeris' own: a real run stages the files it wrote and the change files it removed (spec F13.4), and nothing
+# else. The change file is kept in the index as a deletion.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add Cargo.toml CHANGELOG.md notes.txt .changeset/fix.md
+exec git commit -m 'chore: initial'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: Something new'
+cp notes.txt notes.orig
+exec sh -c 'echo changed >> notes.txt'
+
+exec remeris release
+! stdout .
+exec git status --porcelain
+stdout '^M  CHANGELOG.md$'
+stdout '^M  Cargo.toml$'
+stdout '^D  .changeset/fix.md$'
+stdout '^ M notes.txt$'
+! exists .changeset/fix.md
+cmp CHANGELOG.md out/CHANGELOG.md
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- CHANGELOG.md --
+# Changelog
+
+## 1.0.0
+
+Old.
+-- notes.txt --
+untouched
+-- .changeset/fix.md --
+---
+default: patch
+---
+
+# A fix from a change file
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- out/CHANGELOG.md --
+# Changelog
+
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- Something new
+
+### Fixes
+
+- A fix from a change file
+
+## 1.0.0
+
+Old.

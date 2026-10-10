@@ -1,0 +1,51 @@
+# Remeris' own: a real run fails when nothing causes a version increase, a dry run does not (spec F13), and
+# allow_empty turns the error off.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git commit --allow-empty -m 'feat: Old feat'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'docs: Update README'
+
+exec remeris --dry-run release
+! stdout .
+! stderr .
+
+! exec remeris release
+! stdout .
+cmp stderr stderr.log
+
+exec remeris allow-empty
+! stdout .
+cmp Cargo.toml Cargo.toml.orig
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- Cargo.toml.orig --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows]]
+name = "allow-empty"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+allow_empty = true
+-- stderr.log --
+Error: Problem with workflow release
+  ╰─▶ No packages are ready to release
+      help: The `PrepareRelease` step will not complete if no changes cause a package's version to be increased.

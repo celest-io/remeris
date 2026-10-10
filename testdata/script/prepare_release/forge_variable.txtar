@@ -1,0 +1,54 @@
+# Remeris' own: a change template that needs forge data fails without [github] when there are changes (spec F13),
+# and is not built yet with it (milestone M7). Without changes nothing is checked.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git commit --allow-empty -m 'chore: initial'
+exec git tag v1.0.0
+
+exec remeris --dry-run release
+! stdout .
+
+exec git commit --allow-empty -m 'feat: Something new'
+! exec remeris --dry-run release
+cmp stderr no_github.log
+
+cp knope.github knope.toml
+! exec remeris --dry-run release
+stderr 'not implemented yet \(milestone M7\)'
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+
+[release_notes]
+change_templates = ["- $summary by @$pr_author_login"]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- knope.github --
+[package]
+versioned_files = ["Cargo.toml"]
+
+[github]
+owner = "o"
+repo = "r"
+
+[release_notes]
+change_templates = ["- $summary (#$pr_number)"]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- no_github.log --
+Error: Problem with workflow release
+  ╰─▶ You must configure [github] to use the variable $pr_author_login in a change template

@@ -1,0 +1,101 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/scopes/no_scopes (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: No scope feature' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'feat(scope)!: New breaking feature with a scope' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp Cargo.toml out/Cargo.toml
+cmp FIRST_CHANGELOG.md out/FIRST_CHANGELOG.md
+cmp SECOND_CHANGELOG.md out/SECOND_CHANGELOG.md
+cmp pyproject.toml out/pyproject.toml
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[packages.first]
+versioned_files = ["Cargo.toml"]
+changelog = "FIRST_CHANGELOG.md"
+
+[packages.second]
+versioned_files = ["pyproject.toml"]
+changelog = "SECOND_CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- pyproject.toml --
+[tool.poetry]
+version = "0.1.0"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 2.0.0
+Would add the following to pyproject.toml: 0.2.0
+Would add the following to FIRST_CHANGELOG.md:
+## 2.0.0 (2026-01-01)
+
+### Breaking Changes
+
+- New breaking feature with a scope
+
+### Features
+
+- No scope feature
+
+Would add the following to SECOND_CHANGELOG.md:
+## 0.2.0 (2026-01-01)
+
+### Breaking Changes
+
+- New breaking feature with a scope
+
+### Features
+
+- No scope feature
+
+Would add files to git:
+  Cargo.toml
+  pyproject.toml
+  FIRST_CHANGELOG.md
+  SECOND_CHANGELOG.md
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "2.0.0"
+-- out/FIRST_CHANGELOG.md --
+## 2.0.0 (2026-01-01)
+
+### Breaking Changes
+
+- New breaking feature with a scope
+
+### Features
+
+- No scope feature
+-- out/SECOND_CHANGELOG.md --
+## 0.2.0 (2026-01-01)
+
+### Breaking Changes
+
+- New breaking feature with a scope
+
+### Features
+
+- No scope feature
+-- out/pyproject.toml --
+[tool.poetry]
+version = "0.2.0"

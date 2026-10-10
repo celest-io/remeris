@@ -18,6 +18,7 @@ UPDATE_SCRIPTS=1 go test ./cmd/remeris      # rewrite the files compared with cm
 | `cli` | Remeris' own scripts: flags, help, errors, dry run, `--validate`, default workflows. |
 | `bump_version` | The `BumpVersion` step, ported from Knope's `bump_version` suite (`<dir>_<case>.txtar`). |
 | `command` | The `Command` step. `shell` and `replace_version` are ported from Knope; the rest are ours. |
+| `prepare_release` | The `PrepareRelease` step. `changesets_*`, `enable_prerelease_*`, `second_prerelease`, `release_after_prerelease`, `override_*`, `scopes_*`, `multiple_packages` (skipped: needs M9), `allow_empty` (skipped: needs M10) and `no_version_change` (skipped: needs M6) are ported from Knope's `prepare_release` suite (`<dir>_<case>.txtar`); `no_packages_ready`, `stages_files` and `forge_variable` are ours. Scripts set `REMERIS_FAKE_DATE=2026-01-01` and write that date where Knope has `[DATE]`; `rstrip` (defined in `cmd/remeris/main_test.go`) removes trailing spaces from a dry run's output before it is compared. |
 
 `--help` is compared by content, not byte for byte: its layout comes from urfave/cli and differs from
 clap's (spec F3.1).
