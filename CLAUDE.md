@@ -112,11 +112,10 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 
 ## Code layout
 
-Milestones M0 to M4 are in place: `remeris <workflow>` runs `Command`, `BumpVersion` and `CreateChangeFile`
-steps, with the SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod, regex), packages,
-Git tags, conventional commits, change files, prompts and the `Version` variable. Steps that are not built yet fail
-with `Step X is not implemented yet (milestone Mx)`. `PrepareRelease` (M5) is in progress in the stack of open PRs
-(issue #5); forges, discovery, `--generate` and `--upgrade` come later (see spec section 1).
+Milestones M0 to M5 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
+`PrepareRelease` steps, with the SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod,
+regex), packages, Git tags and staging, conventional commits, change files, changelogs, prompts and the `Version`
+variable. Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; forges, discovery, `--generate` and `--upgrade` come later (see spec section 1).
 
 ```
 cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests
@@ -144,8 +143,7 @@ pkg/versioning/     pure core (the knope-versioning equivalent): no file system,
 ```
 
 Imports flow one way: `workflow` imports only `diag`, `internal/git`, `internal/prompt` and `pkg/versioning/...`,
-then `variables`,
-`steps`, `config`, `project`, `cli`. Keep it so.
+then `variables`, `steps`, `config`, `project`, `cli`. Keep it so.
 `pkg/versioning` may import `internal/diag` (pure) and nothing else from `internal/`.
 Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.
 
@@ -180,6 +178,8 @@ Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.
 ### Tests
 
 - Unit tests sit next to the code. `internal/cli` tests build the command tree in process.
+- `steps.Today` gives the release date. Tests replace it; in golden scripts `env REMERIS_FAKE_DATE=2026-01-01` sets
+  it through the hook in `cmd/remeris/main_test.go`, and the binary reads no such variable.
 - Golden tests are `.txtar` scripts in `testdata/script/<suite>/`, run by `cmd/remeris/main_test.go` with the
   binary registered as `remeris`. `UPDATE_SCRIPTS=1 go test ./cmd/remeris` rewrites files compared with
   `cmp`; read the diff before committing. `--help` is compared by content, not byte for byte.
