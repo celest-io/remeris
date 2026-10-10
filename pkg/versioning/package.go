@@ -114,8 +114,9 @@ func (p *Package) TakeOverride() *semver.Version {
 	return o
 }
 
-// Clone returns a deep copy of the package: changing the copy (SetVersion, the history, the slices) does not
-// change p. Workflows run on clones so that one cannot see another's changes (--validate).
+// Clone returns a copy of the package: changing the copy (SetVersion, the history, the slices) does not
+// change p. Workflows run on clones so that one cannot see another's changes (--validate). ReleaseNotes is
+// shared: ApplyChanges replaces its Changelog instead of changing it.
 func (p *Package) Clone() *Package {
 	c := *p
 	c.Files = slices.Clone(p.Files)
