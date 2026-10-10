@@ -39,6 +39,9 @@ func TestTerminalNotATTY(t *testing.T) {
 				d.Help() != "This step requires user input, but no user input was provided. Try running the step again." {
 				t.Errorf("diagnostic = %q %q %q", d.Error(), d.Code(), d.Help())
 			}
+			if rel := d.Related(); len(rel) != 1 || rel[0].Error() != "The input device is not a TTY" {
+				t.Errorf("related = %v, want the not-a-TTY cause shown beneath", rel)
+			}
 			if out.Len() != 0 {
 				t.Errorf("wrote %q before failing", out.String())
 			}

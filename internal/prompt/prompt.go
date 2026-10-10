@@ -33,7 +33,12 @@ type Prompter interface {
 }
 
 // Error returns the diagnostic every prompt failure uses: Knope's "Failed to get user input" with its help
-// text. cause says why (for example that the input is not a terminal) and stays reachable with errors.Is/As.
+// text. cause says why (for example that the input is not a terminal): it is rendered beneath the message, as
+// Knope shows inquire's error, and stays reachable with errors.Is/As.
 func Error(cause error) *diag.Error {
-	return diag.New(errorMessage).WithCode(codePrompt).WithHelp(errorHelp).WithCause(cause)
+	d := diag.New(errorMessage).WithCode(codePrompt).WithHelp(errorHelp).WithCause(cause)
+	if cause != nil {
+		d = d.WithRelated(cause)
+	}
+	return d
 }
