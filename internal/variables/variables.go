@@ -7,6 +7,7 @@ import (
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/action"
 )
 
 // Variable names a value remeris can compute. Exactly these three exist.
@@ -82,7 +83,8 @@ type PackageScope struct{}
 //
 // Version needs exactly one package and is that package's latest version (spec F4.4). A nil scope means the
 // single-package rules; a scope is the hook for per-package variables (Phase 2). ChangelogEntry applies the same
-// package rules, then fails until the changelog lands (milestone M5). There is no selected issue yet.
+// package rules, then is the notes of the first pending CreateRelease or the changelog entry of the latest version.
+// There is no selected issue yet.
 func Resolve(state workflow.State, v Variable, _ *PackageScope) (string, error) {
 	switch v {
 	case Version:
@@ -96,17 +98,40 @@ func Resolve(state workflow.State, v Variable, _ *PackageScope) (string, error) 
 		}
 		return latest.String(), nil
 	case ChangelogEntry:
-		if _, err := onlyPackage(state); err != nil {
-			return "", err
-		}
-		return "", diag.New("The ChangelogEntry variable is not implemented yet (milestone M5)").
-			WithCode("remeris::not_implemented")
+		return changelogEntry(state)
 	case IssueBranch:
 		return "", diag.New("No issue selected").
 			WithCode("remeris::no_issue_selected").
 			WithHelp("You must select an issue with a Select*Issue step before using the IssueBranch variable.")
 	}
 	return "", diag.Newf("Unknown variable %q", string(v))
+}
+
+// changelogEntry is the value of ChangelogEntry (spec F4.4): the notes of the first pending CreateRelease, or
+// else the changelog section of the package's latest version. It reads nothing from disk: the changelog is the
+// content the loader read, or the one a PrepareRelease step updated.
+func changelogEntry(state workflow.State) (string, error) {
+	pkg, err := onlyPackage(state)
+	if err != nil {
+		return "", err
+	}
+	for _, a := range state.PendingActions {
+		if a.Kind == action.KindCreateRelease && a.Release != nil {
+			return a.Release.Notes, nil
+		}
+	}
+	latest, ok := pkg.LatestVersion()
+	if !ok {
+		return "", diag.New("Could not determine version of package").WithCode("remeris::variables::no_version")
+	}
+	if c := pkg.ReleaseNotes.Changelog; c != nil {
+		if release, found := c.GetRelease(latest); found {
+			return release.Notes, nil
+		}
+	}
+	return "", diag.New("Could not find a changelog entry for version " + latest.String()).
+		WithCode("remeris::variables::no_changelog_entry").
+		WithURL("https://knope.tech/reference/concepts/changelog/#versions")
 }
 
 // onlyPackage returns the single package of the state, or the error Knope gives for none or several.
