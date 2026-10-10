@@ -41,6 +41,9 @@ type State struct {
 	Prompter prompt.Prompter
 	// IgnoreConventionalCommits is the `ignore_conventional_commits` setting of `[changes]`.
 	IgnoreConventionalCommits bool
+	// GitHubConfigured is true when the configuration has a `[github]` table. PrepareRelease needs it for change
+	// templates that use forge data.
+	GitHubConfigured bool
 }
 
 // RunType says whether a step may change the world. A dry run must do no writes, make no network
