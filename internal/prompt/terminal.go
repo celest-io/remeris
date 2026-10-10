@@ -7,22 +7,21 @@ import (
 	"os"
 
 	"charm.land/huh/v2"
-	"github.com/charmbracelet/x/term"
+	"golang.org/x/term"
 )
 
 var (
 	// ErrNotTTY is the cause when the input is not a terminal. It is inquire's NotTTY message.
 	ErrNotTTY = errors.New("The input device is not a TTY") //nolint:revive,staticcheck // Knope's exact wording.
-	// ErrInterrupted is the cause when the user interrupts a prompt (Ctrl-C or Esc). It is inquire's
-	// Interrupted message; huh does not tell the two keys apart.
+	// ErrInterrupted is the cause when the user interrupts a prompt (Ctrl-C). It is inquire's
+	// Interrupted message.
 	ErrInterrupted = errors.New("Operation was interrupted by the user") //nolint:revive,staticcheck // Knope's wording.
 	errNoOptions   = errors.New("there is nothing to choose from")
 )
 
 type terminal struct {
-	in         io.Reader
-	out        io.Writer
-	accessible bool
+	in  io.Reader
+	out io.Writer
 }
 
 // NewTerminal returns the interactive Prompter. Like Knope (inquire), it refuses to prompt when in is not a
@@ -31,35 +30,33 @@ func NewTerminal(in io.Reader, out io.Writer) Prompter {
 	return &terminal{in: in, out: out}
 }
 
-// NewAccessible returns a Prompter that uses huh's line-based accessible mode (no cursor movement, answers are
-// typed as numbers or text, one per line). It works on any reader, terminal or not, so it suits screen readers
-// and scripted input. Knope has no equivalent: NewTerminal never selects it on its own.
-func NewAccessible(in io.Reader, out io.Writer) Prompter {
-	return &terminal{in: in, out: out, accessible: true}
-}
-
-// ready fails with ErrNotTTY when the input is not a terminal. Accessible mode reads plain lines, so it only
-// needs a terminal for a secret: huh reads that one with terminal calls and would silently return "" otherwise.
-func (t *terminal) ready(secret bool) error {
-	if t.accessible && !secret {
-		return nil
-	}
-	if f, ok := t.in.(*os.File); ok && term.IsTerminal(f.Fd()) {
+// ready fails with ErrNotTTY when the input is not a terminal.
+func (t *terminal) ready() error {
+	if f, ok := t.in.(*os.File); ok && term.IsTerminal(int(f.Fd())) { //nolint:gosec // file descriptors fit in an int.
 		return nil
 	}
 	return Error(ErrNotTTY)
 }
 
-func (t *terminal) run(ctx context.Context, field huh.Field, secret bool) error {
-	if err := t.ready(secret); err != nil {
+// runError maps the error of a finished form to the package's diagnostic. huh reports a cancelled or expired
+// context as ErrTimeout (its program is killed), so the context's own error is the cause when ctx is done.
+func runError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return Error(ctxErr)
+	}
+	if errors.Is(err, huh.ErrUserAborted) {
+		return Error(ErrInterrupted)
+	}
+	return Error(err)
+}
+
+func (t *terminal) run(ctx context.Context, field huh.Field) error {
+	if err := t.ready(); err != nil {
 		return err
 	}
-	form := huh.NewForm(huh.NewGroup(field)).WithInput(t.in).WithOutput(t.out).WithAccessible(t.accessible)
+	form := huh.NewForm(huh.NewGroup(field)).WithInput(t.in).WithOutput(t.out)
 	if err := form.RunWithContext(ctx); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return Error(ErrInterrupted)
-		}
-		return Error(err)
+		return runError(ctx, err)
 	}
 	return nil
 }
@@ -77,7 +74,7 @@ func (t *terminal) Select(ctx context.Context, message string, options []string)
 		return 0, Error(errNoOptions)
 	}
 	var idx int
-	err := t.run(ctx, huh.NewSelect[int]().Title(message).Options(indexedOptions(options)...).Value(&idx), false)
+	err := t.run(ctx, huh.NewSelect[int]().Title(message).Options(indexedOptions(options)...).Value(&idx))
 	return idx, err
 }
 
@@ -93,7 +90,7 @@ func (t *terminal) MultiSelect(ctx context.Context, message string, options []st
 			}
 			return nil
 		})
-	if err := t.run(ctx, field, false); err != nil {
+	if err := t.run(ctx, field); err != nil {
 		return nil, err
 	}
 	return idx, nil
@@ -101,12 +98,12 @@ func (t *terminal) MultiSelect(ctx context.Context, message string, options []st
 
 func (t *terminal) Input(ctx context.Context, message, help string) (string, error) {
 	var answer string
-	err := t.run(ctx, huh.NewInput().Title(message).Description(help).Value(&answer), false)
+	err := t.run(ctx, huh.NewInput().Title(message).Description(help).Value(&answer))
 	return answer, err
 }
 
 func (t *terminal) Password(ctx context.Context, message string) (string, error) {
 	var answer string
-	err := t.run(ctx, huh.NewInput().Title(message).EchoMode(huh.EchoModeNone).Value(&answer), true)
+	err := t.run(ctx, huh.NewInput().Title(message).EchoMode(huh.EchoModeNone).Value(&answer))
 	return answer, err
 }

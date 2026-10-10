@@ -118,7 +118,10 @@ func (s *Scripted) MultiSelect(ctx context.Context, message string, options []st
 			return nil, Error(fmt.Errorf("%w: index %d out of range for %q", ErrScript, i, message))
 		}
 	}
-	return slices.Clone(a.Indexes), nil
+	// The real prompt returns the chosen indexes in option order, once each.
+	chosen := slices.Clone(a.Indexes)
+	slices.Sort(chosen)
+	return slices.Compact(chosen), nil
 }
 
 // Input implements Prompter.

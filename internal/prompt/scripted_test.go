@@ -3,6 +3,7 @@ package prompt_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/celest-io/remeris/internal/prompt"
@@ -123,5 +124,14 @@ func TestScriptedFailures(t *testing.T) {
 				t.Fatalf("err = %v, want it to wrap %v", err, tc.is)
 			}
 		})
+	}
+}
+
+func TestScriptedMultiSelectSortsAndDeduplicates(t *testing.T) {
+	t.Parallel()
+	s := prompt.NewScripted(prompt.Answer{Indexes: []int{2, 0, 2, 1, 0}})
+	got, err := s.MultiSelect(context.Background(), "q", abc, msgAtLeast)
+	if err != nil || !slices.Equal(got, []int{0, 1, 2}) {
+		t.Fatalf("MultiSelect = %v, %v; want [0 1 2]", got, err)
 	}
 }
