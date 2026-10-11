@@ -113,7 +113,8 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 ## Code layout
 
 Milestone M0 is in place: `remeris <workflow>` runs `Command` steps and every other step fails with
-`Step X is not implemented yet (milestone Mx)`. Not built yet: semver, versioned files, packages, git,
+`Step X is not implemented yet (milestone Mx)`. The pure versioning core is growing under
+`pkg/versioning` (milestones M1 to M5, tracked in issue #5). Not built yet: versioned files, packages, git,
 changes, forges, prompts, discovery, `--generate`, `--upgrade` (see spec section 1).
 
 ```
@@ -127,9 +128,12 @@ internal/variables/ Template and Variable substitution
 internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines
 internal/fsx/       dry-run aware file writes
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
+pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
+  semver/           full SemVer 2.0.0 Version: Parse, String, Compare (precedence), Equal
 ```
 
 Imports flow one way: `workflow` imports only `diag`, then `variables`, `steps`, `config`, `cli`. Keep it so.
+`pkg/versioning` may import `internal/diag` (pure) and nothing else from `internal/`.
 Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.
 
 ### Adding or finishing a step
