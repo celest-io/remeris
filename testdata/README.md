@@ -44,7 +44,9 @@ are © Triax Technologies and Dylan Anthony, used under the MIT License:
 > IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
 > THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-A ported script starts with a comment naming its Knope source directory.
+A ported script starts with a comment naming its Knope source directory. Unit tests under `pkg/` also reuse a few
+Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/testdata/` (from
+`prepare_release/{npm,multiple_packages,tauri_conf_json}`); they carry the same credit.
 
 ### Conversion rules
 

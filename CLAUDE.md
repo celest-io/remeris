@@ -129,7 +129,11 @@ internal/steps/     one file per step (stubs for the unbuilt ones); steps/comman
 internal/fsx/       dry-run aware file writes
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
-  semver/           full SemVer 2.0.0 Version: Parse, String, Compare (precedence), Equal
+  semver/           full SemVer 2.0.0 Version: Parse, Compare, rules, bumps, PackageVersions
+  action/           Action (WriteToFile, RemoveFile, AddTag, CreateRelease), Release, ReleaseTag: a leaf package
+  versionedfile/    Format table, Config, the File interface and one file per format
+  internal/tomledit/ format-preserving TOML editor on go-toml/v2 unstable: key lookup, byte-span edits
+  internal/jsonedit/ ordered JSON tree printed exactly like serde_json to_string_pretty (package.json & co.)
 ```
 
 Imports flow one way: `workflow` imports only `diag`, then `variables`, `steps`, `config`, `cli`. Keep it so.
