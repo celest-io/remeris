@@ -1,0 +1,73 @@
+# --validate applies --override-version while it creates the state, before it validates, as Knope does.
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add .
+exec git commit -m 'feat: Existing feature'
+exec git tag a/v1.0.0
+exec git tag b/v1.0.0
+
+# An unknown package is reported on its own, before any workflow is validated.
+! exec remeris --validate x --override-version zz=1.0.0
+! stdout .
+cmp stderr unknown.log
+
+# A bad version is an error too.
+! exec remeris --validate x --override-version a=bad
+! stdout .
+cmp stderr bad.log
+
+# A comma does not separate values: "a=2.0.0,b=3.0.0" is one invalid version, with --validate or without.
+! exec remeris --validate x --override-version a=2.0.0,b=3.0.0
+! stdout .
+cmp stderr bad.log
+! exec remeris --dry-run x --override-version a=2.0.0,b=3.0.0
+cmp stderr bad.log
+
+# Overriding only a leaves b without a pre-release, so the Release rule of workflow y fails.
+! exec remeris --validate x --override-version a=2.0.0
+! stdout .
+cmp stderr release.log
+
+# Without any override, y fails for both packages.
+! exec remeris --validate
+! stdout .
+cmp stderr release.log
+
+-- a/Cargo.toml --
+[package]
+name = "a"
+version = "1.0.0"
+-- b/Cargo.toml --
+[package]
+name = "b"
+version = "1.0.0"
+-- knope.toml --
+[packages.a]
+versioned_files = ["a/Cargo.toml"]
+
+[packages.b]
+versioned_files = ["b/Cargo.toml"]
+
+[[workflows]]
+name = "x"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Major"
+
+[[workflows]]
+name = "y"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Release"
+-- unknown.log --
+Error: Unknown package(s) to override: zz
+-- bad.log --
+Error: Found invalid semantic version invalid digit found in string
+  help: The version must be a valid Semantic Version
+-- release.log --
+Error: There are problems with the defined workflows
+  ╰─▶ Problem with workflow y
+      ╰─▶ No prerelease version found, but a Release rule was requested

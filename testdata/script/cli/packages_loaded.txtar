@@ -1,0 +1,91 @@
+# Packages and their versioned files are loaded before the workflow runs, in a real run, a dry run and
+# --validate alike, and a workflow without package steps still works. Git is optional: with no repository
+# the tag list is empty and loading still succeeds.
+exec remeris hello
+cmp stdout stdout.log
+
+exec remeris --dry-run hello
+cmp stdout dry.log
+
+exec remeris --validate
+! stdout .
+! stderr .
+
+# Two packages sharing a file parse it twice and still load.
+cp shared.toml knope.toml
+exec remeris hello
+cmp stdout stdout.log
+
+# Files that disagree on the version are reported before the workflow runs.
+cp inconsistent.toml knope.toml
+! exec remeris hello
+! stdout .
+cmp stderr inconsistent.log
+
+# A file that cannot be read.
+cp unreadable.toml knope.toml
+! exec remeris hello
+! stdout .
+cmp stderr unreadable.log
+
+-- knope.toml --
+[package]
+versioned_files = [{ path = "VERSION.txt", regex = "v(?<version>\\d+\\.\\d+\\.\\d+)" }]
+
+[[workflows]]
+name = "hello"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo hello"
+-- shared.toml --
+[packages.a]
+versioned_files = [{ path = "VERSION.txt", regex = "v(?<version>\\d+\\.\\d+\\.\\d+)" }]
+
+[packages.b]
+versioned_files = [{ path = "VERSION.txt", regex = "v(?<version>\\d+\\.\\d+\\.\\d+)" }]
+
+[[workflows]]
+name = "hello"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo hello"
+-- inconsistent.toml --
+[package]
+versioned_files = [
+  { path = "VERSION.txt", regex = "v(?<version>\\d+\\.\\d+\\.\\d+)" },
+  { path = "OTHER.txt", regex = "v(?<version>\\d+\\.\\d+\\.\\d+)" },
+]
+
+[[workflows]]
+name = "hello"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo hello"
+-- unreadable.toml --
+[package]
+versioned_files = [{ path = "DIR", regex = "v(?<version>\\d+\\.\\d+\\.\\d+)" }]
+
+[[workflows]]
+name = "hello"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo hello"
+-- VERSION.txt --
+v1.2.3
+-- OTHER.txt --
+v2.0.0
+-- DIR/keep --
+-- stdout.log --
+hello
+-- dry.log --
+Would run echo hello
+-- inconsistent.log --
+Error: Found inconsistent versions in package: VERSION.txt had 1.2.3 and OTHER.txt had 2.0.0
+  help: All files in a package must have the same version
+-- unreadable.log --
+Error: Error reading from DIR: is a directory
+  help: Make sure you have permission to read this file.

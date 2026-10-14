@@ -1,0 +1,26 @@
+# Ported from knope crates/knope/tests/prepare_release/unknown_versioned_file_format
+# A versioned file with a name remeris does not know fails at config load. The help lists the
+# supported names instead of Knope's one-line help (testdata/deviations.md).
+! exec remeris release
+! stdout .
+stderr '^Error: Problem with versioned file$'
+stderr '^  ╰─▶ Unknown file: setup\.py$'
+stderr '^      help: remeris identifies the type of file based on its name\. Supported file names: .*Cargo\.toml'
+
+! exec remeris --dry-run release
+stderr '^  ╰─▶ Unknown file: setup\.py$'
+
+! exec remeris --validate
+stderr '^  ╰─▶ Unknown file: setup\.py$'
+
+-- knope.toml --
+[package]
+versioned_files = ["setup.py"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- setup.py --

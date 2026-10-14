@@ -1,0 +1,42 @@
+# Every validated workflow runs on its own copy of the packages, each with the overrides of the command line.
+# Workflow y's Release rule succeeds because its packages are overridden with pre-release versions.
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add .
+exec git commit -m 'feat: Existing feature'
+exec git tag a/v1.0.0
+exec git tag b/v1.0.0
+
+exec remeris --validate x --override-version a=2.0.0-rc.1 --override-version b=3.0.0-rc.1
+! stdout .
+! stderr .
+
+-- a/Cargo.toml --
+[package]
+name = "a"
+version = "1.0.0"
+-- b/Cargo.toml --
+[package]
+name = "b"
+version = "1.0.0"
+-- knope.toml --
+[packages.a]
+versioned_files = ["a/Cargo.toml"]
+
+[packages.b]
+versioned_files = ["b/Cargo.toml"]
+
+[[workflows]]
+name = "x"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Major"
+
+[[workflows]]
+name = "y"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Release"

@@ -11,11 +11,33 @@ import (
 	"reflect"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/git"
+	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/action"
+	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
-// State is what steps pass along a workflow (spec F4.3). Packages, versioned files, git tags and
-// the selected issue are added to it by later milestones.
-type State struct{}
+// State is what steps pass along a workflow (spec F4.3). It is a plain value: the internal/project package
+// builds it once per run, before the workflow starts. The selected issue, the forge clients and the pending
+// actions are added to it by later milestones.
+type State struct {
+	// Packages are the configured packages, in declaration order. Empty when there are none.
+	Packages []*versioning.Package
+	// AllVersionedFiles holds one parsed file per versioned_files entry of every package, in order (spec F7.1).
+	AllVersionedFiles []versionedfile.File
+	// AllGitTags are the tags reachable from HEAD, newest first. Empty without packages or when Git failed.
+	AllGitTags []string
+	// Git is the repository access, or nil when there is no package or opening it failed. Opening fails only when
+	// neither the git command is on PATH nor the built-in backend can open the directory: with the git command
+	// it does not fail outside a repository, and reading the tags then does (their failure leaves AllGitTags empty).
+	Git git.Git
+	// PendingActions are the AddTag and CreateRelease actions that earlier steps returned and a later Release step
+	// executes (spec F4.3, F13.4). Writes and removals are executed by the step that produced them. Only
+	// PrepareRelease (M5) fills it; BumpVersion discards what it gets back, as Knope does.
+	PendingActions []action.Action
+	// IgnoreConventionalCommits is the `ignore_conventional_commits` setting of `[changes]`.
+	IgnoreConventionalCommits bool
+}
 
 // RunType says whether a step may change the world. A dry run must do no writes, make no network
 // calls and run no external commands: it logs what it would have done instead.
@@ -76,4 +98,18 @@ func describe(step Step) string {
 // cause and the related error, so it renders beneath the workflow's message.
 func Problem(name string, err error) error {
 	return diag.New("Problem with workflow " + name).WithRelated(err).WithCause(err)
+}
+
+// Clone returns a copy of the state that a workflow can change without the others seeing it: the packages are
+// deep copies. The parsed files are immutable values (SetVersion returns new ones) and the tags, the repository
+// handle and the settings are only read, so they are shared.
+func (s State) Clone() State {
+	if s.Packages != nil {
+		pkgs := make([]*versioning.Package, len(s.Packages))
+		for i, p := range s.Packages {
+			pkgs[i] = p.Clone()
+		}
+		s.Packages = pkgs
+	}
+	return s
 }

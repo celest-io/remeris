@@ -1,0 +1,74 @@
+# Ours: the Version variable of a Command step and the --override-version errors.
+# (--override-version only exists on workflows with BumpVersion or PrepareRelease.)
+[windows] skip 'uses a POSIX echo'
+
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add Cargo.toml knope.toml
+exec git commit -m Initial
+
+# One package: the Version variable is its current version.
+exec remeris show
+cmp stdout show.log
+
+# A version that does not parse.
+! exec remeris bump --override-version=nope
+! stdout .
+stderr 'Version must have exactly 3 parts|invalid digit'
+
+# Several packages: the Version variable is ambiguous.
+cp multi.toml knope.toml
+! exec remeris show
+! stdout .
+cmp stderr multi.err
+
+! exec remeris bump --override-version=1.0.0
+stderr 'package override should be formatted like package_name=version'
+
+! exec remeris bump --override-version=a=1.0.0 --override-version=c=2.0.0 --override-version=b=3.0.0 --override-version=z=1.0.0
+stderr 'Unknown package\(s\) to override: c, z'
+
+-- Cargo.toml --
+[package]
+name = "test"
+version = "1.2.3"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+
+[[workflows]]
+name = "show"
+[[workflows.steps]]
+type = "Command"
+command = "echo version is $version"
+
+[[workflows]]
+name = "bump"
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Patch"
+-- multi.toml --
+[packages.a]
+versioned_files = ["Cargo.toml"]
+
+[packages.b]
+versioned_files = ["Cargo.toml"]
+
+[[workflows]]
+name = "show"
+[[workflows.steps]]
+type = "Command"
+command = "echo version is $version"
+
+[[workflows]]
+name = "bump"
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Patch"
+-- show.log --
+version is 1.2.3
+-- multi.err --
+Error: Problem with workflow show
+  ╰─▶ Too many packages defined
+      help: The Version and Changelog variables can only be used with a single [package].

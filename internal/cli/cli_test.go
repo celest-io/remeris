@@ -142,7 +142,7 @@ func TestWorkflowSubcommandsAndHelpText(t *testing.T) {
 }
 
 func TestWorkflowFlagConditions(t *testing.T) {
-	const onePackage = "[package]\nversioned_files = [\"Cargo.toml\"]\n"
+	const onePackage = "[package]\n"
 	const twoPackages = "[packages.a]\n[packages.b]\n"
 	cases := map[string]struct {
 		toml                    string
@@ -258,7 +258,7 @@ func TestValidate(t *testing.T) {
 		}
 		type related interface{ Related() []error }
 		got := err.(related).Related()
-		if len(got) != 2 || got[0].Error() != "Problem with workflow prep" || got[1].Error() != "Problem with workflow bump" {
+		if len(got) != 1 || got[0].Error() != "Problem with workflow prep" {
 			t.Errorf("related = %v", got)
 		}
 	})

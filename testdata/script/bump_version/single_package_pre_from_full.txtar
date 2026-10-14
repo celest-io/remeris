@@ -1,0 +1,37 @@
+# Ported from knope-dev/knope, crates/knope/tests/bump_version/single_package/pre/from_full (MIT, see testdata/README.md).
+
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add Cargo.toml knope.toml
+exec git commit -m 'Initial commit'
+exec git tag v1.2.3
+
+exec remeris --dry-run bump
+cmp stdout dryrun_stdout.log
+
+exec remeris bump
+! stdout .
+cmp Cargo.toml out/Cargo.toml
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.2.3"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+
+[[workflows]]
+name = "bump"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Pre"
+label = "rc"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.2.4-rc.0
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.2.4-rc.0"

@@ -1,0 +1,32 @@
+# Ported from knope crates/knope/tests/prepare_release/invalid_versioned_files/package_json
+# An empty package.json is not JSON. The error is raised while the packages are loaded, before any step runs,
+# so a real run and a dry run fail the same way.
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add knope.toml package.json
+exec git commit -m 'feat: Existing feature'
+exec git tag v1.0.0
+
+! exec remeris release
+! stdout .
+cmp stderr stderr.log
+
+! exec remeris --dry-run release
+! stdout .
+cmp stderr stderr.log
+
+-- knope.toml --
+[package]
+versioned_files = ["package.json"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- package.json --
+-- stderr.log --
+Error: Error deserializing package.json: EOF
+  help: remeris expects the package.json file to be an object with a top level `version` property

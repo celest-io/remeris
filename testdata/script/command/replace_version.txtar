@@ -1,7 +1,6 @@
 # Ported from knope-dev/knope, crates/knope/tests/command/replace_version (MIT, see testdata/README.md).
-# Needs packages: the Version variable, Cargo.toml and --override-version. Enable it when the
-# last of these lands: M2 (Cargo.toml), M3 (packages, Version, --override-version) and M5 (PrepareRelease).
-skip 'needs packages: milestones M2, M3 and M5'
+# Needs PrepareRelease (M5): packages, the Version variable and --override-version are done.
+skip 'needs PrepareRelease (M5)'
 
 exec git init
 exec git config user.email fake@remeris.dev

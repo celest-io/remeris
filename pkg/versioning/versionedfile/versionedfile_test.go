@@ -17,7 +17,6 @@ const (
 	notImplement = "is not implemented yet"
 	denoJSONC    = "deno.jsonc"
 	goMod        = "go.mod"
-	m2           = "M2"
 	m9           = "M9"
 )
 
@@ -257,10 +256,6 @@ func TestNewNotImplemented(t *testing.T) {
 		format    versionedfile.Format
 		milestone string
 	}{
-		"Cargo":           {versionedfile.Cargo, m2},
-		"PyProject":       {versionedfile.PyProject, m2},
-		"PackageJson":     {versionedfile.PackageJson, m2},
-		"GoMod":           {versionedfile.GoMod, m2},
 		"CargoLock":       {versionedfile.CargoLock, m9},
 		"DenoJson":        {versionedfile.DenoJson, m9},
 		"DenoLock":        {versionedfile.DenoLock, m9},

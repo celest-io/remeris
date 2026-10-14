@@ -1,0 +1,31 @@
+# Ported from knope crates/knope/tests/prepare_release/invalid_versioned_files/cargo_toml
+# An empty Cargo.toml has no version. The error is raised while the packages are loaded, before any step runs,
+# so a real run and a dry run fail the same way.
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add knope.toml Cargo.toml
+exec git commit -m 'feat: Existing feature'
+exec git tag v1.0.0
+
+! exec remeris release
+! stdout .
+cmp stderr stderr.log
+
+! exec remeris --dry-run release
+! stdout .
+cmp stderr stderr.log
+
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- Cargo.toml --
+-- stderr.log --
+Error: Cargo.toml was missing required property `package.version` or `workspace.package.version`

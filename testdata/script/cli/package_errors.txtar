@@ -1,0 +1,105 @@
+# Package configuration errors are raised when the file is loaded, so --validate reports them.
+
+# An empty [packages] table.
+cp empty.toml knope.toml
+! exec remeris --validate
+! stdout .
+cmp stderr empty.log
+
+# [package] next to an empty [packages] table.
+cp both-empty.toml knope.toml
+! exec remeris --validate
+cmp stderr empty.log
+
+# Asset uploads are not supported on Gitea, with either form of assets.
+cp gitea.toml knope.toml
+! exec remeris --validate
+cmp stderr gitea.log
+cp gitea-list.toml knope.toml
+! exec remeris --validate
+cmp stderr gitea.log
+
+# The first bad file wins: a missing file in a later package is found after the earlier ones pass.
+cp second.toml knope.toml
+! exec remeris --validate
+cmp stderr second.log
+
+# dependency and regex together.
+cp conflict.toml knope.toml
+! exec remeris --validate
+cmp stderr conflict.log
+
+# Existing files, all three forms of versioned_files, and a package without files pass.
+cp ok.toml knope.toml
+exec remeris --validate
+! stdout .
+! stderr .
+
+-- Cargo.toml --
+[package]
+name = "demo"
+version = "1.0.0"
+
+[dependencies]
+serde = "1.0.0"
+-- VERSION --
+v1.0.0 w1.0.0
+-- empty.toml --
+[packages]
+
+[[workflows]]
+name = "w"
+steps = [{ type = "Command", command = "echo hi" }]
+-- both-empty.toml --
+[package]
+
+[packages]
+-- gitea.toml --
+[gitea]
+owner = "o"
+repo = "r"
+host = "https://codeberg.org"
+
+[package]
+assets = "dist/*"
+-- gitea-list.toml --
+[gitea]
+owner = "o"
+repo = "r"
+host = "https://codeberg.org"
+
+[packages.a]
+assets = [{ path = "dist/a.zip" }]
+-- second.toml --
+[packages.a]
+versioned_files = ["Cargo.toml"]
+
+[packages.b]
+versioned_files = ["Cargo.toml", "sub/package.json", "setup.py"]
+-- conflict.toml --
+[package]
+versioned_files = [{ path = "Cargo.toml", dependency = "serde", regex = "x" }]
+-- ok.toml --
+[package]
+versioned_files = [
+  "Cargo.toml",
+  { path = "Cargo.toml", dependency = "serde" },
+  { path = "VERSION", regex = ["v(?<version>\\d+\\.\\d+\\.\\d+)", "w(?<version>\\d+\\.\\d+\\.\\d+)"] },
+]
+
+[[workflows]]
+name = "w"
+steps = [{ type = "Command", command = "echo hi" }]
+-- empty.log --
+Error: The `packages` key is defined but does not contain any packages
+  help: Add at least one package to the `packages` key.
+-- gitea.log --
+Error: Asset uploads for Gitea are not supported
+  help: Remove the `[[package.assets]]` key from your config.
+-- second.log --
+Error: File sub/package.json does not exist
+  help: Make sure the file exists and is accessible.
+-- conflict.log --
+Error: Problem with versioned file
+  ╰─▶ Cannot specify both 'dependency' and 'regex' for the same file: Cargo.toml
+      help: Use 'dependency' to update a dependency version in a known file format, or 'regex' to match version strings in arbitrary text files, but not both.

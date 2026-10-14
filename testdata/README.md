@@ -16,6 +16,7 @@ UPDATE_SCRIPTS=1 go test ./cmd/remeris      # rewrite the files compared with cm
 | Suite | Content |
 | --- | --- |
 | `cli` | Remeris' own scripts: flags, help, errors, dry run, `--validate`, default workflows. |
+| `bump_version` | The `BumpVersion` step, ported from Knope's `bump_version` suite (`<dir>_<case>.txtar`). |
 | `command` | The `Command` step. `shell` and `replace_version` are ported from Knope; the rest are ours. |
 
 `--help` is compared by content, not byte for byte: its layout comes from urfave/cli and differs from
@@ -64,8 +65,18 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | Fixture | Status |
 | --- | --- |
 | `shell` | Ported: `script/command/shell.txtar`. |
-| `replace_version` | Ported but skipped: needs `Cargo.toml` (M2), packages, the `Version` variable and `--override-version` (M3), and `PrepareRelease` (M5). |
+| `replace_version` | Ported but skipped: needs `PrepareRelease` (M5). Packages, `Cargo.toml`, the `Version` variable and `--override-version` are done. |
 
-Other Knope suites (`bump_version`, `prepare_release`, `default_workflows`, `validate`, ...) are ported
+### Status of `crates/knope/tests/bump_version/*`
+
+| Fixture | Status |
+| --- | --- |
+| `single_package/{major,minor,patch,release}`, `single_package/pre/{from_full,from_pre,increment_pre}` | Ported: `script/bump_version/single_package_*.txtar`. |
+| `multiple_packages/{major,minor,patch,release}`, `multiple_packages/pre/{from_full,from_pre}` | Ported: `script/bump_version/multiple_packages_*.txtar`. |
+| `text_file/minor` | Ported: `script/bump_version/text_file_minor.txtar`. |
+| `single_package/override`, `multiple_packages/override` | Ported: `script/bump_version/{single,multiple}_package*_override.txtar`. |
+| `maven` | Ported but skipped: needs `pom.xml` (M9). |
+
+Other Knope suites ( `prepare_release`, `default_workflows`, `validate`, ...) are ported
 with the milestone that needs them. Deviations from Knope's behaviour are listed in
 [`deviations.md`](deviations.md).

@@ -137,7 +137,10 @@ func decodeVersionedFile(data any) (any, error) {
 	case nil:
 	case string:
 		file.Regex = []string{re}
+	case []string:
+		file.Regex = append([]string{}, re...)
 	case []any:
+		file.Regex = []string{} // `regex = []` is present but empty, which is not the same as absent
 		for _, item := range re {
 			s, ok := item.(string)
 			if !ok {
