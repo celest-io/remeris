@@ -18,6 +18,9 @@ exec remeris release
 ! stdout .
 ! stderr .
 cmp CHANGELOG.md out/CHANGELOG.md
+# The tags Knope expects on HEAD (expected_tags in its mod.rs).
+exec git tag --contains HEAD
+cmp stdout tags.txt
 
 -- CHANGELOG.md --
 ## 1.0.0
@@ -61,3 +64,5 @@ Would create Git tag v1.1.0
 ### Features
 
 - Existing features
+-- tags.txt --
+v1.1.0

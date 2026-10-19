@@ -1,6 +1,6 @@
 # Ported from knope-dev/knope, crates/knope/tests/default_workflows/get_version/multi_package (MIT, see testdata/README.md).
-skip 'FAILS: with two packages remeris reports No workflow named get-version, not an unrecognised subcommand error'
-# With several packages there is no get-version workflow, so the command is not recognised.
+# With several packages there is no get-version workflow, so the command is not recognised. remeris reports an
+# unknown workflow in its own words (cli/no_workflow); Knope prints clap's message (see testdata/deviations.md).
 
 ! exec remeris get-version
 ! stdout .
@@ -21,8 +21,4 @@ versioned_files = ["package.json"]
   "version": "13.24.54"
 }
 -- stderr.log --
-error: unrecognized subcommand 'get-version'
-
-Usage: remeris [OPTIONS] [COMMAND]
-
-For more information, try '--help'.
+Error: No workflow named get-version

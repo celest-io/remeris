@@ -18,6 +18,9 @@ exec remeris release
 ! stdout .
 ! stderr .
 cmp go.mod out/go.mod
+# The tags Knope expects on HEAD (expected_tags in its mod.rs).
+exec git tag --contains HEAD
+cmp stdout tags.txt
 
 -- go.mod --
 module something/test
@@ -41,3 +44,5 @@ Would add files to git:
 Would create Git tag v2.0.1
 -- out/go.mod --
 module something/test // v2.0.1
+-- tags.txt --
+v2.0.1

@@ -19,6 +19,9 @@ exec remeris release --override-version=2.0.0
 ! stderr .
 cmp go.mod out/go.mod
 cmp CHANGELOG.md out/CHANGELOG.md
+# The tags Knope expects on HEAD (expected_tags in its mod.rs).
+exec git tag --contains HEAD
+cmp stdout tags.txt
 
 -- CHANGELOG.md --
 ## 1.1.0 ([DATE])
@@ -102,3 +105,5 @@ example.com/thatmodule v1.2.3
 
 replace example.com/thatmodule => ../thatmodule
 exclude example.com/thismodule v1.3.0
+-- tags.txt --
+v2.0.0

@@ -20,6 +20,9 @@ exec remeris release
 ! stderr .
 cmp CHANGELOG.md out/CHANGELOG.md
 cmp sub_dir/go.mod out/sub_dir/go.mod
+# The tags Knope expects on HEAD (expected_tags in its mod.rs).
+exec git tag --contains HEAD
+cmp stdout tags.txt
 
 -- CHANGELOG.md --
 ## 1.0.0
@@ -92,3 +95,6 @@ example.com/thatmodule v1.2.3
 
 replace example.com/thatmodule => ../thatmodule
 exclude example.com/thismodule v1.3.0
+-- tags.txt --
+sub_dir/v1.1.0
+v1.1.0

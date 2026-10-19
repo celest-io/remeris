@@ -1,5 +1,5 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/go_modules/major_version_directories (MIT, see testdata/README.md).
-skip 'FAILS: --verbose prints remeris debug lines that differ from Knope (see prepare_release/verbose and testdata/deviations.md)'
+skip 'needs the --verbose debug lines that prepare_release/verbose waits for (see testdata/deviations.md)'
 
 env REMERIS_FAKE_DATE=2026-01-01
 
@@ -28,6 +28,9 @@ cmp sub_dir/go.mod out/sub_dir/go.mod
 cmp sub_dir/v2/go.mod out/sub_dir/v2/go.mod
 cmp v2/go.mod out/v2/go.mod
 cmp v2/CHANGELOG.md out/v2/CHANGELOG.md
+# The tags Knope expects on HEAD (expected_tags in its mod.rs).
+exec git tag --contains HEAD
+cmp stdout tags.txt
 
 -- CHANGELOG.md --
 # CHANGELOG
@@ -192,3 +195,10 @@ module sub_dir/knope/v2 // v2.1.0
 - Initial commit
 -- out/v2/go.mod --
 module knope/v2 // v2.1.0
+-- tags.txt --
+sub_dir/v1.0.1
+sub_dir/v2.1.0
+v1.0.1
+v1/v1.0.1
+v2.1.0
+v2/v2.1.0
