@@ -66,6 +66,10 @@ func (g *recordingGit) CreateTag(_ context.Context, name string, _ git.TagOption
 
 func (*recordingGit) HeadCommitSHA(context.Context) (string, error) { return "", nil }
 
+func (*recordingGit) CurrentBranch(context.Context) (string, error) { return "", nil }
+
+func (*recordingGit) FirstRemoteURL(context.Context) (string, bool) { return "", false }
+
 func commits(messages ...string) []git.Commit {
 	out := make([]git.Commit, len(messages))
 	for i, m := range messages {

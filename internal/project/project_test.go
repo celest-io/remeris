@@ -50,6 +50,10 @@ func (fakeGit) CreateTag(context.Context, string, git.TagOptions) error { return
 // HeadCommitSHA is not used by package loading.
 func (fakeGit) HeadCommitSHA(context.Context) (string, error) { return "", nil }
 
+func (fakeGit) CurrentBranch(context.Context) (string, error) { return "", nil }
+
+func (fakeGit) FirstRemoteURL(context.Context) (string, bool) { return "", false }
+
 func regexCfg(t *testing.T, path string) versionedfile.Config {
 	t.Helper()
 	cfg, err := versionedfile.NewConfig(path, nil, []string{`v(?<version>\d+\.\d+\.\d+)`})

@@ -38,6 +38,14 @@ type Git interface {
 	CreateTag(ctx context.Context, name string, opts TagOptions) error
 	// HeadCommitSHA returns the full 40-character id of the commit HEAD points to (spec F9.6).
 	HeadCommitSHA(ctx context.Context) (string, error)
+	// CurrentBranch returns the short name of the branch HEAD points to, such as "main" or "feature/x" (spec F9.6,
+	// Quirk Q3: Knope returns the full "refs/heads/..." name). A detached HEAD is Knope's "Not on the tip of a Git
+	// branch." error, and an unborn branch fails with "reference 'refs/heads/main' not found", like libgit2's repo.head().
+	CurrentBranch(ctx context.Context) (string, error)
+	// FirstRemoteURL returns the configured URL of the first remote in git remote order (alphabetical by name, which is
+	// also libgit2's order), without insteadOf rewriting. It is false when there is no remote, or on any error, like
+	// Knope's get_first_remote (spec F9.6).
+	FirstRemoteURL(ctx context.Context) (string, bool)
 }
 
 // TagOptions are the options of CreateTag.

@@ -656,3 +656,125 @@ func TestGoGitCreateTag(t *testing.T) { //nolint:paralleltest // sets environmen
 		return g
 	})
 }
+
+const (
+	remoteSCP   = "git@github.com:o/r.git"
+	remoteHTTPS = "https://github.com/o/r.git"
+)
+
+func runBranchContract(t *testing.T, open func(t *testing.T, dir string) Git) {
+	t.Helper()
+	ctx := context.Background()
+
+	t.Run("CurrentBranch", func(t *testing.T) {
+		type tc struct {
+			setup   func(r *testRepo)
+			want    string
+			wantErr string
+			code    string
+		}
+		tests := map[string]tc{
+			"on a branch": {setup: func(r *testRepo) { r.commit("one") }, want: "main"},
+			"branch with slashes": {setup: func(r *testRepo) {
+				r.commit("one")
+				r.git("checkout", "--quiet", "-b", "feature/x/y")
+			}, want: "feature/x/y"},
+			"detached HEAD": {setup: func(r *testRepo) {
+				r.commit("one")
+				r.git("checkout", "--quiet", "--detach")
+			}, wantErr: "Not on the tip of a Git branch.", code: "remeris::git::not_a_branch"},
+			"unborn branch": {
+				setup:   func(*testRepo) {},
+				wantErr: "Unknown Git error: reference 'refs/heads/main' not found", code: "remeris::git::command",
+			},
+		}
+		for name, tt := range tests {
+			t.Run(name, func(t *testing.T) {
+				isolateConfig(t)
+				r := newTestRepo(t, true)
+				tt.setup(r)
+				got, err := open(t, r.dir).CurrentBranch(ctx)
+				if tt.wantErr == "" {
+					if err != nil || got != tt.want {
+						t.Fatalf("CurrentBranch = %q, %v, want %q", got, err, tt.want)
+					}
+					return
+				}
+				wantDiagCode(t, err, tt.code)
+				if err.Error() != tt.wantErr {
+					t.Fatalf("error = %q, want %q", err.Error(), tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("CurrentBranch without a repository", func(t *testing.T) {
+		isolateConfig(t)
+		r := newTestRepo(t, false)
+		_, err := open(t, r.dir).CurrentBranch(ctx)
+		wantDiagCode(t, err, "remeris::git::open_repo")
+	})
+
+	t.Run("FirstRemoteURL", func(t *testing.T) {
+		type tc struct {
+			remotes [][2]string
+			want    string
+			ok      bool
+		}
+		tests := map[string]tc{
+			"no remote":     {},
+			"scp-style URL": {remotes: [][2]string{{"origin", remoteSCP}}, want: remoteSCP, ok: true},
+			"https URL":     {remotes: [][2]string{{"origin", remoteHTTPS}}, want: remoteHTTPS, ok: true},
+			"alphabetical order": {
+				remotes: [][2]string{{"zeta", remoteSCP}, {"alpha", remoteHTTPS}},
+				want:    remoteHTTPS,
+				ok:      true,
+			},
+		}
+		for name, tt := range tests {
+			t.Run(name, func(t *testing.T) {
+				isolateConfig(t)
+				r := newTestRepo(t, true)
+				r.commit("one")
+				for _, rm := range tt.remotes {
+					r.git("remote", "add", rm[0], rm[1])
+				}
+				got, ok := open(t, r.dir).FirstRemoteURL(ctx)
+				if got != tt.want || ok != tt.ok {
+					t.Fatalf("FirstRemoteURL = %q, %t, want %q, %t", got, ok, tt.want, tt.ok)
+				}
+			})
+		}
+	})
+
+	t.Run("FirstRemoteURL ignores insteadOf", func(t *testing.T) {
+		isolateConfig(t)
+		r := newTestRepo(t, true)
+		r.git("remote", "add", "origin", remoteHTTPS)
+		r.git("config", "url.ssh://example.com/.insteadOf", "https://github.com/")
+		if got, ok := open(t, r.dir).FirstRemoteURL(ctx); !ok || got != remoteHTTPS {
+			t.Fatalf("FirstRemoteURL = %q, %t, want %q", got, ok, remoteHTTPS)
+		}
+	})
+
+	t.Run("FirstRemoteURL without a repository", func(t *testing.T) {
+		isolateConfig(t)
+		r := newTestRepo(t, false)
+		if got, ok := open(t, r.dir).FirstRemoteURL(ctx); ok || got != "" {
+			t.Fatalf("FirstRemoteURL = %q, %t, want none", got, ok)
+		}
+	})
+}
+
+func TestCLIBranch(t *testing.T) { runBranchContract(t, openGit) } //nolint:paralleltest // sets environment variables
+
+func TestGoGitBranch(t *testing.T) { //nolint:paralleltest // sets environment variables
+	runBranchContract(t, func(t *testing.T, dir string) Git {
+		t.Helper()
+		g, err := NewGoGit(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return g
+	})
+}
