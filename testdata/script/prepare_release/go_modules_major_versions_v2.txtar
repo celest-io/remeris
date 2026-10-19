@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/go_modules/major_versions/v2 (MIT, see testdata/README.md).
-skip 'needs the Release step (milestone M6)'
 
 env REMERIS_FAKE_DATE=2026-01-01
 

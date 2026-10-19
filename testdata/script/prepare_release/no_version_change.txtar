@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/no_version_change (MIT, see testdata/README.md).
-skip 'needs the Release step (milestone M6)'
 
 env REMERIS_FAKE_DATE=2026-01-01
 
@@ -42,12 +41,7 @@ type = "PrepareRelease"
 [[workflows.steps]]
 type = "Release"
 -- dryrun_stdout.log --
-
 -- stderr.log --
-Error:   × Problem with workflow release
-
-Error: releases::no_release (https://remeris.tech/reference/config-file/steps/prepare-release/#errors)
-
-  × No packages are ready to release
-  help: The `PrepareRelease` step will not complete if no changes cause a
-        package's version to be increased.
+Error: Problem with workflow release
+  ╰─▶ No packages are ready to release
+      help: The `PrepareRelease` step will not complete if no changes cause a package's version to be increased.

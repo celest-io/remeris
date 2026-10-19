@@ -1,5 +1,5 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/go_modules/major_version_directories (MIT, see testdata/README.md).
-skip 'needs the Release step (milestone M6)'
+skip 'FAILS: --verbose prints remeris debug lines that differ from Knope (see prepare_release/verbose and testdata/deviations.md)'
 
 env REMERIS_FAKE_DATE=2026-01-01
 

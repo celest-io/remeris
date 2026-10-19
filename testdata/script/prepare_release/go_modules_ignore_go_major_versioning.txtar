@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/go_modules/ignore_go_major_versioning (MIT, see testdata/README.md).
-skip 'needs the Release step (milestone M6)'
 
 exec git init --initial-branch=main
 exec git config user.email fake@remeris.dev
