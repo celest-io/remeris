@@ -235,7 +235,10 @@ func TestPreparedReleaseActions(t *testing.T) {
 			t.Parallel()
 			p := preparedPackage(t, versioning.DefaultName(), tc.tags, tc.current, "")
 			p.Files, p.GoVersioning = tc.cfgs, tc.gv
-			got := p.PreparedReleaseActions(tc.tags, tc.files(t))
+			var got []action.Action
+			if pr, ok := p.FindPreparedRelease(tc.tags); ok {
+				got = p.PreparedReleaseActions(pr.Release, tc.files(t))
+			}
 			var kinds []string
 			for _, a := range got {
 				switch a.Kind {

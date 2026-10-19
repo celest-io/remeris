@@ -61,20 +61,15 @@ func (p *Package) LastTagOf(allTags []string) *semver.Version {
 	return &v
 }
 
-// PreparedReleaseActions returns the pending actions of the Release step for a package when no PrepareRelease ran
-// in the workflow (spec F14): a CreateRelease for the prepared release, then the first AddTag of every file that
-// the current version written, which is how go.mod files get their module tag. It returns nil when no release is
-// prepared (see FindPreparedRelease).
+// PreparedReleaseActions returns the pending actions of the Release step for rel, a release found by
+// FindPreparedRelease when no PrepareRelease ran in the workflow (spec F14): a CreateRelease, then the first AddTag
+// that each file gives once rel's version is set in it, which is how go.mod files get their module tag.
 //
-// Like Knope's set_version, this sets the current version in the files and resets the package's history to it; the
-// files themselves are values, so all is not changed. A SetVersion error gives only the CreateRelease.
-func (p *Package) PreparedReleaseActions(allTags []string, all []versionedfile.File) []action.Action {
-	pr, ok := p.FindPreparedRelease(allTags)
-	if !ok {
-		return nil
-	}
-	actions := []action.Action{action.CreateRelease(pr.Release)}
-	files, err := p.SetVersion(pr.Release.Version, p.GoVersioning, all)
+// Like Knope's set_version, this sets the version in the files and resets the package's history to it; the files
+// themselves are values, so all is not changed. A SetVersion error gives only the CreateRelease.
+func (p *Package) PreparedReleaseActions(rel action.Release, all []versionedfile.File) []action.Action {
+	actions := []action.Action{action.CreateRelease(rel)}
+	files, err := p.SetVersion(rel.Version, p.GoVersioning, all)
 	if err != nil {
 		return actions
 	}
