@@ -329,9 +329,14 @@ func TestReleaseOpensGitWhenStateHasNone(t *testing.T) {
 		t.Skip("git is not installed")
 	}
 	t.Chdir(t.TempDir())
+	// The tagger comes from the repository's config only, never from the machine's.
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	for _, args := range [][]string{
 		{"init", "-q"},
-		{"-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init"},
+		{"config", "user.name", "T"},
+		{"config", "user.email", "t@example.com"},
+		{"commit", "-q", "--allow-empty", "-m", "init"},
 	} {
 		if out, err := exec.CommandContext(t.Context(), "git", args...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
