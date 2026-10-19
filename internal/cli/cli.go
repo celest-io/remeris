@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/urfave/cli/v3"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/celest-io/remeris/internal/config"
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/project"
+	"github.com/celest-io/remeris/internal/prompt"
+	"github.com/celest-io/remeris/internal/steps"
 	"github.com/celest-io/remeris/internal/version"
 	"github.com/celest-io/remeris/internal/workflow"
 )
@@ -149,6 +152,7 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 			if err := app.LoadConfig(cmd, opts); err != nil {
 				return err
 			}
+			setPrereleaseLabel(cfg, opts.PrereleaseLabel)
 			if handled, err := runSpecialMode(ctx, global, cfg, opts.OverrideVersion); handled {
 				return err
 			}
@@ -159,12 +163,28 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 			if err := applyOverrides(state.Packages, opts.OverrideVersion); err != nil {
 				return err
 			}
+			state.Prompter = prompt.NewTerminal(os.Stdin, os.Stdout)
 			rt := workflow.Real(state)
 			if global.DryRun {
 				rt = workflow.DryRun(state)
 			}
 			return workflow.Run(ctx, w, rt)
 		},
+	}
+}
+
+// setPrereleaseLabel sets prerelease_label on every PrepareRelease step of every workflow (spec F3.1). The flag
+// beats the environment variables, which urfave/cli reads as the flag's sources. An empty label changes nothing.
+func setPrereleaseLabel(cfg *config.Config, label string) {
+	if label == "" {
+		return
+	}
+	for _, w := range cfg.Workflows {
+		for _, step := range w.Steps {
+			if p, ok := step.(*steps.PrepareRelease); ok {
+				p.PrereleaseLabel = label
+			}
+		}
 	}
 }
 

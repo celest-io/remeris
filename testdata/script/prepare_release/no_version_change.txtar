@@ -1,0 +1,53 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/no_version_change (MIT, see testdata/README.md).
+skip 'needs the Release step (milestone M6)'
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'docs: update README' --author 'Knope <knope@example.com>'
+exec git tag v1.2.3
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+! exec remeris release
+! stdout .
+cmp stderr stderr.log
+
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- Existing features
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.2.3"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
+-- dryrun_stdout.log --
+
+-- stderr.log --
+Error:   × Problem with workflow release
+
+Error: releases::no_release (https://remeris.tech/reference/config-file/steps/prepare-release/#errors)
+
+  × No packages are ready to release
+  help: The `PrepareRelease` step will not complete if no changes cause a
+        package's version to be increased.

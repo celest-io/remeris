@@ -1,0 +1,36 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/inconsistent_versions (MIT, see testdata/README.md).
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New feature' --author 'Knope <knope@example.com>'
+
+! exec remeris --dry-run release
+! stdout .
+cmp stderr stderr.log
+
+! exec remeris release
+! stdout .
+cmp stderr stderr.log
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "2.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["pyproject.toml", "Cargo.toml"]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- pyproject.toml --
+[tool.poetry]
+version = "1.0.0"
+-- stderr.log --
+Error: Found inconsistent versions in package: pyproject.toml had 1.0.0 and Cargo.toml had 2.0.0
+  help: All files in a package must have the same version

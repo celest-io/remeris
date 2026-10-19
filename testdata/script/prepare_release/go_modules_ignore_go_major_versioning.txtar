@@ -1,0 +1,44 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/go_modules/ignore_go_major_versioning (MIT, see testdata/README.md).
+skip 'needs the Release step (milestone M6)'
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'fix!: Breaking change' --author 'Knope <knope@example.com>'
+exec git tag v2.0.0
+exec git commit --allow-empty -m 'fix: A fix' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp go.mod out/go.mod
+
+-- go.mod --
+module something/test
+-- knope.toml --
+[package]
+versioned_files = ["go.mod"]
+ignore_go_major_versioning = true
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
+-- dryrun_stdout.log --
+Would add the following to go.mod: 2.0.1
+Would add files to git:
+  go.mod
+Would create Git tag v2.0.1
+-- out/go.mod --
+module something/test // v2.0.1

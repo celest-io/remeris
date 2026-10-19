@@ -1,0 +1,72 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/changesets/invalid_change_file (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat!: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag first/v1.2.3
+exec git tag second/v0.4.6
+exec git commit --allow-empty -m 'feat: A new shared feature from a conventional commit' --author 'Knope <knope@example.com>'
+
+! exec remeris --dry-run release
+! stdout .
+cmp stderr dryrun_stderr.log
+
+! exec remeris release
+! stdout .
+cmp stderr stderr.log
+cmp .changeset/invalid.md out/.changeset/invalid.md
+cmp CHANGELOG.md out/CHANGELOG.md
+cmp Cargo.toml out/Cargo.toml
+cmp knope.toml out/knope.toml
+
+-- .changeset/invalid.md --
+
+-- CHANGELOG.md --
+## 1.2.3
+
+Some existing content
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.2.3"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- dryrun_stderr.log --
+Error: Problem with workflow release
+  ╰─▶ missing front matter
+      help: This could be a file-system issue or a problem with the formatting of a change file.
+-- stderr.log --
+Error: Problem with workflow release
+  ╰─▶ missing front matter
+      help: This could be a file-system issue or a problem with the formatting of a change file.
+-- out/.changeset/invalid.md --
+
+-- out/CHANGELOG.md --
+## 1.2.3
+
+Some existing content
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.2.3"
+-- out/knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"

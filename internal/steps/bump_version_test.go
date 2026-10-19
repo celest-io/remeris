@@ -31,7 +31,7 @@ func stateFor(t *testing.T, tags []string, content string, names ...string) work
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := workflow.State{AllVersionedFiles: []versionedfile.File{f}}
+	state := workflow.State{AllVersionedFiles: []versionedfile.File{f}, AllGitTags: tags}
 	for _, name := range names {
 		pn := versioning.DefaultName()
 		if name != "" {

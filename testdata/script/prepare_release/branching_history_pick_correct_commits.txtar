@@ -1,0 +1,100 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/branching_history/pick_correct_commits (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit' --author 'Knope <knope@knope.tech>'
+exec git tag v1.0.0
+exec git switch -c patch
+exec git commit --allow-empty -m 'fix: A bug' --author 'Knope <knope@knope.tech>'
+exec git switch main
+exec git merge --no-ff --no-edit patch
+exec git tag v1.0.1
+exec git switch -c breaking
+exec git commit --allow-empty -m 'feat!: A breaking feature' --author 'Knope <knope@knope.tech>'
+exec git switch main
+exec git merge --no-ff --no-edit breaking
+exec git tag v2.0.0
+exec git switch breaking
+exec git merge --no-ff --no-edit main
+exec git commit --allow-empty -m 'fix: Another bug' --author 'Knope <knope@knope.tech>'
+exec git switch main
+exec git merge --no-ff --no-edit breaking
+
+exec remeris --dry-run prepare-release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris prepare-release
+! stdout .
+! stderr .
+cmp Cargo.toml out/Cargo.toml
+cmp CHANGELOG.md out/CHANGELOG.md
+
+-- CHANGELOG.md --
+# Changelog
+
+## 2.0.0
+
+### Breaking Changes
+
+#### A breaking feature
+
+## 1.0.1
+
+### Bug Fixes
+
+#### A bug
+-- Cargo.toml --
+[package]
+name = "default"
+version = "2.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 2.0.1
+Would add the following to CHANGELOG.md:
+## 2.0.1 (2026-01-01)
+
+### Fixes
+
+- Another bug
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+-- out/CHANGELOG.md --
+# Changelog
+
+## 2.0.1 (2026-01-01)
+
+### Fixes
+
+- Another bug
+
+## 2.0.0
+
+### Breaking Changes
+
+#### A breaking feature
+
+## 1.0.1
+
+### Bug Fixes
+
+#### A bug
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "2.0.1"

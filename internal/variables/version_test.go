@@ -7,6 +7,8 @@ import (
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/action"
+	"github.com/celest-io/remeris/pkg/versioning/releasenotes"
 	"github.com/celest-io/remeris/pkg/versioning/semver"
 )
 
@@ -62,13 +64,67 @@ func TestTemplateReplaceVersion(t *testing.T) {
 	}
 }
 
-func TestResolveChangelogEntryChecksPackagesFirst(t *testing.T) {
-	_, err := Resolve(workflow.State{Packages: []*versioning.Package{pkgWith(), pkgWith()}}, ChangelogEntry, nil)
-	if err == nil || err.Error() != "Too many packages defined" {
-		t.Errorf("err = %v", err)
+func pkgWithChangelog(content string, tags ...string) *versioning.Package {
+	p := pkgWith(tags...)
+	c := releasenotes.NewChangelog("CHANGELOG.md", content)
+	p.ReleaseNotes.Changelog = &c
+	return p
+}
+
+func TestResolveChangelogEntry(t *testing.T) {
+	const changelog = "# Changelog\n\n## 1.2.3 (2024-01-01)\n\n### Fixes\n\n- a fix\n\n## 1.0.0\n\n- first\n"
+	pending := func(notes ...string) []action.Action {
+		var out []action.Action
+		for _, n := range notes {
+			out = append(out, action.CreateRelease(action.Release{Notes: n}))
+		}
+		return out
 	}
-	_, err = Resolve(workflow.State{Packages: []*versioning.Package{pkgWith("v1.0.0")}}, ChangelogEntry, nil)
-	if err == nil || !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("err = %v", err)
+	cases := map[string]struct {
+		state   workflow.State
+		want    string
+		wantMsg string
+	}{
+		"no packages": {workflow.State{}, "", msgNoPackages},
+		"two packages": {
+			workflow.State{Packages: []*versioning.Package{pkgWith(), pkgWith()}},
+			"",
+			"Too many packages defined",
+		},
+		"pending wins": {
+			workflow.State{Packages: []*versioning.Package{pkgWith()}, PendingActions: pending("first", "second")},
+			"first", "",
+		},
+		"from changelog": {
+			workflow.State{Packages: []*versioning.Package{pkgWithChangelog(changelog, "v1.2.3")}},
+			"\n## Fixes\n\n- a fix\n", "",
+		},
+		"version missing": {
+			workflow.State{Packages: []*versioning.Package{pkgWithChangelog(changelog, "v2.0.0")}},
+			"", "Could not find a changelog entry for version 2.0.0",
+		},
+		"no changelog": {
+			workflow.State{Packages: []*versioning.Package{pkgWith("v1.0.0")}},
+			"", "Could not find a changelog entry for version 1.0.0",
+		},
+		"no version": {
+			workflow.State{Packages: []*versioning.Package{pkgWithChangelog(changelog)}},
+			"", "Could not determine version of package",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := Resolve(tc.state, ChangelogEntry, nil)
+
+			if tc.wantMsg != "" {
+				if err == nil || err.Error() != tc.wantMsg {
+					t.Fatalf("err = %v, want %q", err, tc.wantMsg)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Errorf("Resolve() = %q, %v; want %q", got, err, tc.want)
+			}
+		})
 	}
 }

@@ -1,0 +1,80 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/branching_history/merge_commits (MIT, see testdata/README.md).
+skip 'needs the Release step (milestone M6)'
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit' --author 'Knope <knope@knope.tech>'
+exec git switch -c feature
+exec git commit --allow-empty -m 'feat: A new feature' --author 'Knope <knope@knope.tech>'
+exec git switch main
+exec sleep 1
+exec git commit --allow-empty -m 'feat: existing feature' --author 'Knope <knope@knope.tech>'
+exec git tag v1.2.3
+exec git merge --no-ff --no-edit feature
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp Cargo.toml out/Cargo.toml
+cmp CHANGELOG.md out/CHANGELOG.md
+
+-- CHANGELOG.md --
+## 1.2.3
+
+### Features
+
+- Existing features
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.2.3"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.3.0
+Would add the following to CHANGELOG.md:
+## 1.3.0 (2026-01-01)
+
+### Features
+
+- A new feature
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+Would create Git tag v1.3.0
+-- out/CHANGELOG.md --
+## 1.3.0 (2026-01-01)
+
+### Features
+
+- A new feature
+
+## 1.2.3
+
+### Features
+
+- Existing features
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.3.0"

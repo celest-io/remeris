@@ -1,0 +1,72 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/custom_change_entries/all_custom (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Existing version' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git add .changeset/breaking_change.md
+exec git commit --allow-empty -m 'Add breaking change file' --author 'Alice <alice@knope.tech>'
+exec git commit --allow-empty -m 'feat: Feature from commit' --author 'Sushi <sushi@knope.tech>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+grep '(?s)\AWould add the following to Cargo\.toml: version = 2\.0\.0\nWould delete \.changeset/breaking_change\.md\nWould delete \.changeset/feature\.md\nWould add the following to CHANGELOG\.md:\n## 2\.0\.0 \(2026-01-01\)\n\n### Breaking Changes\n\n### A breaking change with the intentionally wrong header by Alice \([0-9a-f]+\)\n\n\nSome details about the breaking change\n\n### Features\n\n\* Feature from commit by Sushi \([0-9a-f]+\)\n\* A simple feature\n\nWould add files to git:\n  Cargo\.toml\n  \.changeset/breaking_change\.md\n  \.changeset/feature\.md\n  CHANGELOG\.md\n\z' dryrun_actual.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+! exists .changeset/breaking_change.md
+! exists .changeset/feature.md
+cmp Cargo.toml out/Cargo.toml
+grep '(?s)\A# My Changelog\n\n## 2\.0\.0 \(2026-01-01\)\n\n### Breaking Changes\n\n### A breaking change with the intentionally wrong header by Alice \([0-9a-f]+\)\n\n\nSome details about the breaking change\n\n### Features\n\n\* Feature from commit by Sushi \([0-9a-f]+\)\n\* A simple feature\n\n## 1\.0\.0\n\nSome older pre-Knope version\n\z' CHANGELOG.md
+
+-- .changeset/breaking_change.md --
+---
+default: major
+---
+
+## A breaking change with the intentionally wrong header
+
+Some details about the breaking change
+-- .changeset/feature.md --
+---
+default: minor
+---
+
+###### A simple feature
+-- CHANGELOG.md --
+# My Changelog
+
+## 1.0.0
+
+Some older pre-Knope version
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[release_notes]
+change_templates = [
+  "## $summary by $commit_author_name ($commit_hash)\n\n\n$details",
+  "* $summary by $commit_author_name ($commit_hash)",
+  "## $summary\n\n\n$details",
+  "* $summary",
+]
+
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "2.0.0"

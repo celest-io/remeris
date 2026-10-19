@@ -12,6 +12,7 @@ import (
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/git"
+	"github.com/celest-io/remeris/internal/prompt"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/action"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
@@ -35,8 +36,14 @@ type State struct {
 	// executes (spec F4.3, F13.4). Writes and removals are executed by the step that produced them. Only
 	// PrepareRelease (M5) fills it; BumpVersion discards what it gets back, as Knope does.
 	PendingActions []action.Action
+	// Prompter asks the user questions (CreateChangeFile). The CLI sets the terminal; tests set prompt.Scripted.
+	// It is nil when nothing can be asked, and steps then fail with a prompt error.
+	Prompter prompt.Prompter
 	// IgnoreConventionalCommits is the `ignore_conventional_commits` setting of `[changes]`.
 	IgnoreConventionalCommits bool
+	// GitHubConfigured is true when the configuration has a `[github]` table. PrepareRelease needs it for change
+	// templates that use forge data.
+	GitHubConfigured bool
 }
 
 // RunType says whether a step may change the world. A dry run must do no writes, make no network

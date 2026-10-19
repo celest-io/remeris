@@ -1,0 +1,96 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/changesets/prerelease (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat!: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.2.3
+exec git commit --allow-empty -m 'feat: A new shared feature from a conventional commit' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp .changeset/breaking_change.md out/.changeset/breaking_change.md
+cmp CHANGELOG.md out/CHANGELOG.md
+cmp Cargo.toml out/Cargo.toml
+
+-- .changeset/breaking_change.md --
+---
+default: major
+---
+
+#### A breaking change
+
+A breaking change for only the first package
+-- CHANGELOG.md --
+## 1.2.3
+
+Some existing content
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.2.3"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+prerelease_label = "alpha"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 2.0.0-alpha.0
+Would add the following to CHANGELOG.md:
+## 2.0.0-alpha.0 (2026-01-01)
+
+### Breaking Changes
+
+#### A breaking change
+
+A breaking change for only the first package
+
+### Features
+
+- A new shared feature from a conventional commit
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+-- out/.changeset/breaking_change.md --
+---
+default: major
+---
+
+#### A breaking change
+
+A breaking change for only the first package
+-- out/CHANGELOG.md --
+## 2.0.0-alpha.0 (2026-01-01)
+
+### Breaking Changes
+
+#### A breaking change
+
+A breaking change for only the first package
+
+### Features
+
+- A new shared feature from a conventional commit
+
+## 1.2.3
+
+Some existing content
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "2.0.0-alpha.0"

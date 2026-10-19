@@ -1,0 +1,56 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/allow_empty (MIT, see testdata/README.md).
+skip 'needs package discovery (milestone M10) and the Command output of git commit'
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Old feat' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'docs: Update README' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run prepare-release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris prepare-release
+cmp stdout stdout.log
+! stderr .
+cmp CHANGELOG.md out/CHANGELOG.md
+
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- Existing features
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+allow_empty = true
+
+[[workflows.steps]]
+type = "Command"
+command = "git commit -m \"chore: prepare release $version\" --allow-empty"
+
+[workflows.steps.variables]
+"$version" = "Version"
+-- dryrun_stdout.log --
+Would run git commit -m "chore: prepare release 1.0.0" --allow-empty
+-- stdout.log --
+[..] chore: prepare release 1.0.0
+-- out/CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- Existing features

@@ -112,11 +112,10 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 
 ## Code layout
 
-Milestones M0 to M3 are in place: `remeris <workflow>` runs `Command` and `BumpVersion` steps, with the
-SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod, regex), packages, Git tags and
-the `Version` variable. Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`.
-Changes and `PrepareRelease` are in progress in the stack of open PRs (issue #5); forges, prompts, discovery,
-`--generate` and `--upgrade` come later (see spec section 1).
+Milestones M0 to M5 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
+`PrepareRelease` steps, with the SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod,
+regex), packages, Git tags and staging, conventional commits, change files, changelogs, prompts and the `Version`
+and `ChangelogEntry` variables. Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; forges, discovery, `--generate` and `--upgrade` come later (see spec section 1).
 
 ```
 cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests
@@ -130,17 +129,21 @@ internal/steps/     one file per step (stubs for the unbuilt ones); steps/comman
 internal/fsx/       dry-run aware file writes
 internal/git/       Git access: the Git interface, the git CLI backend, the go-git fallback, Open picks one
 internal/project/   reads the packages, versioned files and Git tags into a workflow.State
+internal/prompt/    Prompter interface (select, multi-select, input, password) on huh v2, and a scripted fake
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
   semver/           full SemVer 2.0.0 Version: Parse, Compare, rules, bumps, PackageVersions
   action/           Action (WriteToFile, RemoveFile, AddTag, CreateRelease), Release, ReleaseTag: a leaf package
   versionedfile/    Format table, Config, the File interface and one file per format
+  changes/          Change, ChangeType, the Source interface; changes/conventional parses conventional commits
+  changesets/       .changeset files: parse, write, normalise ids, group by package, convert to changes
+  releasenotes/     sections, release notes rendering, change templates, changelog read and write
   internal/tomledit/ format-preserving TOML editor on go-toml/v2 unstable: key lookup, byte-span edits
   internal/jsonedit/ ordered JSON tree printed exactly like serde_json to_string_pretty (package.json & co.)
 ```
 
-Imports flow one way: `workflow` imports only `diag`, `internal/git` and `pkg/versioning/...`, then `variables`,
-`steps`, `config`, `project`, `cli`. Keep it so.
+Imports flow one way: `workflow` imports only `diag`, `internal/git`, `internal/prompt` and `pkg/versioning/...`,
+then `variables`, `steps`, `config`, `project`, `cli`. Keep it so.
 `pkg/versioning` may import `internal/diag` (pure) and nothing else from `internal/`.
 Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.
 
@@ -175,6 +178,8 @@ Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.
 ### Tests
 
 - Unit tests sit next to the code. `internal/cli` tests build the command tree in process.
+- `steps.Today` gives the release date. Tests replace it; in golden scripts `env REMERIS_FAKE_DATE=2026-01-01` sets
+  it through the hook in `cmd/remeris/main_test.go`, and the binary reads no such variable.
 - Golden tests are `.txtar` scripts in `testdata/script/<suite>/`, run by `cmd/remeris/main_test.go` with the
   binary registered as `remeris`. `UPDATE_SCRIPTS=1 go test ./cmd/remeris` rewrites files compared with
   `cmp`; read the diff before committing. `--help` is compared by content, not byte for byte.

@@ -18,6 +18,7 @@ UPDATE_SCRIPTS=1 go test ./cmd/remeris      # rewrite the files compared with cm
 | `cli` | Remeris' own scripts: flags, help, errors, dry run, `--validate`, default workflows. |
 | `bump_version` | The `BumpVersion` step, ported from Knope's `bump_version` suite (`<dir>_<case>.txtar`). |
 | `command` | The `Command` step. `shell` and `replace_version` are ported from Knope; the rest are ours. |
+| `prepare_release` | The `PrepareRelease` step. `changesets_*`, `enable_prerelease_*`, `second_prerelease`, `release_after_prerelease`, `override_*`, `scopes_*`, `multiple_packages` (skipped: needs M9), `allow_empty` (skipped: needs M10), `no_version_change` (skipped: needs M6), `branching_history_*`, `cargo_*`, `changelog_*`, `custom_change_entries_all_custom`, `deno_*`, `gleam_toml`, `go_modules_*`, `handle_pre_versions_that_are_too_new`, `ignore_conventional_commits{,_toplevel}`, `inconsistent_versions`, `no_versioned_files`, `npm_*`, `override_version_multiple_packages`, `package_selection`, `prerelease_after_release`, `pubspec_yaml`, `pyproject_toml_*`, `readme_version`, `tauri_conf_json` and `verbose` are ported from Knope's `prepare_release` suite (skipped ones are listed below) (`<dir>_<case>.txtar`); `no_packages_ready`, `stages_files` and `forge_variable` are ours. Scripts set `REMERIS_FAKE_DATE=2026-01-01` and write that date where Knope has `[DATE]`; `rstrip` (defined in `cmd/remeris/main_test.go`) removes trailing spaces from a dry run's output before it is compared. |
 
 `--help` is compared by content, not byte for byte: its layout comes from urfave/cli and differs from
 clap's (spec F3.1).
@@ -65,7 +66,7 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | Fixture | Status |
 | --- | --- |
 | `shell` | Ported: `script/command/shell.txtar`. |
-| `replace_version` | Ported but skipped: needs `PrepareRelease` (M5). Packages, `Cargo.toml`, the `Version` variable and `--override-version` are done. |
+| `replace_version` | Ported but skipped: needs package discovery (M10), since its `knope.toml` declares no package. |
 
 ### Status of `crates/knope/tests/bump_version/*`
 
@@ -77,6 +78,20 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | `single_package/override`, `multiple_packages/override` | Ported: `script/bump_version/{single,multiple}_package*_override.txtar`. |
 | `maven` | Ported but skipped: needs `pom.xml` (M9). |
 
-Other Knope suites ( `prepare_release`, `default_workflows`, `validate`, ...) are ported
+### Status of `crates/knope/tests/prepare_release/*` (skipped scripts)
+
+Every case that Knope's `mod.rs` files declare is ported. These scripts are skipped:
+
+| Fixture | Status |
+| --- | --- |
+| `branching_history/merge_commits`, `changelog/override_default_sections`, `go_modules/*` (except `version_determination`), `no_versioned_files` | Skipped: need the `Release` step (M6). |
+| `changelog/header_level_detection` | Skipped: needs the GitHub forge (M7) and `Release` (M6). |
+| `cargo/workspace/{full,no_lock}`, `deno/*`, `npm/workspaces`, `allow_empty` | Skipped: need package discovery (M10), and for `full`, `deno` and `npm` also `Cargo.lock`, `deno.json` or `package-lock.json` (M9). |
+| `cargo/workspace/shared_version`, `npm/{dependencies,package}`, `gleam_toml`, `pubspec_yaml`, `tauri_conf_json`, `multiple_packages` | Skipped: need M9 formats. |
+| `no_version_change` | Skipped: needs M6. |
+| `verbose` | Skipped: remeris does not print five of Knope's `--verbose` debug lines yet (see `deviations.md`). |
+| `custom_change_entries/with_fallback`, `go_modules/major_versions/failed_v2` | Not ported: Knope's `mod.rs` does not declare them. |
+
+Other Knope suites (`default_workflows`, `validate`, ...) are ported
 with the milestone that needs them. Deviations from Knope's behaviour are listed in
 [`deviations.md`](deviations.md).

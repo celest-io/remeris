@@ -1,6 +1,6 @@
 # Ported from knope-dev/knope, crates/knope/tests/command/replace_version (MIT, see testdata/README.md).
-# Needs PrepareRelease (M5): packages, the Version variable and --override-version are done.
-skip 'needs PrepareRelease (M5)'
+# Needs package discovery (M10): knope.toml declares no package, so Knope finds Cargo.toml by itself.
+skip 'needs package discovery (M10)'
 
 exec git init
 exec git config user.email fake@remeris.dev

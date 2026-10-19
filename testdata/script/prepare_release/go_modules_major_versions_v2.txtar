@@ -1,0 +1,105 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/go_modules/major_versions/v2 (MIT, see testdata/README.md).
+skip 'needs the Release step (milestone M6)'
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat!: Breaking change' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release --override-version=2.0.0
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release --override-version=2.0.0
+! stdout .
+! stderr .
+cmp go.mod out/go.mod
+cmp CHANGELOG.md out/CHANGELOG.md
+
+-- CHANGELOG.md --
+## 1.1.0 ([DATE])
+
+### Features
+
+#### New feature
+
+## 1.0.0
+
+### Features
+
+- Existing feature
+-- go.mod --
+module github.com/knope-dev/knope // v1.1.0
+
+go 1.19
+
+require (
+example.com/othermodule v1.2.3
+example.com/thismodule v1.2.3
+example.com/thatmodule v1.2.3
+)
+
+replace example.com/thatmodule => ../thatmodule
+exclude example.com/thismodule v1.3.0
+-- knope.toml --
+[package]
+versioned_files = ["go.mod"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
+-- dryrun_stdout.log --
+Would add the following to go.mod: 2.0.0
+Would add the following to CHANGELOG.md:
+## 2.0.0 (2026-01-01)
+
+### Breaking Changes
+
+- Breaking change
+
+Would add files to git:
+  go.mod
+  CHANGELOG.md
+Would create Git tag v2.0.0
+-- out/CHANGELOG.md --
+## 2.0.0 (2026-01-01)
+
+### Breaking Changes
+
+- Breaking change
+
+## 1.1.0 ([DATE])
+
+### Features
+
+#### New feature
+
+## 1.0.0
+
+### Features
+
+- Existing feature
+-- out/go.mod --
+module github.com/knope-dev/knope/v2 // v2.0.0
+
+go 1.19
+
+require (
+example.com/othermodule v1.2.3
+example.com/thismodule v1.2.3
+example.com/thatmodule v1.2.3
+)
+
+replace example.com/thatmodule => ../thatmodule
+exclude example.com/thismodule v1.3.0

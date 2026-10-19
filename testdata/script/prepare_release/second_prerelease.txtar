@@ -1,0 +1,74 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/second_prerelease (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'An old prerelease which should not be checked' --author 'Knope <knope@example.com>'
+exec git tag v1.1.0-rc.2
+exec git commit --allow-empty -m 'feat: New feature in first RC' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git tag v1.1.0-rc.1
+exec git commit --allow-empty -m 'feat: New feature in second RC' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run prerelease
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris prerelease
+! stdout .
+! stderr .
+cmp CHANGELOG.md out/CHANGELOG.md
+cmp Cargo.toml out/Cargo.toml
+
+-- CHANGELOG.md --
+## 1.1.0-rc.1
+
+### Features
+
+- New feature in first RC
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.1.0-rc.1"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prerelease"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+prerelease_label = "rc"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.1.0-rc.2
+Would add the following to CHANGELOG.md:
+## 1.1.0-rc.2 (2026-01-01)
+
+### Features
+
+- New feature in second RC
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+-- out/CHANGELOG.md --
+## 1.1.0-rc.2 (2026-01-01)
+
+### Features
+
+- New feature in second RC
+
+## 1.1.0-rc.1
+
+### Features
+
+- New feature in first RC
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.1.0-rc.2"

@@ -1,0 +1,61 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/override_version (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v0.1.0
+
+exec remeris --dry-run release --override-version=1.0.0
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release --override-version=1.0.0
+! stdout .
+! stderr .
+cmp CHANGELOG.md out/CHANGELOG.md
+cmp Cargo.toml out/Cargo.toml
+
+-- CHANGELOG.md --
+## 0.1.0
+
+Some existing content
+-- Cargo.toml --
+[package]
+name = "default"
+version = "0.1.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.0.0
+Would add the following to CHANGELOG.md:
+## 1.0.0 (2026-01-01)
+
+
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+-- out/CHANGELOG.md --
+## 1.0.0 (2026-01-01)
+
+
+
+## 0.1.0
+
+Some existing content
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"

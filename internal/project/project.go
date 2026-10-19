@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"unicode/utf8"
 
 	"github.com/celest-io/remeris/internal/config"
@@ -19,6 +20,7 @@ import (
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/releasenotes"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
@@ -29,6 +31,10 @@ var errInvalidUTF8 = errors.New("stream did not contain valid UTF-8")
 
 // Loader reads the project. The zero value reads the working directory; tests replace the two seams.
 type Loader struct {
+	// ChangeTemplates are the [release_notes].change_templates, given to every package.
+	ChangeTemplates []releasenotes.ChangeTemplate
+	// GitHubConfigured is true when the configuration has a [github] table.
+	GitHubConfigured bool
 	// ReadFile returns the content of the file at the slash-separated relative path. nil reads from disk.
 	ReadFile func(path string) (string, error)
 	// OpenGit opens the repository. nil uses git.Open on the working directory.
@@ -38,7 +44,13 @@ type Loader struct {
 // Load builds the State for cfg with the default Loader.
 func Load(ctx context.Context, cfg *config.Config) (workflow.State, error) {
 	ignore := cfg.Changes != nil && cfg.Changes.IgnoreConventionalCommits
-	return Loader{}.State(ctx, cfg.PackageConfigs(), ignore)
+	l := Loader{GitHubConfigured: cfg.GitHub != nil}
+	if cfg.ReleaseNotes != nil {
+		for _, t := range cfg.ReleaseNotes.ChangeTemplates {
+			l.ChangeTemplates = append(l.ChangeTemplates, releasenotes.ChangeTemplate(t))
+		}
+	}
+	return l.State(ctx, cfg.PackageConfigs(), ignore)
 }
 
 // State loads the packages, their versioned files and the Git tags. Git is only opened, and tags only read,
@@ -49,7 +61,7 @@ func Load(ctx context.Context, cfg *config.Config) (workflow.State, error) {
 func (l Loader) State(
 	ctx context.Context, pkgs []config.PackageConfig, ignoreConventionalCommits bool,
 ) (workflow.State, error) {
-	state := workflow.State{IgnoreConventionalCommits: ignoreConventionalCommits}
+	state := workflow.State{IgnoreConventionalCommits: ignoreConventionalCommits, GitHubConfigured: l.GitHubConfigured}
 	if len(pkgs) == 0 {
 		return state, nil
 	}
@@ -82,9 +94,28 @@ func (l Loader) State(
 		if err != nil {
 			return workflow.State{}, err
 		}
+		pkg.ReleaseNotes.Sections = releasenotes.ConvertSections(extraSections(p.ExtraChangelogSections))
+		pkg.ReleaseNotes.ChangeTemplates = slices.Clone(l.ChangeTemplates)
+		if p.Changelog != "" {
+			content, err := l.readOptional(p.Changelog)
+			if err != nil {
+				return workflow.State{}, err
+			}
+			changelog := releasenotes.NewChangelog(p.Changelog, content)
+			pkg.ReleaseNotes.Changelog = &changelog
+		}
 		state.Packages = append(state.Packages, pkg)
 	}
 	return state, nil
+}
+
+// extraSections converts the extra_changelog_sections of a package to the versioning core's type (F7.1, F12.1).
+func extraSections(in []config.ExtraSection) []releasenotes.ChangelogSectionConfig {
+	out := make([]releasenotes.ChangelogSectionConfig, 0, len(in))
+	for _, s := range in {
+		out = append(out, releasenotes.ChangelogSectionConfig{Name: s.Name, Footers: s.Footers, Types: s.Types})
+	}
+	return out
 }
 
 // readTags opens Git and lists its tags. Errors are logged and swallowed, as Knope does (unwrap_or_default).
@@ -104,6 +135,15 @@ func (l Loader) readTags(ctx context.Context) (git.Git, []string) {
 		return g, nil
 	}
 	return g, tags
+}
+
+// readOptional reads a file that may be missing, which then counts as empty (the changelog, spec F2.2).
+func (l Loader) readOptional(path string) (string, error) {
+	content, err := l.read(path)
+	if err != nil && errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	return content, err
 }
 
 func (l Loader) read(path string) (string, error) {

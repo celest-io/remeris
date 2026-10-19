@@ -1,0 +1,58 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/changelog/create_missing (MIT, see testdata/README.md).
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New feature' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp Cargo.toml out/Cargo.toml
+cmp CHANGELOG.md out/CHANGELOG.md
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.1.0
+Would add the following to CHANGELOG.md:
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- New feature
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+-- out/CHANGELOG.md --
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- New feature
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.1.0"

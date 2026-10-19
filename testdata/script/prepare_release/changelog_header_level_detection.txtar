@@ -1,0 +1,54 @@
+# Ported from knope-dev/knope, crates/knope/tests/prepare_release/changelog/header_level_detection (MIT, see testdata/README.md).
+skip 'needs the GitHub forge (milestone M7) and the Release step (milestone M6)'
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: We support custom header levels now 🎉' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+grep '(?s)\AWould add the following to Cargo\.toml: version = 1\.1\.0\nWould delete \.changeset/changeset\.md\nWould add the following to CHANGELOG\.md:\n# 1\.1\.0 \(2026-01-01\)\n\n## Features\n\n- We support custom header levels now 🎉\n\n### A title from a changeset\n\nThat title up there should be promoted to the correct header level\n\nWould add files to git:\n  Cargo\.toml\n  \.changeset/changeset\.md\n  CHANGELOG\.md\nWould create a release on GitHub with name 1\.1\.0 \(2026-01-01\) and tag v1\.1\.0 at commit [0-9a-f]{40} and body:\n## Features\n\n- We support custom header levels now 🎉\n\n### A title from a changeset\n\nThat title up there should be promoted to the correct header level\n\z' stdout_actual.log
+! stderr .
+
+-- .changeset/changeset.md --
+---
+default: minor
+---
+
+#### A title from a changeset
+
+That title up there should be promoted to the correct header level
+-- CHANGELOG.md --
+# CHANGELOG
+
+# 1.0.0
+
+## Breaking Changes 🍳
+
+### Well for one, we're using a second first-level header 🙀
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[github]
+owner = "knope-dev"
+repo = "knope"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
