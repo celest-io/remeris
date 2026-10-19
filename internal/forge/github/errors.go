@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	gh "github.com/google/go-github/v92/github"
@@ -15,7 +16,7 @@ import (
 //
 //	Trouble communicating with GitHub while {activity}: {status error} with body: {body}
 //
-// for an error response from GitHub, including the rate-limit errors, and
+// for an error response from GitHub, including the rate-limit, two-factor and redirection errors, and
 //
 //	Trouble communicating with GitHub while {activity}: {error}
 //
@@ -32,6 +33,8 @@ func WrapError(activity string, err error) error {
 		errResp *gh.ErrorResponse
 		rate    *gh.RateLimitError
 		abuse   *gh.AbuseRateLimitError
+		twoFA   *gh.TwoFactorAuthError
+		redir   *gh.RedirectionError
 	)
 	switch {
 	case errors.As(err, &errResp):
@@ -40,10 +43,18 @@ func WrapError(activity string, err error) error {
 		resp, message = rate.Response, rate.Message
 	case errors.As(err, &abuse):
 		resp, message = abuse.Response, abuse.Message
+	case errors.As(err, &twoFA):
+		resp, message = twoFA.Response, twoFA.Message
+	case errors.As(err, &redir):
+		resp = redir.Response
 	}
 	if resp != nil {
 		if d := httpx.NewStatusError(service, activity, resp, responseBody(resp, message)); d != nil {
 			return d.WithCause(err)
+		}
+		if resp.StatusCode >= http.StatusMultipleChoices && resp.StatusCode < http.StatusBadRequest {
+			return httpx.NewAPIRequestError(service, activity, redirectStatus(resp)+" with body: "+responseBody(resp, message)).
+				WithCause(err)
 		}
 	}
 	return httpx.NewTransportError(service, activity, err)
@@ -62,4 +73,14 @@ func responseBody(resp *http.Response, message string) string {
 		return message
 	}
 	return string(data)
+}
+
+// redirectStatus words a redirect like httpx.StatusError words 4xx and 5xx:
+// "HTTP status redirect error (307 Temporary Redirect) for url (URL)".
+func redirectStatus(resp *http.Response) string {
+	msg := "HTTP status redirect error (" + strconv.Itoa(resp.StatusCode) + " " + http.StatusText(resp.StatusCode) + ")"
+	if resp.Request != nil && resp.Request.URL != nil {
+		msg += " for url (" + resp.Request.URL.Redacted() + ")"
+	}
+	return msg
 }
