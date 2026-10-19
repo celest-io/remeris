@@ -32,6 +32,18 @@ type Git interface {
 	// Like Knope, paths that match nothing, and untracked files that are ignored, are skipped without an error.
 	// Paths are literal names, not patterns. An empty list does nothing, not even opening the repository.
 	AddFiles(ctx context.Context, paths []string) error
+	// CreateTag creates the tag name on HEAD (spec F9.5). Like Knope's repo.tag(name, HEAD, signature, "", false), it is
+	// an annotated tag with an empty message, tagged by the committer from the Git configuration (user.name and
+	// user.email only: GIT_COMMITTER_* is ignored), and it fails when the tag already exists.
+	CreateTag(ctx context.Context, name string, opts TagOptions) error
+	// HeadCommitSHA returns the full 40-character id of the commit HEAD points to (spec F9.6).
+	HeadCommitSHA(ctx context.Context) (string, error)
+}
+
+// TagOptions are the options of CreateTag.
+type TagOptions struct {
+	// Sign asks for a signed tag. It is a Phase 1 hook for the signing extension (spec E2): both backends ignore it.
+	Sign bool
 }
 
 // Commit is a commit with its full message, as returned by CommitMessagesAfterTag.

@@ -50,6 +50,10 @@ func (g *recordingGit) AddFiles(_ context.Context, paths []string) error {
 	return nil
 }
 
+func (*recordingGit) CreateTag(context.Context, string, git.TagOptions) error { return nil }
+
+func (*recordingGit) HeadCommitSHA(context.Context) (string, error) { return "", nil }
+
 func commits(messages ...string) []git.Commit {
 	out := make([]git.Commit, len(messages))
 	for i, m := range messages {

@@ -63,9 +63,14 @@ func gitEnv(environ []string) []string {
 //
 // --no-replace-objects keeps refs/replace out of the picture, as libgit2 ignores it.
 func (c *CLI) run(ctx context.Context, stdin string, args ...string) (string, error) {
+	return c.runEnv(ctx, stdin, nil, args...)
+}
+
+// runEnv is run with extra environment variables, which win over the inherited ones.
+func (c *CLI) runEnv(ctx context.Context, stdin string, extraEnv []string, args ...string) (string, error) {
 	full := append([]string{"--no-replace-objects", "-C", c.Dir}, args...)
 	cmd := exec.CommandContext(ctx, c.path, full...) //nolint:gosec // path comes from LookPath
-	cmd.Env = gitEnv(os.Environ())
+	cmd.Env = append(gitEnv(os.Environ()), extraEnv...)
 	cmd.WaitDelay = waitDelay
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
