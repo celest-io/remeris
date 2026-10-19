@@ -73,7 +73,7 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 				return ctx, err
 			}
 			setupLogging(stdout, global.Verbose, global.Validate)
-			return ctx, nil
+			return ctx, global.ValidateGitHubApp(os.Getenv)
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if handled, err := runSpecialMode(ctx, global, cfg, nil); handled {
@@ -105,6 +105,22 @@ func rootFlags(cfg *config.Config) []cli.Flag {
 			Name:    "verbose",
 			Aliases: []string{"v"},
 			Usage:   "Print extra information (for debugging)",
+		},
+		&cli.Int64Flag{
+			Name:    app.FlagGitHubAppID,
+			Usage:   "ID of the GitHub App to authenticate as",
+			Sources: cli.EnvVars(app.EnvGitHubAppID),
+		},
+		&cli.Int64Flag{
+			Name:    app.FlagGitHubInstallationID,
+			Usage:   "ID of the GitHub App installation",
+			Sources: cli.EnvVars(app.EnvGitHubInstallationID),
+		},
+		&cli.StringFlag{
+			Name: app.FlagGitHubAppKeyPath,
+			Usage: "Path to the GitHub App private key (PEM); " + app.EnvGitHubAppKey +
+				" may hold the key itself",
+			Sources: cli.EnvVars(app.EnvGitHubAppKeyPath),
 		},
 	}
 	if cfg.Source == config.SourceDefault {

@@ -28,6 +28,9 @@ func run(t *testing.T, args ...string) (*GlobalOptions, *WorkflowOptions) {
 			&cli.BoolFlag{Name: "dry-run"},
 			&cli.BoolFlag{Name: "verbose", Aliases: []string{"v"}},
 			&cli.BoolFlag{Name: "validate", Local: true},
+			&cli.Int64Flag{Name: FlagGitHubAppID, Sources: cli.EnvVars(EnvGitHubAppID)},
+			&cli.Int64Flag{Name: FlagGitHubInstallationID, Sources: cli.EnvVars(EnvGitHubInstallationID)},
+			&cli.StringFlag{Name: FlagGitHubAppKeyPath, Sources: cli.EnvVars(EnvGitHubAppKeyPath)},
 		},
 		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 			return ctx, LoadConfig(cmd, global)

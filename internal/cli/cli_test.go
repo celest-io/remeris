@@ -15,6 +15,8 @@ import (
 )
 
 const (
+	flagAppID    = "--github-app-id"
+	errNoKey     = "without a private key"
 	flagVerbose  = "verbose"
 	flagValidate = "validate"
 	flagUpgrade  = "upgrade"
@@ -377,5 +379,57 @@ func TestSetupLogging(t *testing.T) {
 				t.Errorf("output = %q, want %q", buf.String(), tc.want)
 			}
 		})
+	}
+}
+
+func TestGitHubAppOptionsAreValidatedAtStartup(t *testing.T) {
+	cfg := loadConfig(t, twoWorkflows)
+	cases := map[string]struct {
+		args    []string
+		env     map[string]string
+		wantErr string
+	}{
+		"unset":                 {args: []string{wfPlain}},
+		"id without key":        {args: []string{flagAppID, "1", wfPlain}, wantErr: errNoKey},
+		"id after the workflow": {args: []string{wfPlain, flagAppID, "1"}, wantErr: errNoKey},
+		"id from env, no key": {
+			args:    []string{wfPlain},
+			env:     map[string]string{"REMERIS_GITHUB_APP_ID": "1"},
+			wantErr: errNoKey,
+		},
+		"id and path": {args: []string{flagAppID, "1", "--github-app-private-key-path", "k.pem", wfPlain}},
+		"id and key env": {
+			args: []string{wfPlain, "--github-app-id=1"},
+			env:  map[string]string{"REMERIS_GITHUB_APP_PRIVATE_KEY": "fake-key-for-tests"},
+		},
+		"key env without id": {
+			args:    []string{wfPlain},
+			env:     map[string]string{"REMERIS_GITHUB_APP_PRIVATE_KEY": "fake-key-for-tests"},
+			wantErr: "without an App ID",
+		},
+		"installation without id": {args: []string{"--github-installation-id", "2", wfPlain}, wantErr: "without an App ID"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			_, err := run(t, cfg, tc.args...)
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatal(err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("error = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestGitHubAppFlagsAreListed(t *testing.T) {
+	names := flagNames(New(loadConfig(t, twoWorkflows), nil, nil))
+	for _, f := range []string{"github-app-id", "github-installation-id", "github-app-private-key-path"} {
+		if !has(names, f) {
+			t.Errorf("missing flag --%s in %v", f, names)
+		}
 	}
 }
