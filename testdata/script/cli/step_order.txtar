@@ -13,10 +13,10 @@ name = "run"
 type = "Command"
 command = "touch first"
 [[workflows.steps]]
-type = "Release"
+type = "SelectGitHubIssue"
 [[workflows.steps]]
 type = "Command"
 command = "touch third"
 -- stderr.log --
 Error: Problem with workflow run
-  ╰─▶ Step Release is not implemented yet (milestone M6)
+  ╰─▶ Step SelectGitHubIssue is not implemented yet (milestone M11)

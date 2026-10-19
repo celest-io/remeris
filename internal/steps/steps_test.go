@@ -142,7 +142,6 @@ func TestUnimplementedSteps(t *testing.T) {
 		step      workflow.Step
 		milestone string
 	}{
-		"Release":               {&Release{}, "M6"},
 		"CreatePullRequest":     {&CreatePullRequest{}, "M7"},
 		"SelectJiraIssue":       {&SelectJiraIssue{}, milestone11},
 		"TransitionJiraIssue":   {&TransitionJiraIssue{}, milestone11},

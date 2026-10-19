@@ -32,6 +32,12 @@ type recordingGit struct {
 	tagArg  *string
 	called  bool
 	staged  []string
+	// tagged are the names given to CreateTag, in order.
+	tagged []string
+	// tagErr is returned by CreateTag.
+	tagErr error
+	// forbidTag, when set, makes every CreateTag call fail this test.
+	forbidTag *testing.T
 }
 
 func (*recordingGit) AllTagsOnBranch(context.Context) ([]string, error) { return nil, nil }
@@ -50,7 +56,13 @@ func (g *recordingGit) AddFiles(_ context.Context, paths []string) error {
 	return nil
 }
 
-func (*recordingGit) CreateTag(context.Context, string, git.TagOptions) error { return nil }
+func (g *recordingGit) CreateTag(_ context.Context, name string, _ git.TagOptions) error {
+	if g.forbidTag != nil {
+		g.forbidTag.Errorf("CreateTag(%q) must not be called", name)
+	}
+	g.tagged = append(g.tagged, name)
+	return g.tagErr
+}
 
 func (*recordingGit) HeadCommitSHA(context.Context) (string, error) { return "", nil }
 
