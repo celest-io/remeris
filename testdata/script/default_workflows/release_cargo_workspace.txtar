@@ -1,5 +1,5 @@
 # Ported from knope-dev/knope, crates/knope/tests/default_workflows/release/cargo_workspace (MIT, see testdata/README.md).
-skip 'needs the GitHub forge (milestone M7) and package discovery (milestone M10)'
+skip 'needs package discovery (milestone M10)'
 
 env REMERIS_FAKE_DATE=2026-01-01
 

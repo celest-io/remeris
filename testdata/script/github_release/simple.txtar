@@ -1,0 +1,48 @@
+# Ported from knope-dev/knope, crates/knope/tests/github_release/simple (MIT, see testdata/README.md).
+# Release creates a GitHub release with the notes of the changelog; nothing is tagged locally, since GitHub makes the tag.
+# Knope only runs this as a dry run (a real release needs the GitHub API); so does this script. A dry run reads no
+# credentials and makes no request. [COMMIT] is the HEAD commit, matched as 40 hex digits.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+grep '(?s)\AWould add the following to Cargo\.toml: version = 1\.1\.0\nWould add the following to CHANGELOG\.md:\n## 1\.1\.0 \(2026-01-01\)\n\n### Features\n\n- New feature\n\nWould add files to git:\n  Cargo\.toml\n  CHANGELOG\.md\nWould create a release on GitHub with name 1\.1\.0 \(2026-01-01\) and tag v1\.1\.0 at commit [0-9a-f]{40} and body:\n## Features\n\n- New feature\n\z' stdout_actual.log
+! stderr .
+
+exec git tag --list
+! stdout 'v1\.1\.0|2\.0\.0|0\.5\.0|go/v1\.1\.0'
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- New feature in existing release
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+name = "test"
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
+
+[github]
+owner = "knope-dev"
+repo = "knope"
