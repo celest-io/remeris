@@ -115,14 +115,15 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 Milestones M0 to M5 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
 `PrepareRelease` steps, with the SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod,
 regex), packages, Git tags and staging, conventional commits, change files, changelogs, prompts and the `Version`
-and `ChangelogEntry` variables. Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; forges, workspace discovery (a workspace root is an error until M10), `--generate` and `--upgrade` come later (see spec section 1). `internal/config/discover.go` finds the single default package at the root.
+and `ChangelogEntry` variables. Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; forges, workspace discovery (a workspace root is an error until M10), `--generate` and `--upgrade` come later (see spec section 1).
 
 ```
 cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests
 internal/diag/      Diagnostic interface and the renderer for errors (message, help, related errors)
 internal/app/       GlobalOptions, WorkflowOptions and the generic LoadConfig[T]
 internal/cli/       root command, one subcommand per workflow, logging, --validate
-internal/config/    Knope configuration (knope.toml) loading: koanf + a go-toml unstable index for key order and spans
+internal/config/    Knope configuration (knope.toml) loading: koanf + a go-toml unstable index for key order and spans;
+                    discover.go finds the root package when none is declared (workspace roots are an M10 error)
 internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
 internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines
