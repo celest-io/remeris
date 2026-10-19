@@ -38,6 +38,9 @@ type recordingGit struct {
 	tagErr error
 	// forbidTag, when set, makes every CreateTag call fail this test.
 	forbidTag *testing.T
+	// head and headErr are what HeadCommitSHA returns.
+	head    string
+	headErr error
 }
 
 func (*recordingGit) AllTagsOnBranch(context.Context) ([]string, error) { return nil, nil }
@@ -64,7 +67,7 @@ func (g *recordingGit) CreateTag(_ context.Context, name string, _ git.TagOption
 	return g.tagErr
 }
 
-func (*recordingGit) HeadCommitSHA(context.Context) (string, error) { return "", nil }
+func (g *recordingGit) HeadCommitSHA(context.Context) (string, error) { return g.head, g.headErr }
 
 func (*recordingGit) CurrentBranch(context.Context) (string, error) { return "", nil }
 

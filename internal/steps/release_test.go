@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -261,48 +262,19 @@ func TestReleaseDryRunWithoutGit(t *testing.T) {
 	}
 }
 
-func TestReleaseForges(t *testing.T) {
-	cases := map[string]struct {
-		github, gitea bool
-		want          string
-	}{
-		"github":       {github: true, want: "Step Release is not implemented yet (milestone M7)"},
-		"gitea":        {gitea: true, want: "Step Release is not implemented yet (milestone M8)"},
-		"both: github": {github: true, gitea: true, want: "Step Release is not implemented yet (milestone M7)"},
-	}
-	for name, tc := range cases {
-		for _, dry := range []bool{false, true} {
-			t.Run(name, func(t *testing.T) {
-				g := &recordingGit{forbidTag: t}
-				state := releaseState(t, []string{tagV100}, false, "")
-				state.Git, state.GiteaConfigured = g, tc.gitea
-				if tc.github {
-					state.GitHub = newTestForge()
-				}
+func TestReleaseGiteaIsNotImplemented(t *testing.T) {
+	for _, dry := range []bool{false, true} {
+		t.Run(fmt.Sprintf("dry run %v", dry), func(t *testing.T) {
+			g := &recordingGit{forbidTag: t}
+			state := releaseState(t, []string{tagV100}, false, "")
+			state.Git, state.GiteaConfigured = g, true
 
-				_, err := runRelease(state, dry)
+			_, err := runRelease(state, dry)
 
-				if err == nil || err.Error() != tc.want {
-					t.Errorf("err = %v, want %q", err, tc.want)
-				}
-			})
-		}
-	}
-}
-
-func TestReleaseForgeStillCreatesAddTag(t *testing.T) {
-	g := &recordingGit{}
-	state := releaseState(t, nil, false, "")
-	state.Git, state.GitHub = g, newTestForge()
-	state.PendingActions = []action.Action{action.AddTag(subTagV120), releaseOf(v120, "")}
-
-	_, err := runRelease(state, false)
-
-	if err == nil || !strings.Contains(err.Error(), "M7") {
-		t.Errorf("err = %v", err)
-	}
-	if !slices.Equal(g.tagged, []string{subTagV120}) {
-		t.Errorf("tags = %q", g.tagged)
+			if want := "Step Release is not implemented yet (milestone M8)"; err == nil || err.Error() != want {
+				t.Errorf("err = %v, want %q", err, want)
+			}
+		})
 	}
 }
 
