@@ -270,7 +270,10 @@ func TestPrepareReleaseForgeVariable(t *testing.T) {
 			prepareDir(t, nil)
 			g := &recordingGit{commits: commits(tc.commits...)}
 			state := stateFor(t, []string{tagV123}, cargo(v123), "")
-			state.Git, state.GitHubConfigured = g, tc.github
+			state.Git = g
+			if tc.github {
+				state.GitHub = newTestForge()
+			}
 			state.Packages[0].ReleaseNotes.ChangeTemplates = []releasenotes.ChangeTemplate{
 				releasenotes.ChangeTemplate(tc.template),
 			}

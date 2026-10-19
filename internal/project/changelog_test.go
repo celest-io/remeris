@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/celest-io/remeris/internal/config"
+	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/releasenotes"
@@ -34,8 +35,8 @@ func TestStateLoadsChangelogAndTemplates(t *testing.T) {
 			cfg := pkgCfg(versioning.DefaultName(), regexCfg(t, versionTxt))
 			cfg.Changelog = tc.changelog
 			l := Loader{
-				ChangeTemplates:  []releasenotes.ChangeTemplate{"- $summary"},
-				GitHubConfigured: true,
+				ChangeTemplates: []releasenotes.ChangeTemplate{"- $summary"},
+				GitHub:          github.New(github.Config{Owner: "o", Repo: "r"}, nil, nil),
 				ReadFile: func(path string) (string, error) {
 					if path == versionTxt {
 						return versionBody, nil
@@ -57,8 +58,8 @@ func TestStateLoadsChangelogAndTemplates(t *testing.T) {
 			if (notes.Changelog == nil) != tc.wantNil || notes.Changelog != nil && notes.Changelog.Content != tc.wantContent {
 				t.Errorf("changelog = %+v", notes.Changelog)
 			}
-			if len(notes.ChangeTemplates) != 1 || !state.GitHubConfigured {
-				t.Errorf("templates = %v, github = %v", notes.ChangeTemplates, state.GitHubConfigured)
+			if len(notes.ChangeTemplates) != 1 || state.GitHub == nil {
+				t.Errorf("templates = %v, github = %v", notes.ChangeTemplates, state.GitHub)
 			}
 		})
 	}

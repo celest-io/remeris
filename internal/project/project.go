@@ -16,7 +16,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/celest-io/remeris/internal/config"
+	"github.com/celest-io/remeris/internal/credentials"
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
@@ -33,8 +35,8 @@ var errInvalidUTF8 = errors.New("stream did not contain valid UTF-8")
 type Loader struct {
 	// ChangeTemplates are the [release_notes].change_templates, given to every package.
 	ChangeTemplates []releasenotes.ChangeTemplate
-	// GitHubConfigured is true when the configuration has a [github] table.
-	GitHubConfigured bool
+	// GitHub is the GitHub forge, nil when the configuration has no [github] table.
+	GitHub *github.Forge
 	// GiteaConfigured is true when the configuration has a [gitea] table.
 	GiteaConfigured bool
 	// ReadFile returns the content of the file at the slash-separated relative path. nil reads from disk.
@@ -43,10 +45,24 @@ type Loader struct {
 	OpenGit func(ctx context.Context) (git.Git, error)
 }
 
+// Options are what Load needs besides the configuration: how to authenticate to the forges. Nothing here is read
+// or used until a step asks the forge for a client, which a dry run never does.
+type Options struct {
+	// GitHubApp is the GitHub App given by the command line, or nil for none.
+	GitHubApp *github.App
+	// Credentials finds the GitHub token and asks for it. nil means the zero credentials.Store: the real
+	// environment and no prompt.
+	Credentials *credentials.Store
+}
+
 // Load builds the State for cfg with the default Loader.
-func Load(ctx context.Context, cfg *config.Config) (workflow.State, error) {
+func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State, error) {
 	ignore := cfg.Changes != nil && cfg.Changes.IgnoreConventionalCommits
-	l := Loader{GitHubConfigured: cfg.GitHub != nil, GiteaConfigured: cfg.Gitea != nil}
+	l := Loader{GiteaConfigured: cfg.Gitea != nil}
+	if gh := cfg.GitHub; gh != nil {
+		l.GitHub = github.New(github.Config{Owner: gh.Owner, Repo: gh.Repo, APIURL: gh.APIURL, UploadURL: gh.UploadURL},
+			opts.GitHubApp, opts.Credentials)
+	}
 	if cfg.ReleaseNotes != nil {
 		for _, t := range cfg.ReleaseNotes.ChangeTemplates {
 			l.ChangeTemplates = append(l.ChangeTemplates, releasenotes.ChangeTemplate(t))
@@ -63,7 +79,7 @@ func Load(ctx context.Context, cfg *config.Config) (workflow.State, error) {
 func (l Loader) State(
 	ctx context.Context, pkgs []config.PackageConfig, ignoreConventionalCommits bool,
 ) (workflow.State, error) {
-	state := workflow.State{IgnoreConventionalCommits: ignoreConventionalCommits, GitHubConfigured: l.GitHubConfigured,
+	state := workflow.State{IgnoreConventionalCommits: ignoreConventionalCommits, GitHub: l.GitHub,
 		GiteaConfigured: l.GiteaConfigured}
 	if len(pkgs) == 0 {
 		return state, nil

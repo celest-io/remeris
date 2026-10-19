@@ -44,7 +44,7 @@ func (s *Release) Run(
 		case action.KindCreateRelease:
 			tag := action.ReleaseTag(a.Release.Version, a.Release.PackageName)
 			switch {
-			case rt.State.GitHubConfigured:
+			case rt.State.GitHub != nil:
 				return rt, notImplemented(s, "M7")
 			case rt.State.GiteaConfigured:
 				return rt, notImplemented(s, "M8")

@@ -11,6 +11,7 @@ import (
 	"reflect"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/prompt"
 	"github.com/celest-io/remeris/pkg/versioning"
@@ -41,9 +42,9 @@ type State struct {
 	Prompter prompt.Prompter
 	// IgnoreConventionalCommits is the `ignore_conventional_commits` setting of `[changes]`.
 	IgnoreConventionalCommits bool
-	// GitHubConfigured is true when the configuration has a `[github]` table. PrepareRelease needs it for change
-	// templates that use forge data.
-	GitHubConfigured bool
+	// GitHub is the GitHub forge, or nil when the configuration has no `[github]` table. It builds its client on
+	// demand and caches it; a step must not ask for the client in a dry run. Clones of the state share it.
+	GitHub *github.Forge
 	// GiteaConfigured is true when the configuration has a `[gitea]` table. Release needs it to pick the forge.
 	GiteaConfigured bool
 }

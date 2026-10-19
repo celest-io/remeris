@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/steps"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
@@ -32,6 +33,11 @@ const (
 	searching   = "Searching for last package tag to determine if there's a release to release"
 	noChangelog = "Release has previously been prepared without a changelog, will create a release with no notes."
 )
+
+// newTestForge is the forge of a configuration with a [github] table. Nothing builds a client from it.
+func newTestForge() *github.Forge {
+	return github.New(github.Config{Owner: "o", Repo: "r"}, nil, nil)
+}
 
 // releaseState builds a state whose packages (named as in names, "" is the default one) list Cargo.toml at
 // version 1.2.0, or, when withGoMod is set, list the Go module sub/go.mod at that version instead.
@@ -269,7 +275,10 @@ func TestReleaseForges(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				g := &recordingGit{forbidTag: t}
 				state := releaseState(t, []string{tagV100}, false, "")
-				state.Git, state.GitHubConfigured, state.GiteaConfigured = g, tc.github, tc.gitea
+				state.Git, state.GiteaConfigured = g, tc.gitea
+				if tc.github {
+					state.GitHub = newTestForge()
+				}
 
 				_, err := runRelease(state, dry)
 
@@ -284,7 +293,7 @@ func TestReleaseForges(t *testing.T) {
 func TestReleaseForgeStillCreatesAddTag(t *testing.T) {
 	g := &recordingGit{}
 	state := releaseState(t, nil, false, "")
-	state.Git, state.GitHubConfigured = g, true
+	state.Git, state.GitHub = g, newTestForge()
 	state.PendingActions = []action.Action{action.AddTag(subTagV120), releaseOf(v120, "")}
 
 	_, err := runRelease(state, false)
