@@ -109,7 +109,7 @@ type GitHub struct {
 	// or contains ".api.". A trailing slash is added when missing.
 	APIURL string `toml:"api_url"`
 	// UploadURL is the base URL for release asset uploads, with the same shape as APIURL. It needs APIURL. When
-	// only APIURL is set, uploads use APIURL too (PR 42). go-github appends "api/uploads/" to its path unless
+	// only APIURL is set, uploads use APIURL too. go-github appends "api/uploads/" to its path unless
 	// the path already ends in "/api/uploads/" or the host starts with "api." or "uploads." or contains ".api.".
 	UploadURL string `toml:"upload_url"`
 }
