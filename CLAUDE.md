@@ -127,6 +127,7 @@ internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
 internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines
 internal/fsx/       dry-run aware file writes
+internal/glob/      Glob(fs.FS, pattern) with the semantics of Rust's glob crate (`**`, brackets, no backslash escape)
 internal/git/       Git access: the Git interface, the git CLI backend, the go-git fallback, Open picks one
 internal/project/   reads the packages, versioned files and Git tags into a workflow.State
 internal/httpx/     HTTP behaviour (F15.1): User-Agent, retrying RoundTripper with Retry-After and rate-limit warnings, ApiRequestError diagnostics
