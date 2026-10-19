@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -428,6 +429,155 @@ func TestCLICancelledContext(t *testing.T) {
 func TestGoGitCancelledContext(t *testing.T) {
 	t.Parallel()
 	runCancelled(t, func(t *testing.T, dir string) Git {
+		t.Helper()
+		g, err := NewGoGit(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return g
+	})
+}
+
+const (
+	cfgName  = "Config Name"
+	cfgEmail = "config@example.com"
+)
+
+var sha40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+// isolateConfig points every Git configuration scope at an empty place and sets committer variables that must
+// be ignored. It sets environment variables, so the tests that call it cannot run in parallel.
+func isolateConfig(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_COMMITTER_NAME", "Env Committer")
+	t.Setenv("GIT_COMMITTER_EMAIL", "env@example.com")
+}
+
+// tagRepo returns a repository with one commit and, when identity is true, user.name and user.email set.
+func tagRepo(t *testing.T, identity bool) *testRepo {
+	t.Helper()
+	isolateConfig(t)
+	r := newTestRepo(t, true)
+	r.commit("one")
+	if identity {
+		r.git("config", "user.name", cfgName)
+		r.git("config", "user.email", cfgEmail)
+	}
+	return r
+}
+
+func wantDiagCode(t *testing.T, err error, code string) {
+	t.Helper()
+	var d diag.Diagnostic
+	if err == nil || !errors.As(err, &d) || d.Code() != code {
+		t.Fatalf("error = %v, want a diagnostic with code %s", err, code)
+	}
+}
+
+func runTagContract(t *testing.T, open func(t *testing.T, dir string) Git) {
+	t.Helper()
+	ctx := context.Background()
+
+	t.Run("annotated tag on HEAD with an empty message and the configured tagger", func(t *testing.T) {
+		r := tagRepo(t, true)
+		if err := open(t, r.dir).CreateTag(ctx, "v1.0.0", TagOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.TrimSpace(r.git("cat-file", "-t", "v1.0.0")); got != "tag" {
+			t.Fatalf("object type = %q, want an annotated tag", got)
+		}
+		head := strings.TrimSpace(r.git("rev-parse", "HEAD"))
+		if got := strings.TrimSpace(r.git("rev-parse", "v1.0.0^{commit}")); got != head {
+			t.Fatalf("tag points to %s, want HEAD %s", got, head)
+		}
+		raw := r.git("cat-file", "tag", "v1.0.0")
+		_, message, _ := strings.Cut(raw, "\n\n")
+		if message != "" {
+			t.Fatalf("message = %q, want empty", message)
+		}
+		if !regexp.MustCompile(`(?m)^tagger Config Name <config@example\.com> \d+ [+-]\d{4}$`).MatchString(raw) {
+			t.Fatalf("tagger is not the configured identity:\n%s", raw)
+		}
+		if out := r.git("fsck", "--strict"); strings.Contains(out, "error") {
+			t.Fatalf("fsck: %s", out)
+		}
+	})
+
+	t.Run("an existing tag is an error and stays unchanged", func(t *testing.T) {
+		r := tagRepo(t, true)
+		r.annotated("v1.0.0")
+		before := strings.TrimSpace(r.git("rev-parse", "v1.0.0"))
+		r.commit("two")
+		err := open(t, r.dir).CreateTag(ctx, "v1.0.0", TagOptions{})
+		wantDiagCode(t, err, "remeris::git::command")
+		if !strings.Contains(err.Error(), "Unknown Git error: ") || !strings.Contains(err.Error(), "already exists") {
+			t.Fatalf("error = %v", err)
+		}
+		if after := strings.TrimSpace(r.git("rev-parse", "v1.0.0")); after != before {
+			t.Fatalf("tag moved from %s to %s", before, after)
+		}
+	})
+
+	t.Run("a missing identity is an error", func(t *testing.T) {
+		for key, other := range map[string]string{"user.name": "user.email", "user.email": "user.name"} {
+			r := tagRepo(t, false)
+			r.git("config", other, "x")
+			err := open(t, r.dir).CreateTag(ctx, "v1.0.0", TagOptions{})
+			wantDiagCode(t, err, "remeris::git::no_committer")
+			want := "Could not determine Git committer to commit changes: config value '" + key + "' was not found"
+			if err.Error() != want {
+				t.Fatalf("error = %q, want %q", err.Error(), want)
+			}
+			if out := r.git("tag", "--list"); out != "" {
+				t.Fatalf("tags = %q, want none", out)
+			}
+		}
+	})
+
+	t.Run("the new tag is on the branch", func(t *testing.T) {
+		r := tagRepo(t, true)
+		g := open(t, r.dir)
+		if err := g.CreateTag(ctx, "v1.0.0", TagOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := g.AllTagsOnBranch(ctx)
+		if err != nil || !slices.Equal(got, []string{"v1.0.0"}) {
+			t.Fatalf("tags = %v, err = %v", got, err)
+		}
+	})
+
+	t.Run("no commits", func(t *testing.T) {
+		isolateConfig(t)
+		r := newTestRepo(t, true)
+		r.git("config", "user.name", cfgName)
+		r.git("config", "user.email", cfgEmail)
+		g := open(t, r.dir)
+		_, err := g.HeadCommitSHA(ctx)
+		wantDiagCode(t, err, "remeris::git::command")
+		wantDiagCode(t, g.CreateTag(ctx, "v1.0.0", TagOptions{}), "remeris::git::command")
+	})
+
+	t.Run("HeadCommitSHA", func(t *testing.T) {
+		r := tagRepo(t, true)
+		got, err := open(t, r.dir).HeadCommitSHA(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := strings.TrimSpace(r.git("rev-parse", "HEAD")); got != want || !sha40.MatchString(got) {
+			t.Fatalf("sha = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestCLICreateTag(t *testing.T) { runTagContract(t, openGit) } //nolint:paralleltest // sets environment variables
+
+func TestGoGitCreateTag(t *testing.T) { //nolint:paralleltest // sets environment variables
+	runTagContract(t, func(t *testing.T, dir string) Git {
 		t.Helper()
 		g, err := NewGoGit(dir)
 		if err != nil {
