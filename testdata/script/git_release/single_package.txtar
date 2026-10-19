@@ -1,0 +1,83 @@
+# Ported from knope-dev/knope, crates/knope/tests/git_release/single_package (MIT, see testdata/README.md).
+# A Release step in a repository with no forge creates the tag for the release commit, and nothing is pushed.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+stdout '(?m)\A\[main [0-9a-f]+\] chore: Bump to 1\.1\.0\n 2 files changed, 14 insertions\(\+\)\n create mode 100644 CHANGELOG\.md\n create mode 100644 Cargo\.toml\n\z'
+! stderr .
+cmp CHANGELOG.md out/CHANGELOG.md
+cmp Cargo.toml out/Cargo.toml
+
+exec git tag --contains HEAD
+stdout '(?m)\Av1\.1\.0\n\z'
+
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- New feature in existing release
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = "git commit -m \"chore: Bump to version\""
+variables = { "version" = "Version" }
+
+[[workflows.steps]]
+type = "Release"
+-- dryrun_stdout.log --
+Would add the following to Cargo.toml: version = 1.1.0
+Would add the following to CHANGELOG.md:
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- New feature
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+Would run git commit -m "chore: Bump to 1.1.0"
+Would create Git tag v1.1.0
+-- out/CHANGELOG.md --
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- New feature
+
+## 1.0.0
+
+### Features
+
+- New feature in existing release
+-- out/Cargo.toml --
+[package]
+name = "default"
+version = "1.1.0"

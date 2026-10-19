@@ -1,0 +1,32 @@
+# Ported from knope-dev/knope, crates/knope/tests/default_workflows/release/no_forge (MIT, see testdata/README.md).
+# Without a forge, the default release workflow prepares the release and tags it. It only shows the push.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New Feature' --author 'Knope <knope@example.com>'
+
+cp Cargo.toml Cargo.toml.orig
+exec remeris release --dry-run
+cmp stdout stdout.log
+! stderr .
+cmp Cargo.toml Cargo.toml.orig
+
+-- Cargo.toml --
+[package]
+name = "my-package"
+version = "0.1.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+-- stdout.log --
+Would add the following to Cargo.toml: version = 1.1.0
+Would add files to git:
+  Cargo.toml
+Would run git commit -m "chore: prepare release 1.1.0"
+Would create Git tag v1.1.0
+Would run git push
+Would run git push --tags

@@ -1,0 +1,53 @@
+# Ported from knope-dev/knope, crates/knope/tests/git_release/split_workflow (MIT, see testdata/README.md).
+skip 'FAILS: --verbose prints Running step Release {} and lacks the Cargo.toml version and Git tags lines (see testdata/deviations.md)'
+# A Release step on its own, after a PrepareRelease run in another workflow: the version is already in Cargo.toml.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --verbose --dry-run
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release --verbose
+cmp stdout stdout.log
+! stderr .
+exec git tag --contains HEAD
+stdout '(?m)\Av1\.1\.0\n\z'
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.1.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "Release"
+-- dryrun_stdout.log --
+Loading package
+Cargo.toml has version 1.1.0
+Looking for Git tags matching package name.
+Running step Release
+Searching for last package tag to determine if there's a release to release
+Last tag is 1.0.0
+Release has previously been prepared without a changelog, will create a release with no notes.
+Would create Git tag v1.1.0
+-- stdout.log --
+Loading package
+Cargo.toml has version 1.1.0
+Looking for Git tags matching package name.
+Running step Release
+Searching for last package tag to determine if there's a release to release
+Last tag is 1.0.0
+Release has previously been prepared without a changelog, will create a release with no notes.

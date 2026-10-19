@@ -1,0 +1,29 @@
+# Ported from knope-dev/knope, crates/knope/tests/default_workflows/release/gitea (MIT, see testdata/README.md).
+skip 'needs the Gitea forge (milestone M8)'
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New Feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+grep '(?s)\AWould add the following to Cargo\.toml: version = 1\.1\.0\nWould add files to git:\n  Cargo\.toml\nWould run git commit -m "chore: prepare release 1\.1\.0"\nWould run git push\nWould create a release on Gitea \[https://codeberg\.org\] with name 1\.1\.0 \(2026-01-01\) and tag v1\.1\.0 at commit [0-9a-f]{40} and body:\n## Features\n\n- New Feature\n\z' stdout_actual.log
+! stderr .
+
+-- Cargo.toml --
+[package]
+name = "my-package"
+version = "0.1.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+
+[gitea]
+owner = "knope-dev"
+repo = "knope"
+host = "https://codeberg.org"

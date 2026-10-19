@@ -18,7 +18,9 @@ UPDATE_SCRIPTS=1 go test ./cmd/remeris      # rewrite the files compared with cm
 | `cli` | Remeris' own scripts: flags, help, errors, dry run, `--validate`, default workflows. |
 | `bump_version` | The `BumpVersion` step, ported from Knope's `bump_version` suite (`<dir>_<case>.txtar`). |
 | `command` | The `Command` step. `shell` and `replace_version` are ported from Knope; the rest are ours. |
-| `prepare_release` | The `PrepareRelease` step. `changesets_*`, `enable_prerelease_*`, `second_prerelease`, `release_after_prerelease`, `override_*`, `scopes_*`, `multiple_packages` (skipped: needs M9), `allow_empty` (skipped: needs M10), `no_version_change` (skipped: needs M6), `branching_history_*`, `cargo_*`, `changelog_*`, `custom_change_entries_all_custom`, `deno_*`, `gleam_toml`, `go_modules_*`, `handle_pre_versions_that_are_too_new`, `ignore_conventional_commits{,_toplevel}`, `inconsistent_versions`, `no_versioned_files`, `npm_*`, `override_version_multiple_packages`, `package_selection`, `prerelease_after_release`, `pubspec_yaml`, `pyproject_toml_*`, `readme_version`, `tauri_conf_json` and `verbose` are ported from Knope's `prepare_release` suite (skipped ones are listed below) (`<dir>_<case>.txtar`); `no_packages_ready`, `stages_files` and `forge_variable` are ours. Scripts set `REMERIS_FAKE_DATE=2026-01-01` and write that date where Knope has `[DATE]`; `rstrip` (defined in `cmd/remeris/main_test.go`) removes trailing spaces from a dry run's output before it is compared. |
+| `git_release` | The `Release` step in a repository with no forge, ported from Knope's `git_release` suite (`<dir>_<case>.txtar`). `split_workflow` is skipped: `--verbose` output differs (see below). |
+| `default_workflows` | Knope's `default_workflows` suite (`<dir>_<case>.txtar`, where `<dir>` is `release` or `get_version`). Help is compared by content, as in `cli`. Ports that need a forge or package discovery are skipped until their milestones (see below). |
+| `prepare_release` | The `PrepareRelease` step. `changesets_*`, `enable_prerelease_*`, `second_prerelease`, `release_after_prerelease`, `override_*`, `scopes_*`, `multiple_packages` (skipped: needs M9), `allow_empty` (skipped: needs M10), `no_version_change`, `branching_history_*`, `cargo_*`, `changelog_*`, `custom_change_entries_all_custom`, `deno_*`, `gleam_toml`, `go_modules_*`, `handle_pre_versions_that_are_too_new`, `ignore_conventional_commits{,_toplevel}`, `inconsistent_versions`, `no_versioned_files`, `npm_*`, `override_version_multiple_packages`, `package_selection`, `prerelease_after_release`, `pubspec_yaml`, `pyproject_toml_*`, `readme_version`, `tauri_conf_json` and `verbose` are ported from Knope's `prepare_release` suite (skipped ones are listed below) (`<dir>_<case>.txtar`); `no_packages_ready`, `stages_files` and `forge_variable` are ours. Scripts set `REMERIS_FAKE_DATE=2026-01-01` and write that date where Knope has `[DATE]`; `rstrip` (defined in `cmd/remeris/main_test.go`) removes trailing spaces from a dry run's output before it is compared. |
 
 `--help` is compared by content, not byte for byte: its layout comes from urfave/cli and differs from
 clap's (spec F3.1).
@@ -68,6 +70,23 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | `shell` | Ported: `script/command/shell.txtar`. |
 | `replace_version` | Ported but skipped: needs package discovery (M10), since its `knope.toml` declares no package. |
 
+### Status of `crates/knope/tests/git_release/*`
+
+| Fixture | Status |
+| --- | --- |
+| `single_package`, `multiple_packages` | Ported: `script/git_release/{single_package,multiple_packages}.txtar`. |
+| `split_workflow` | Ported but skipped: `FAILS`, `--verbose` output differs (see the `--verbose` row in `deviations.md`). |
+
+### Status of `crates/knope/tests/default_workflows/*`
+
+| Fixture | Status |
+| --- | --- |
+| `document_change`, `release/no_forge` | Ported: `script/default_workflows/{document_change,release_no_forge}.txtar`. |
+| `get_version/multi_package` | Ported but skipped: `FAILS`, remeris reports `No workflow named get-version` where clap reports an unrecognised subcommand. |
+| `get_version/single_package`, `release/cargo_workspace`, `release/help_single_package`, `release/help_multi_package` | Ported but skipped: need package discovery (M10). |
+| `release/github` | Ported but skipped: needs the GitHub forge (M7) and package discovery (M10). |
+| `release/gitea` | Ported but skipped: needs the Gitea forge (M8). |
+
 ### Status of `crates/knope/tests/bump_version/*`
 
 | Fixture | Status |
@@ -84,14 +103,13 @@ Every case that Knope's `mod.rs` files declare is ported. These scripts are skip
 
 | Fixture | Status |
 | --- | --- |
-| `branching_history/merge_commits`, `changelog/override_default_sections`, `go_modules/*` (except `version_determination`), `no_versioned_files` | Skipped: need the `Release` step (M6). |
-| `changelog/header_level_detection` | Skipped: needs the GitHub forge (M7) and `Release` (M6). |
+| `changelog/header_level_detection` | Skipped: needs the GitHub forge (M7). |
+| `go_modules/major_version_directories` | Skipped: `--verbose` output differs (`FAILS`, see the `--verbose` row in `deviations.md`). The `out/` files and tags match. |
 | `cargo/workspace/{full,no_lock}`, `deno/*`, `npm/workspaces`, `allow_empty` | Skipped: need package discovery (M10), and for `full`, `deno` and `npm` also `Cargo.lock`, `deno.json` or `package-lock.json` (M9). |
 | `cargo/workspace/shared_version`, `npm/{dependencies,package}`, `gleam_toml`, `pubspec_yaml`, `tauri_conf_json`, `multiple_packages` | Skipped: need M9 formats. |
-| `no_version_change` | Skipped: needs M6. |
 | `verbose` | Skipped: remeris does not print five of Knope's `--verbose` debug lines yet (see `deviations.md`). |
 | `custom_change_entries/with_fallback`, `go_modules/major_versions/failed_v2` | Not ported: Knope's `mod.rs` does not declare them. |
 
-Other Knope suites (`default_workflows`, `validate`, ...) are ported
+Other Knope suites (`validate`, ...) are ported
 with the milestone that needs them. Deviations from Knope's behaviour are listed in
 [`deviations.md`](deviations.md).

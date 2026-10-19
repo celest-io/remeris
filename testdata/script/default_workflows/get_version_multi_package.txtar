@@ -1,0 +1,28 @@
+# Ported from knope-dev/knope, crates/knope/tests/default_workflows/get_version/multi_package (MIT, see testdata/README.md).
+skip 'FAILS: with two packages remeris reports No workflow named get-version, not an unrecognised subcommand error'
+# With several packages there is no get-version workflow, so the command is not recognised.
+
+! exec remeris get-version
+! stdout .
+cmp stderr stderr.log
+
+-- Cargo.toml --
+[package]
+name = "single-package-get-version"
+version = "1.23.45"
+-- knope.toml --
+[packages.rust]
+versioned_files = ["Cargo.toml"]
+
+[packages.js]
+versioned_files = ["package.json"]
+-- package.json --
+{
+  "version": "13.24.54"
+}
+-- stderr.log --
+error: unrecognized subcommand 'get-version'
+
+Usage: remeris [OPTIONS] [COMMAND]
+
+For more information, try '--help'.

@@ -1,0 +1,9 @@
+# Ported from knope-dev/knope, crates/knope/tests/default_workflows/document_change (MIT, see testdata/README.md).
+# The help is compared by content: urfave/cli lays it out differently from clap (spec F3.1).
+exec remeris document-change --help
+stdout 'Create a new change file to be included in the next release'
+stdout 'remeris document-change \[options\]'
+stdout '--dry-run'
+stdout '--verbose, -v'
+stdout '--help, -h'
+! stderr .
