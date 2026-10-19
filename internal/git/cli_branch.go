@@ -74,7 +74,8 @@ func (c *CLI) FirstRemoteURL(ctx context.Context) (string, bool) {
 	if !found {
 		return "", false
 	}
-	if _, ok, err := c.configValue(ctx, "remote."+first+".url"); err != nil || !ok {
+	// An empty url is no URL: newer git versions print the remote's name from get-url then.
+	if raw, ok, err := c.configValue(ctx, "remote."+first+".url"); err != nil || !ok || raw == "" {
 		return "", false
 	}
 	out, err = c.run(ctx, "", "remote", "get-url", "--", first)
