@@ -36,17 +36,24 @@ const (
 	codeAuth = "remeris::github::authentication"
 )
 
-// Config is the `[github]` table of the configuration.
+// Config is the `[github]` table of the configuration, together with the URLs the command line trusts.
 type Config struct {
 	Owner string
 	Repo  string
-	// APIURL is the API base URL of a GitHub Enterprise instance (or a test server). Empty means github.com.
-	// It goes through go-github's WithEnterpriseURLs, which appends "api/v3/" to the path unless it already ends
-	// in "/api/v3/" or the host is an "api." host.
+	// APIURL is the API base URL of a GitHub Enterprise instance (or a test server) from knope.toml. Empty means
+	// none. It is not trusted on its own: it is used only when TrustedAPIURL is the same URL, because a repository's
+	// configuration must not choose where the token goes. The client goes through go-github's WithEnterpriseURLs,
+	// which appends "api/v3/" to the path unless it already ends in "/api/v3/" or the host is an "api." host.
 	APIURL string
-	// UploadURL is the base URL for release assets. Empty means the host of APIURL, so go-github uploads to
-	// "{host}/api/uploads/".
+	// UploadURL is the base URL for release assets from knope.toml, trusted like APIURL (against TrustedUploadURL).
+	// Empty means the host of the API URL, so go-github uploads to "{host}/api/uploads/". For hosts that go-github
+	// treats as "api." hosts (it then appends nothing), such as GHE.com with data residency and its "uploads." host,
+	// the upload URL must be given explicitly.
 	UploadURL string
+	// TrustedAPIURL and TrustedUploadURL come from --github-api-url and --github-upload-url (or their environment
+	// variables). With both APIURL and TrustedAPIURL empty the client talks to github.com.
+	TrustedAPIURL    string
+	TrustedUploadURL string
 }
 
 // App is the GitHub App the user asked for with the --github-app-* flags or their environment variables.
@@ -69,6 +76,9 @@ type Client struct {
 	Repo  string
 	// Authenticated is false when the client sends no credentials.
 	Authenticated bool
+
+	// guard is the credential guard of the client; it knows the hosts that may receive credentials.
+	guard *hostGuard
 }
 
 // Forge builds the GitHub client once and caches it.
@@ -123,20 +133,23 @@ func (f *Forge) client(ctx context.Context, require bool) (*Client, error) {
 		return f.anonymous, nil
 	}
 
+	if err := f.checkURLs(); err != nil {
+		return nil, err
+	}
 	src, err := f.tokenSource(ctx, require)
 	if err != nil {
 		return nil, err
 	}
 	if src == nil {
 		slog.DebugContext(ctx, "Using GitHub without authentication")
-		c, err := f.newClient(f.transport(http.DefaultTransport, false), false)
+		c, err := f.newClient(nil)
 		if err != nil {
 			return nil, err
 		}
 		f.anonymous = c
 		return c, nil
 	}
-	c, err := f.newClient(f.transport(&oauth2.Transport{Source: src, Base: http.DefaultTransport}, true), true)
+	c, err := f.newClient(src)
 	if err != nil {
 		return nil, err
 	}
@@ -144,30 +157,66 @@ func (f *Forge) client(ctx context.Context, require bool) (*Client, error) {
 	return c, nil
 }
 
-// transport wraps base with the retry policy. authenticated only changes the rate-limit hint.
-func (f *Forge) transport(base http.RoundTripper, authenticated bool) http.RoundTripper {
-	t := httpx.NewRetryTransport(base)
-	t.Authenticated = authenticated
-	return t
-}
-
-func (f *Forge) newClient(rt http.RoundTripper, authenticated bool) (*Client, error) {
-	opts := []gh.ClientOptionsFunc{gh.WithTransport(rt), gh.WithUserAgent(userAgent)}
-	if f.cfg.APIURL != "" {
-		upload := f.cfg.UploadURL
-		if upload == "" {
-			upload = defaultUploadURL(f.cfg.APIURL)
-		}
-		opts = append(opts, gh.WithEnterpriseURLs(f.cfg.APIURL, upload))
+// newClient builds a client that sends the token of src, or no credentials when src is nil.
+//
+// The URLs are resolved (and refused when untrusted or insecure) before anything is sent. Credentials go through a
+// [hostGuard] that adds them only for the scheme, host and port of the API and upload URLs, and CheckRedirect
+// refuses a redirect to another host, so a token never leaves the configured GitHub instance.
+func (f *Forge) newClient(src oauth2.TokenSource) (*Client, error) {
+	apiURL, uploadURL, err := resolveURLs(f.cfg)
+	if err != nil {
+		return nil, err
+	}
+	guard := newHostGuard(http.DefaultTransport, nil)
+	if src != nil {
+		guard.creds = &oauth2.Transport{Source: src, Base: http.DefaultTransport}
+	}
+	retry := httpx.NewRetryTransport(guard)
+	retry.Authenticated = src != nil
+	opts := []gh.ClientOptionsFunc{
+		gh.WithHTTPClient(&http.Client{CheckRedirect: checkRedirect}),
+		gh.WithTransport(retry),
+		gh.WithUserAgent(userAgent),
+		// httpx handles 429 and Retry-After; go-github's sticky local rate-limit state would add a second policy.
+		gh.WithDisableRateLimitCheck(),
+	}
+	if apiURL != "" {
+		opts = append(opts, gh.WithEnterpriseURLs(apiURL, uploadURL))
 	}
 	api, err := gh.NewClient(opts...)
 	if err != nil {
-		return nil, diag.New("The GitHub API URL is not valid: " + err.Error()).
-			WithCode("remeris::github::invalid_url").
-			WithHelp("Check api_url and upload_url in the [github] table.").
-			WithCause(err)
+		// The error of go-github repeats the URL as written, which could hold userinfo: it is not echoed.
+		return nil, diag.New("The GitHub API URL is not valid").
+			WithCode(codeInvalidURL).
+			WithHelp("Check the API and upload URLs.")
 	}
-	return &Client{Client: api, Owner: f.cfg.Owner, Repo: f.cfg.Repo, Authenticated: authenticated}, nil
+	for _, u := range []string{api.BaseURL(), api.UploadURL()} {
+		if err := checkSecure(u); err != nil {
+			return nil, err
+		}
+		guard.allow(u)
+	}
+	return &Client{
+		Client: api, Owner: f.cfg.Owner, Repo: f.cfg.Repo, Authenticated: src != nil, guard: guard,
+	}, nil
+}
+
+// checkURLs resolves and checks the URLs the client will use, so that an untrusted or insecure URL is refused
+// before the credential store is read or the user is asked for a token.
+func (f *Forge) checkURLs() error {
+	api, upload, err := resolveURLs(f.cfg)
+	if err != nil {
+		return err
+	}
+	for _, u := range []string{api, upload} {
+		if u == "" {
+			continue
+		}
+		if err := checkSecure(u); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // defaultUploadURL is the upload base go-github derives the GitHub Enterprise upload URL from when only the API URL
@@ -238,17 +287,19 @@ func (f *Forge) appTokenSource(ctx context.Context) (oauth2.TokenSource, error) 
 	}
 	appTS = oauth2.ReuseTokenSource(nil, appTS)
 
-	probe, err := f.newClient(http.DefaultTransport, false)
+	probe, err := f.newClient(nil)
 	if err != nil {
 		return nil, err
 	}
-	baseURL := probe.BaseURL()
-	// Calls made as the App itself (the JWT) or to get installation tokens.
-	jwtTransport := f.transport(http.DefaultTransport, true)
+	// Calls made as the App itself (the JWT) or to get installation tokens. go-githubauth adds the JWT above this
+	// transport; the guard drops it again for any host that is not the API or upload host.
+	jwtTransport := httpx.NewRetryTransport(probe.guard.withoutCreds())
+	jwtTransport.Authenticated = true
+	jwtClient := &http.Client{Transport: jwtTransport, CheckRedirect: checkRedirect}
 
 	id := f.app.InstallationID
 	if id == 0 {
-		lookup, err := f.newClient(f.transport(&oauth2.Transport{Source: appTS, Base: http.DefaultTransport}, true), true)
+		lookup, err := f.newClient(appTS)
 		if err != nil {
 			return nil, err
 		}
@@ -264,8 +315,8 @@ func (f *Forge) appTokenSource(ctx context.Context) (oauth2.TokenSource, error) 
 	}
 	slog.DebugContext(ctx, "Using GitHub App installation "+strconv.FormatInt(id, 10))
 	return githubauth.NewInstallationTokenSource(id, appTS,
-		githubauth.WithHTTPClient(&http.Client{Transport: jwtTransport}),
-		githubauth.WithBaseURL(baseURL),
+		githubauth.WithHTTPClient(jwtClient),
+		githubauth.WithBaseURL(probe.BaseURL()),
 		// The source outlives the call that built it.
 		githubauth.WithContext(context.WithoutCancel(ctx)),
 	), nil

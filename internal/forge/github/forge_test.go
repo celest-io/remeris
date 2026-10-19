@@ -118,7 +118,7 @@ func (f *fakeGitHub) seen() []request {
 }
 
 func (f *fakeGitHub) config() github.Config {
-	return github.Config{Owner: "o", Repo: "r", APIURL: f.URL + apiPath}
+	return github.Config{Owner: "o", Repo: "r", TrustedAPIURL: f.URL + apiPath}
 }
 
 // last returns the last request.
@@ -351,7 +351,7 @@ func TestEnterpriseURLs(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			cfg := github.Config{Owner: "o", Repo: "r", APIURL: tc.api, UploadURL: tc.upload}
+			cfg := github.Config{Owner: "o", Repo: "r", TrustedAPIURL: tc.api, TrustedUploadURL: tc.upload}
 			c, err := github.New(cfg, nil, storeIn(t, nil, nil)).MaybeAuthenticated(context.Background())
 			if err != nil {
 				t.Fatal(err)
@@ -367,7 +367,7 @@ func TestEnterpriseURLs(t *testing.T) {
 }
 
 func TestInvalidAPIURL(t *testing.T) {
-	cfg := github.Config{Owner: "o", Repo: "r", APIURL: "://bad"}
+	cfg := github.Config{Owner: "o", Repo: "r", TrustedAPIURL: "://bad"}
 	_, err := github.New(cfg, nil, storeIn(t, nil, nil)).MaybeAuthenticated(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "The GitHub API URL is not valid") {
 		t.Errorf("err = %v", err)
