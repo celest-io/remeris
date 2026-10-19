@@ -661,6 +661,7 @@ func TestGoGitCreateTag(t *testing.T) { //nolint:paralleltest // sets environmen
 const (
 	remoteSCP   = "git@github.com:o/r.git"
 	remoteHTTPS = "https://github.com/o/r.git"
+	remoteZed   = "zed"
 )
 
 func runBranchContract(t *testing.T, open func(t *testing.T, dir string) Git) {
@@ -719,6 +720,7 @@ func runBranchContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 	t.Run("FirstRemoteURL", func(t *testing.T) {
 		type tc struct {
 			remotes [][2]string
+			config  [][2]string
 			want    string
 			ok      bool
 		}
@@ -726,6 +728,20 @@ func runBranchContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 			"no remote":     {},
 			"scp-style URL": {remotes: [][2]string{{"origin", remoteSCP}}, want: remoteSCP, ok: true},
 			"https URL":     {remotes: [][2]string{{"origin", remoteHTTPS}}, want: remoteHTTPS, ok: true},
+			"fetch-only section first": {
+				remotes: [][2]string{{remoteZed, remoteHTTPS}},
+				config:  [][2]string{{"remote.alpha.fetch", "+refs/heads/*:refs/remotes/alpha/*"}},
+				want:    remoteHTTPS, ok: true,
+			},
+			"pushurl-only first": {
+				remotes: [][2]string{{remoteZed, remoteHTTPS}},
+				config:  [][2]string{{"remote.beta.pushurl", remoteSCP}},
+			},
+			"empty url first": {
+				remotes: [][2]string{{remoteZed, remoteHTTPS}},
+				config:  [][2]string{{"remote.alpha.url", ""}},
+			},
+			"name with a dot": {remotes: [][2]string{{"my.remote", remoteSCP}}, want: remoteSCP, ok: true},
 			"alphabetical order": {
 				remotes: [][2]string{{"zeta", remoteSCP}, {"alpha", remoteHTTPS}},
 				want:    remoteHTTPS,
@@ -739,6 +755,9 @@ func runBranchContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 				r.commit("one")
 				for _, rm := range tt.remotes {
 					r.git("remote", "add", rm[0], rm[1])
+				}
+				for _, kv := range tt.config {
+					r.git("config", kv[0], kv[1])
 				}
 				got, ok := open(t, r.dir).FirstRemoteURL(ctx)
 				if got != tt.want || ok != tt.ok {

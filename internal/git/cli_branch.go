@@ -40,23 +40,44 @@ func (c *CLI) CurrentBranch(ctx context.Context) (string, error) {
 	return strings.TrimPrefix(ref, branchRefPrefix), nil
 }
 
-// FirstRemoteURL returns the fetch URL of the first remote, in the order of git remote (alphabetical, which is also the
-// order of libgit2's repo.remotes()). It is false when there is no remote, or on any error, like Knope's get_first_remote.
+// FirstRemoteURL returns the fetch URL of the first remote, like Knope's get_first_remote. It is false when there is no
+// remote, or on any error.
 //
-// The url.<base>.insteadOf rewriting is applied, like libgit2's remote lookup does. With several url values the first is
+// Like libgit2's repo.remotes(), only the remotes that have a url or pushurl key are listed, sorted by name in byte
+// order (git remote would list every remote section). If the first one has no url, the result is false. The
+// url.<base>.insteadOf rewriting is applied, like libgit2's remote lookup does. With several url values the first is
 // used (libgit2 would take the last).
 //
-// Commands: git remote; git remote get-url name.
+// Commands: git config --null --get-regexp ^remote\..*\.(push)?url$; git remote get-url -- name.
 func (c *CLI) FirstRemoteURL(ctx context.Context) (string, bool) {
-	out, err := c.run(ctx, "", "remote")
+	out, err := c.run(ctx, "", "config", "--null", "--get-regexp", `^remote\..*\.(push)?url$`)
 	if err != nil {
 		return "", false
 	}
-	names := strings.Fields(out)
-	if len(names) == 0 {
+	var first string
+	found := false
+	for entry := range strings.SplitSeq(out, "\x00") {
+		key, _, _ := strings.Cut(entry, "\n")
+		name, ok := strings.CutPrefix(key, "remote.")
+		if !ok {
+			continue
+		}
+		if i := strings.LastIndex(name, "."); i > 0 {
+			name = name[:i]
+		} else {
+			continue
+		}
+		if !found || name < first {
+			first, found = name, true
+		}
+	}
+	if !found {
 		return "", false
 	}
-	out, err = c.run(ctx, "", "remote", "get-url", "--", names[0])
+	if _, ok, err := c.configValue(ctx, "remote."+first+".url"); err != nil || !ok {
+		return "", false
+	}
+	out, err = c.run(ctx, "", "remote", "get-url", "--", first)
 	url := strings.TrimSpace(out)
 	if err != nil || url == "" {
 		return "", false

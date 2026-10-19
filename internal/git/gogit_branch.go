@@ -32,8 +32,8 @@ func (g *GoGit) CurrentBranch(ctx context.Context) (string, error) {
 	return strings.TrimPrefix(target.String(), branchRefPrefix), nil
 }
 
-// FirstRemoteURL returns the fetch URL of the first remote by name, like the CLI backend: insteadOf is applied, and with
-// several url values the first is used.
+// FirstRemoteURL returns the fetch URL of the first remote, like the CLI backend: only remotes with a url or pushurl
+// key count, sorted by name; insteadOf is applied, and with several url values the first is used.
 func (g *GoGit) FirstRemoteURL(ctx context.Context) (string, bool) {
 	if ctx.Err() != nil {
 		return "", false
@@ -43,17 +43,25 @@ func (g *GoGit) FirstRemoteURL(ctx context.Context) (string, bool) {
 		return "", false
 	}
 	cfg, err := repo.ConfigScoped(config.SystemScope)
-	if err != nil || len(cfg.Remotes) == 0 {
+	if err != nil {
 		return "", false
 	}
-	names := make([]string, 0, len(cfg.Remotes))
-	for name := range cfg.Remotes {
-		names = append(names, name)
+	var names []string
+	for _, sub := range cfg.Raw.Section("remote").Subsections {
+		if sub.HasOption("url") || sub.HasOption("pushurl") {
+			names = append(names, sub.Name)
+		}
+	}
+	if len(names) == 0 {
+		return "", false
 	}
 	slices.Sort(names)
-	urls := cfg.Remotes[names[0]].URLs // the insteadOf rules are already applied
-	if len(urls) == 0 || urls[0] == "" {
+	if !cfg.Raw.Section("remote").Subsection(names[0]).HasOption("url") {
 		return "", false
 	}
-	return urls[0], true // the first value, like git remote get-url
+	remote, ok := cfg.Remotes[names[0]]
+	if !ok || len(remote.URLs) == 0 || remote.URLs[0] == "" {
+		return "", false
+	}
+	return remote.URLs[0], true // the insteadOf rules are already applied
 }
