@@ -19,11 +19,13 @@ type PreparedRelease struct {
 }
 
 // FindPreparedRelease is Knope's find_prepared_release (spec F14): it reports the release of the package's current
-// version when that version is not yet tagged. allTags are all Git tags of the repository.
+// version when that version is not yet tagged. allTags are all Git tags of the repository, newest first (as
+// Git.AllTagsOnBranch returns them).
 //
 // The bool is false when the package has no version, or when its latest tag is the current version (compared with
-// semver.Version.Equal, so build metadata counts, as in Knope). Otherwise the release comes from the changelog
-// entry of the current version, or has empty notes and the version as title.
+// SemVer precedence, so a tag that differs only in build metadata is the same release: Knope cannot parse build
+// metadata at all and skips such tags, which spec D8 replaces with full SemVer). Otherwise the release comes from
+// the changelog entry of the current version, or has empty notes and the version as title.
 //
 // The caller logs these debug messages, in this order: "Searching for last package tag to determine if there's a
 // release to release" (once the package has a version); "Last tag is {v}" when the package has a tag (LastTagOf
@@ -35,7 +37,7 @@ func (p *Package) FindPreparedRelease(allTags []string) (PreparedRelease, bool) 
 		return PreparedRelease{}, false
 	}
 	last := p.LastTagOf(allTags)
-	if last != nil && last.Equal(current) {
+	if last != nil && semver.Compare(*last, current) == 0 {
 		return PreparedRelease{}, false
 	}
 	pr := PreparedRelease{LastTag: last}

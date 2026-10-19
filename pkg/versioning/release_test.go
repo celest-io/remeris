@@ -39,6 +39,15 @@ func preparedPackage(t *testing.T, name versioning.PackageName, tags []string, c
 	return p
 }
 
+// A tag that differs from the version only in build metadata is the same release (SemVer precedence ignores it).
+func TestFindPreparedReleaseIgnoresBuildMetadata(t *testing.T) {
+	t.Parallel()
+	p := &versioning.Package{Name: versioning.DefaultName(), Versions: semver.FromVersion(mustVersion(t, v100))}
+	if pr, ok := p.FindPreparedRelease([]string{"v1.0.0+b1"}); ok {
+		t.Fatalf("FindPreparedRelease = %+v, want nothing to release", pr)
+	}
+}
+
 func TestFindPreparedRelease(t *testing.T) {
 	t.Parallel()
 	foo := versioning.CustomName("foo")
@@ -89,10 +98,6 @@ func TestFindPreparedRelease(t *testing.T) {
 		"stable after a pre-release tag": {
 			name: versioning.DefaultName(), tags: []string{relRC1Tag, tagV100}, current: relV110,
 			want: true, wantLast: relRC1, wantTitle: relV110,
-		},
-		// The history ignores build metadata when ranking, so the tag with build metadata stays the current version.
-		"build metadata of the tag": {
-			name: versioning.DefaultName(), tags: []string{"v1.0.0+b1"}, current: v100,
 		},
 	}
 	for name, tc := range tests {
