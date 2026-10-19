@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/steps"
@@ -59,7 +60,7 @@ func stepsOf(t *testing.T, cfg *Config, name string) []workflow.Step {
 }
 
 func TestLoadMissingFileGivesDefault(t *testing.T) {
-	cfg, err := Load(filepath.Join(t.TempDir(), "knope.toml"))
+	cfg, err := LoadFS(filepath.Join(t.TempDir(), "knope.toml"), fstest.MapFS{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +79,7 @@ func TestLoadMissingFileGivesDefault(t *testing.T) {
 func TestLoadFillsInWorkflows(t *testing.T) {
 	cases := map[string]struct {
 		toml      string
+		files     []string
 		wantNames []string
 		wantPush  string // the step after PrepareRelease and the commit
 	}{
@@ -93,6 +95,7 @@ func TestLoadFillsInWorkflows(t *testing.T) {
 		},
 		"one declared package adds get-version": {
 			toml:      "[package]\nversioned_files = [\"Cargo.toml\"]\n",
+			files:     []string{"Cargo.toml"},
 			wantNames: []string{wfRelease, wfDocumentChange, "get-version"},
 			wantPush:  stepRelease,
 		},
@@ -104,7 +107,10 @@ func TestLoadFillsInWorkflows(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			cfg := mustLoad(t, tc.toml)
+			cfg, err := loadIn(t, tc.toml, tc.files...)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if cfg.Source != SourceHybrid {
 				t.Errorf("Source = %v, want hybrid", cfg.Source)
 			}
@@ -533,7 +539,7 @@ project = "PRJ"
 	}
 	wantFiles := []VersionedFile{
 		{Path: "Cargo.toml"},
-		{Path: "Cargo.lock", Dependency: &dep},
+		{Path: cargoLockName, Dependency: &dep},
 		{Path: "README.md", Regex: []string{`version (?<version>\d+)`}},
 		{Path: "docs.md", Regex: []string{"a(?<version>1)", "b(?<version>2)"}},
 	}

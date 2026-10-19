@@ -221,7 +221,7 @@ assets = [{ path = "dist/*.zip", name = "bundle" }]
 			t.Fatalf("PackageConfigs() = %+v", pkgs)
 		}
 		p := pkgs[0]
-		if !p.Name.Equal(versioning.DefaultName()) || p.Changelog != "CHANGELOG.md" || !p.IgnoreGoMajorVersioning {
+		if !p.Name.Equal(versioning.DefaultName()) || p.Changelog != defaultChangelog || !p.IgnoreGoMajorVersioning {
 			t.Errorf("package = %+v", p)
 		}
 		if p.Scopes == nil || len(p.Scopes) != 0 {

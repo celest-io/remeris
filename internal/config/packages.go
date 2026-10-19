@@ -38,7 +38,7 @@ type PackageConfig struct {
 }
 
 // PackageConfigs returns the packages of the file in declaration order: `[package]` alone, or the entries of
-// `[packages]`. It is empty when the file declares none (package discovery is a later milestone).
+// `[packages]`. It is the package found at the root (F20.1) when the file declares none, and empty when there is none.
 func (c *Config) PackageConfigs() []PackageConfig { return c.packages }
 
 // osRoot is the working directory. Unlike os.DirFS it accepts `..`, which Knope allows in `versioned_files`.

@@ -54,6 +54,9 @@ type Config struct {
 	index *tomlIndex
 	// packages are the validated packages, in declaration order.
 	packages []PackageConfig
+	// discoveryErr is why package discovery failed. It is reported when the project is loaded, so that --help and
+	// the other commands that read no packages keep working.
+	discoveryErr error
 }
 
 type Changes struct {
@@ -144,14 +147,11 @@ type Jira struct {
 // HasForge reports whether a GitHub or Gitea integration is configured.
 func (c *Config) HasForge() bool { return c.GitHub != nil || c.Gitea != nil }
 
-// PackageCount is the number of packages declared in the file.
-func (c *Config) PackageCount() int {
-	n := len(c.Packages)
-	if c.Package != nil {
-		n++
-	}
-	return n
-}
+// PackageCount is the number of packages: those declared in the file, or the one discovered at the root.
+func (c *Config) PackageCount() int { return len(c.packages) }
+
+// DiscoveryError is the error of package discovery (spec F20.1), nil when it succeeded or did not run.
+func (c *Config) DiscoveryError() error { return c.discoveryErr }
 
 // Span returns where the table or array element at path (as in tomlIndex.Span) sits in knope.toml.
 func (c *Config) Span(path ...any) (Span, bool) {
@@ -176,11 +176,18 @@ func Load(path string) (*Config, error) { return LoadFS(path, osRoot{}) }
 func LoadFS(path string, root fs.StatFS) (*Config, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
-		return Default(), nil
+		cfg := Default()
+		cfg.packages, cfg.discoveryErr = discoverPackages(root)
+		cfg.Workflows = DefaultWorkflows(false, len(cfg.packages))
+		return cfg, nil
 	}
 	cfg, err := decode(path, src, root)
 	if err != nil {
 		return nil, err
+	}
+	// Like Knope's fill_in_gaps: a file without packages gets the discovered ones, whatever its workflows.
+	if len(cfg.packages) == 0 {
+		cfg.packages, cfg.discoveryErr = discoverPackages(root)
 	}
 	if len(cfg.Workflows) == 0 {
 		cfg.Workflows = DefaultWorkflows(cfg.HasForge(), cfg.PackageCount())
@@ -189,8 +196,9 @@ func LoadFS(path string, root fs.StatFS) (*Config, error) {
 	return cfg, nil
 }
 
-// Default returns the configuration used when there is no knope.toml: no packages, no forge and
-// the default workflows. Package and forge discovery are not implemented yet.
+// Default returns the bare configuration used when there is no knope.toml: no packages, no forge and
+// the default workflows. LoadFS adds the package discovered at the root (spec F20.1); forge discovery is not
+// implemented yet.
 func Default() *Config {
 	return &Config{Source: SourceDefault, Workflows: DefaultWorkflows(false, 0)}
 }
