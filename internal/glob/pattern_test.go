@@ -101,7 +101,7 @@ func TestPatternMatches(t *testing.T) {
 		"case sensitive":      {pattern: "aBcDeFg", yes: []string{"aBcDeFg"}, no: []string{"abcdefg", "ABCDEFG"}},
 		"case sensitive set":  {pattern: "[a]", yes: []string{"a"}, no: []string{"A"}},
 		"case sensitive neg":  {pattern: "[!a]", yes: []string{"A"}, no: []string{"a"}},
-		"match path":          {pattern: "a/b", yes: []string{"a/b"}},
+		"match path":          {pattern: pathAB, yes: []string{pathAB}},
 		"closing bracket":     {pattern: "[]]", yes: []string{"]"}, no: []string{"a"}},
 		"negated closing":     {pattern: "[!]]", yes: []string{"a"}, no: []string{"]"}},
 	}

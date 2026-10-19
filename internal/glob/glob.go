@@ -29,6 +29,8 @@
 //   - `..` components are an error (an fs.FS cannot leave its root);
 //   - `.` components are dropped: `./a/./b` finds `a/b`, `.` finds `.`;
 //   - `.*` does not match the special entries `.` and `..`;
+//   - empty components are dropped: `a//b` finds `a/b` and `*//b` finds `x/b` for every directory `x`. In the
+//     crate an empty component after a wildcard component never matches, so `*//b` and `**//x` find nothing;
 //   - `\` is not a separator on Windows;
 //   - the crate drops file names that are not valid UTF-8; here they are matched
 //     like any other (invalid bytes read as U+FFFD);

@@ -26,6 +26,8 @@ const (
 	rAnotherA     = "r/another/a.md"
 	rCurrentDir   = "r/current_dir.md"
 	rThreeC       = "r/three/c.md"
+	pathAB        = "a/b"
+	pathCB        = "c/b"
 )
 
 const (
@@ -215,6 +217,34 @@ func TestGlobMapFS(t *testing.T) {
 		"recursive order":          {"**/package.json", []string{"packages/a/package.json", "packages/b/package.json"}},
 		"files before dirs":        {"dist/**/*.txt", []string{distB, distSubC}},
 		"star on a file":           {"x/*", nil},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Glob(fsys, tc.pattern)
+			if err != nil {
+				t.Fatalf("Glob(%q): %v", tc.pattern, err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("Glob(%q) = %q, want %q", tc.pattern, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGlobEmptyComponents pins a difference from the crate: empty components are dropped here, while the
+// crate finds nothing for a pattern such as "*//b".
+func TestGlobEmptyComponents(t *testing.T) {
+	t.Parallel()
+	fsys := fstest.MapFS{pathAB: {}, pathCB: {}, "c/d/b": {}}
+	tests := map[string]struct {
+		pattern string
+		want    []string
+	}{
+		"literal":              {"a//b", []string{pathAB}},
+		"after a wildcard":     {"*//b", []string{pathAB, pathCB}},
+		"after a recursive":    {"**//b", []string{pathAB, pathCB, "c/d/b"}},
+		"same without empties": {"*/b", []string{pathAB, pathCB}},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
