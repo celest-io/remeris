@@ -127,6 +127,18 @@ func rootFlags(cfg *config.Config) []cli.Flag {
 				" may hold the key itself",
 			Sources: cli.EnvVars(app.EnvGitHubAppKeyPath),
 		},
+		&cli.StringFlag{
+			Name: app.FlagGitHubAPIURL,
+			Usage: "API base URL of the GitHub instance to send credentials to, for GitHub Enterprise. " +
+				"The api_url of [github] must be the same URL to be used",
+			Sources: cli.EnvVars(app.EnvGitHubAPIURL),
+		},
+		&cli.StringFlag{
+			Name: app.FlagGitHubUploadURL,
+			Usage: "Upload base URL of the GitHub instance, when it is not the default for the API URL. " +
+				"The upload_url of [github] must be the same URL to be used",
+			Sources: cli.EnvVars(app.EnvGitHubUploadURL),
+		},
 	}
 	if cfg.Source == config.SourceDefault {
 		return append(flags, &cli.BoolFlag{Name: "generate", Local: true, Usage: "Generate a " + config.KnopeFile + " file"})
@@ -238,7 +250,11 @@ func runSpecialMode(
 // else with GITHUB_TOKEN or the stored token, else (when p can ask) with a token typed by the user. The private
 // key is read only when a client is built, never in a dry run.
 func projectOptions(global *app.GlobalOptions, p prompt.Prompter) project.Options {
-	opts := project.Options{Credentials: &credentials.Store{Prompter: p}}
+	opts := project.Options{
+		Credentials:            &credentials.Store{Prompter: p},
+		TrustedGitHubAPIURL:    global.GitHubAPIURL,
+		TrustedGitHubUploadURL: global.GitHubUploadURL,
+	}
 	if global.GitHubAppID != 0 {
 		opts.GitHubApp = &github.App{
 			ID:             global.GitHubAppID,

@@ -20,6 +20,17 @@ const (
 	codeGitHubApp = "remeris::github::app_options"
 )
 
+// Names of the flags and environment variables that say which GitHub API URLs may receive credentials. A
+// [github] api_url or upload_url in knope.toml is used only when it matches these, so a repository's configuration
+// cannot choose where the token goes. They are never read from knope.toml.
+const (
+	FlagGitHubAPIURL    = "github-api-url"
+	FlagGitHubUploadURL = "github-upload-url"
+
+	EnvGitHubAPIURL    = "REMERIS_GITHUB_API_URL"
+	EnvGitHubUploadURL = "REMERIS_GITHUB_UPLOAD_URL"
+)
+
 // GlobalOptions are the root command's flags.
 type GlobalOptions struct {
 	DryRun   bool `mapstructure:"dry-run"`
@@ -32,6 +43,10 @@ type GlobalOptions struct {
 	GitHubAppID          int64  `mapstructure:"github-app-id"`
 	GitHubInstallationID int64  `mapstructure:"github-installation-id"`
 	GitHubAppKeyPath     string `mapstructure:"github-app-private-key-path"`
+
+	// GitHubAPIURL and GitHubUploadURL are the trusted GitHub API and upload base URLs. Never read from knope.toml.
+	GitHubAPIURL    string `mapstructure:"github-api-url"`
+	GitHubUploadURL string `mapstructure:"github-upload-url"`
 }
 
 // GitHubAppPrivateKey returns the PEM bytes of the GitHub App private key and whether one is configured.

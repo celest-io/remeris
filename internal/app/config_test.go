@@ -31,6 +31,8 @@ func run(t *testing.T, args ...string) (*GlobalOptions, *WorkflowOptions) {
 			&cli.Int64Flag{Name: FlagGitHubAppID, Sources: cli.EnvVars(EnvGitHubAppID)},
 			&cli.Int64Flag{Name: FlagGitHubInstallationID, Sources: cli.EnvVars(EnvGitHubInstallationID)},
 			&cli.StringFlag{Name: FlagGitHubAppKeyPath, Sources: cli.EnvVars(EnvGitHubAppKeyPath)},
+			&cli.StringFlag{Name: FlagGitHubAPIURL, Sources: cli.EnvVars(EnvGitHubAPIURL)},
+			&cli.StringFlag{Name: FlagGitHubUploadURL, Sources: cli.EnvVars(EnvGitHubUploadURL)},
 		},
 		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 			return ctx, LoadConfig(cmd, global)

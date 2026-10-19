@@ -120,3 +120,25 @@ func TestGitHubAppFlagsLoad(t *testing.T) {
 		t.Errorf("got %+v", global)
 	}
 }
+
+func TestGitHubURLFlagsLoad(t *testing.T) {
+	t.Setenv(EnvGitHubAPIURL, "https://env.example.com/api/v3/")
+	t.Setenv(EnvGitHubUploadURL, "https://env-up.example.com/api/uploads/")
+	global, _ := run(t, workflowName)
+	if global.GitHubAPIURL != "https://env.example.com/api/v3/" ||
+		global.GitHubUploadURL != "https://env-up.example.com/api/uploads/" {
+		t.Errorf("environment: got %+v", global)
+	}
+
+	global, _ = run(
+		t,
+		workflowName,
+		"--github-api-url",
+		"https://flag.example.com/",
+		"--github-upload-url",
+		"https://up.example.com/",
+	)
+	if global.GitHubAPIURL != "https://flag.example.com/" || global.GitHubUploadURL != "https://up.example.com/" {
+		t.Errorf("flag beats environment: got %+v", global)
+	}
+}

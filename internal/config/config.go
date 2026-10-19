@@ -107,10 +107,15 @@ type GitHub struct {
 	// APIURL is the base URL of the GitHub API, an absolute http or https URL. go-github's WithEnterpriseURLs
 	// appends "api/v3/" to its path unless the path already ends in "/api/v3/" or the host starts with "api."
 	// or contains ".api.", and adds a trailing slash when the path has none; the value here is kept as written.
+	//
+	// The value is not trusted on its own: a repository's configuration cannot choose where the GitHub token
+	// goes. It is used only when --github-api-url or REMERIS_GITHUB_API_URL gives the same URL; otherwise
+	// building the GitHub client fails.
 	APIURL string `toml:"api_url"`
 	// UploadURL is the base URL for release asset uploads, with the same shape as APIURL. It needs APIURL. When
 	// only APIURL is set, uploads use APIURL too. go-github appends "api/uploads/" to its path unless
 	// the path already ends in "/api/uploads/" or the host starts with "api." or "uploads." or contains ".api.".
+	// Like APIURL, it must be confirmed by --github-upload-url or REMERIS_GITHUB_UPLOAD_URL.
 	UploadURL string `toml:"upload_url"`
 }
 

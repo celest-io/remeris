@@ -435,7 +435,7 @@ func TestGitHubAppOptionsAreIgnoredWithoutGitHub(t *testing.T) {
 
 func TestGitHubAppFlagsAreListed(t *testing.T) {
 	names := flagNames(New(loadConfig(t, twoWorkflows), nil, nil))
-	for _, f := range []string{"github-app-id", "github-installation-id", "github-app-private-key-path"} {
+	for _, f := range []string{"github-app-id", "github-installation-id", "github-app-private-key-path", "github-api-url", "github-upload-url"} {
 		if !has(names, f) {
 			t.Errorf("missing flag --%s in %v", f, names)
 		}

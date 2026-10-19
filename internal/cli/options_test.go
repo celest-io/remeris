@@ -30,3 +30,11 @@ func TestProjectOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectOptionsTrustedURLs(t *testing.T) {
+	global := app.GlobalOptions{GitHubAPIURL: "https://ghe.example.com/api/v3/", GitHubUploadURL: "https://up.example.com/"}
+	opts := projectOptions(&global, nil)
+	if opts.TrustedGitHubAPIURL != global.GitHubAPIURL || opts.TrustedGitHubUploadURL != global.GitHubUploadURL {
+		t.Errorf("trusted URLs = %q, %q", opts.TrustedGitHubAPIURL, opts.TrustedGitHubUploadURL)
+	}
+}

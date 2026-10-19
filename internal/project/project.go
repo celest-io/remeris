@@ -53,6 +53,11 @@ type Options struct {
 	// Credentials finds the GitHub token and asks for it. nil means the zero credentials.Store: the real
 	// environment and no prompt.
 	Credentials *credentials.Store
+	// TrustedGitHubAPIURL and TrustedGitHubUploadURL are the GitHub URLs given by --github-api-url and
+	// --github-upload-url (or their environment variables). The [github] api_url and upload_url are used only when
+	// they match.
+	TrustedGitHubAPIURL    string
+	TrustedGitHubUploadURL string
 }
 
 // Load builds the State for cfg with the default Loader.
@@ -60,8 +65,10 @@ func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State
 	ignore := cfg.Changes != nil && cfg.Changes.IgnoreConventionalCommits
 	l := Loader{GiteaConfigured: cfg.Gitea != nil}
 	if gh := cfg.GitHub; gh != nil {
-		l.GitHub = github.New(github.Config{Owner: gh.Owner, Repo: gh.Repo, APIURL: gh.APIURL, UploadURL: gh.UploadURL},
-			opts.GitHubApp, opts.Credentials)
+		l.GitHub = github.New(github.Config{
+			Owner: gh.Owner, Repo: gh.Repo, APIURL: gh.APIURL, UploadURL: gh.UploadURL,
+			TrustedAPIURL: opts.TrustedGitHubAPIURL, TrustedUploadURL: opts.TrustedGitHubUploadURL,
+		}, opts.GitHubApp, opts.Credentials)
 	}
 	if cfg.ReleaseNotes != nil {
 		for _, t := range cfg.ReleaseNotes.ChangeTemplates {

@@ -12,6 +12,10 @@ stdout '--github-app-id'
 stdout '--github-installation-id'
 stdout '--github-app-private-key-path'
 stdout 'REMERIS_GITHUB_APP_PRIVATE_KEY'
+stdout '--github-api-url'
+stdout 'REMERIS_GITHUB_API_URL'
+stdout '--github-upload-url'
+stdout 'REMERIS_GITHUB_UPLOAD_URL'
 ! stdout '--generate'
 ! stderr .
 
