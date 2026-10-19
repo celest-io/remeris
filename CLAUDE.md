@@ -129,6 +129,7 @@ internal/steps/     one file per step (stubs for the unbuilt ones); steps/comman
 internal/fsx/       dry-run aware file writes
 internal/git/       Git access: the Git interface, the git CLI backend, the go-git fallback, Open picks one
 internal/project/   reads the packages, versioned files and Git tags into a workflow.State
+internal/httpx/     HTTP behaviour (F15.1): User-Agent, retrying RoundTripper with Retry-After and rate-limit warnings, ApiRequestError diagnostics
 internal/prompt/    Prompter interface (select, multi-select, input, password) on huh v2, and a scripted fake
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
