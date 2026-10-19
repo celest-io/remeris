@@ -539,6 +539,16 @@ func runTagContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 		}
 	})
 
+	t.Run("an empty identity is an error", func(t *testing.T) {
+		r := tagRepo(t, true)
+		r.git("config", "user.name", "")
+		err := open(t, r.dir).CreateTag(ctx, "v1.0.0", TagOptions{})
+		wantDiagCode(t, err, "remeris::git::no_committer")
+		if out := r.git("tag", "--list"); out != "" {
+			t.Fatalf("tags = %q, want none", out)
+		}
+	})
+
 	t.Run("the new tag is on the branch", func(t *testing.T) {
 		r := tagRepo(t, true)
 		g := open(t, r.dir)

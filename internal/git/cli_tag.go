@@ -8,7 +8,7 @@ import (
 )
 
 // configValue returns the value of a Git configuration key (repository, global and system scopes), and false when
-// the key is not set. Like libgit2, an empty value counts as set.
+// the key is not set.
 func (c *CLI) configValue(ctx context.Context, key string) (string, bool, error) {
 	out, err := c.run(ctx, "", "config", "--null", "--get", key)
 	if err != nil {
@@ -42,7 +42,8 @@ func (c *CLI) CreateTag(ctx context.Context, name string, _ TagOptions) error {
 		if err != nil {
 			return err
 		}
-		if !ok {
+		if !ok || value == "" {
+			// An empty name or email is no identity either: libgit2 refuses it, and so does the go-git backend.
 			return noCommitterError(missingConfigError(key))
 		}
 		identity[i] = value
