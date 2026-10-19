@@ -5,6 +5,11 @@
 // <config>/knope/<key> (copied into the remeris directory, so existing Knope users are not asked again), and
 // finally the user, whose answer is saved to <config>/remeris/<key>. Files hold the raw value, with no trimming,
 // as Knope's do. Values are never logged.
+//
+// Reading can write: finding a value in the Knope directory copies it into the remeris one. A dry run must
+// therefore not look credentials up; the GitHub client is never built in a dry run.
+//
+// An empty environment variable counts as unset, where Knope would use the empty string as the token.
 package credentials
 
 import (
@@ -12,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -92,8 +98,12 @@ type Store struct {
 
 // Lookup finds the value of key without ever asking the user: environment, then the remeris file, then the
 // Knope file (copied into the remeris directory). found is false when none has it. An empty environment
-// variable counts as unset.
-func (s *Store) Lookup(_ context.Context, key Key) (value string, found bool, err error) {
+// variable counts as unset, where Knope would use the empty string.
+//
+// Lookup may write: the migration copy creates the remeris directory and file. A dry run must not call it.
+// When the copy fails, the Knope value is still returned and the failure is logged at debug level, without
+// the value.
+func (s *Store) Lookup(ctx context.Context, key Key) (value string, found bool, err error) {
 	if key.env != "" {
 		if v := s.getenv(key.env); v != "" {
 			return v, true, nil
@@ -111,8 +121,9 @@ func (s *Store) Lookup(_ context.Context, key Key) (value string, found bool, er
 	if err != nil || !ok {
 		return "", false, err
 	}
-	if err := writeValue(filepath.Join(base, dirName), key.name, v); err != nil {
-		return "", false, err
+	dir := filepath.Join(base, dirName)
+	if err := writeValue(dir, key.name, v); err != nil {
+		slog.DebugContext(ctx, "Could not copy the Knope credential "+key.name+" to "+dir+": "+err.Error())
 	}
 	return v, true, nil
 }

@@ -288,6 +288,25 @@ func TestPermissions(t *testing.T) {
 	}
 }
 
+func TestMigrationCopyFailureKeepsValue(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need privileges")
+	}
+	base := t.TempDir()
+	put(t, base, dirKnope, fileGitHub, fakeLegacy)
+	// A dangling symbolic link where the remeris directory should be: reading through it finds nothing,
+	// creating the directory fails (also when the tests run as root, where permission bits do not).
+	if err := os.Symlink(filepath.Join(base, "missing"), filepath.Join(base, dirRemeris)); err != nil {
+		t.Fatal(err)
+	}
+	s := &credentials.Store{Dir: base, Getenv: env(nil)}
+	got, found, err := s.Lookup(t.Context(), credentials.GitHubToken)
+	if err != nil || !found || got != fakeLegacy {
+		t.Errorf("Lookup = %q, %v, %v; want %q, true, nil", got, found, err, fakeLegacy)
+	}
+}
+
 func TestFileErrors(t *testing.T) {
 	t.Parallel()
 	t.Run("directory cannot be created", func(t *testing.T) {
