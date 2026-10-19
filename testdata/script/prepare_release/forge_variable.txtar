@@ -1,5 +1,8 @@
 # Remeris' own: a change template that needs forge data fails without [github] when there are changes (spec F13),
-# and is not built yet with it (milestone M7). Without changes nothing is checked.
+# and, with it, a dry run uses the fixed pull request data 1234 and some-user without calling GitHub (spec F16.4).
+# Without changes nothing is checked.
+env REMERIS_FAKE_DATE=2026-01-01
+
 exec git init --initial-branch=main
 exec git config user.email fake@remeris.dev
 exec git config user.name 'Fake remeris'
@@ -14,8 +17,9 @@ exec git commit --allow-empty -m 'feat: Something new'
 cmp stderr no_github.log
 
 cp knope.github knope.toml
-! exec remeris --dry-run release
-stderr 'not implemented yet \(milestone M7\)'
+exec remeris --dry-run release
+rstrip stdout dry_run_actual.log
+cmp dry_run_actual.log dry_run.log
 
 -- Cargo.toml --
 [package]
@@ -36,19 +40,35 @@ type = "PrepareRelease"
 -- knope.github --
 [package]
 versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
 
 [github]
 owner = "o"
 repo = "r"
 
 [release_notes]
-change_templates = ["- $summary (#$pr_number)"]
+change_templates = ["- $summary (#$pr_number by @$pr_author_login)"]
 
 [[workflows]]
 name = "release"
 
 [[workflows.steps]]
 type = "PrepareRelease"
+-- CHANGELOG.md --
+# Changelog
+-- dry_run.log --
+Would fetch Pull Request info from GitHub repo o/r for 1 changes
+Would add the following to Cargo.toml: version = 1.1.0
+Would add the following to CHANGELOG.md:
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- Something new (#1234 by @some-user)
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
 -- no_github.log --
 Error: Problem with workflow release
   ╰─▶ You must configure [github] to use the variable $pr_author_login in a change template

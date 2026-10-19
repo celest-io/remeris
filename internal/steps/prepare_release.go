@@ -80,7 +80,7 @@ func (s *PrepareRelease) Run(
 				return rt, diag.Newf("You must configure [github] to use the variable %s in a change template", forgeVariable).
 					WithCode(codeNeedsForge)
 			}
-			return rt, notImplemented(s, "M7") // enriching the changes from GitHub (F16.4)
+			enrichGitInfo(ctx, state.GitHub, list, rt.DryRun)
 		}
 
 		logImpliedRules(ctx, pkg, list)

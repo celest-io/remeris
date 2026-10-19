@@ -28,7 +28,7 @@ func TestPullRequestForCommit(t *testing.T) {
 			status: http.StatusOK, body: `[{"number":7,"user":{"login":"ann"}},{"number":8,"user":{"login":"bob"}}]`,
 			wantFound: true, wantNum: 7, wantLogin: "ann",
 		},
-		"no user": {status: http.StatusOK, body: `[{"number":9,"user":null}]`, wantFound: true, wantNum: 9},
+		"no user":    {status: http.StatusOK, body: `[{"number":9,"user":null}]`, wantFound: true, wantNum: 9},
 		"empty list": {status: http.StatusOK, body: `[]`},
 		"error": {
 			status: http.StatusNotFound, body: `{"message":"Not Found"}`,
