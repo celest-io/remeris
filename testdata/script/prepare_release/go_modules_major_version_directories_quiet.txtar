@@ -1,5 +1,6 @@
 # Knope's prepare_release/go_modules/major_version_directories without --verbose (ours; the fixture is MIT, see
-# testdata/README.md): the files, the changelogs and the module tags of every major version directory.
+# testdata/README.md): the files, the changelogs and the module tags of every major version directory. The dry run
+# is Knope's dryrun_stdout.log without its debug lines.
 
 env REMERIS_FAKE_DATE=2026-01-01
 
@@ -15,9 +16,12 @@ exec git commit --allow-empty -m 'fix(v1): A fix' --author 'Knope <knope@example
 exec git commit --allow-empty -m 'feat(v2): New feature' --author 'Knope <knope@example.com>'
 
 exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
 ! stderr .
 
 exec remeris release
+! stdout .
 ! stderr .
 cmp go.mod out/go.mod
 cmp CHANGELOG.md out/CHANGELOG.md
@@ -110,3 +114,35 @@ v1.0.1
 v1/v1.0.1
 v2.1.0
 v2/v2.1.0
+-- dryrun_stdout.log --
+Would add the following to go.mod: 1.0.1
+Would add the following to sub_dir/go.mod: 1.0.1
+Would add the following to v2/go.mod: 2.1.0
+Would add the following to sub_dir/v2/go.mod: 2.1.0
+Would add the following to CHANGELOG.md:
+## 1.0.1 (2026-01-01)
+
+### Fixes
+
+- A fix
+
+Would add the following to v2/CHANGELOG.md:
+## 2.1.0 (2026-01-01)
+
+### Features
+
+- New feature
+
+Would add files to git:
+  go.mod
+  sub_dir/go.mod
+  v2/go.mod
+  sub_dir/v2/go.mod
+  CHANGELOG.md
+  v2/CHANGELOG.md
+Would create Git tag v1.0.1
+Would create Git tag sub_dir/v1.0.1
+Would create Git tag v2.1.0
+Would create Git tag sub_dir/v2.1.0
+Would create Git tag v1/v1.0.1
+Would create Git tag v2/v2.1.0
