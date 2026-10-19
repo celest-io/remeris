@@ -100,7 +100,11 @@ func Run(ctx context.Context, w Workflow, rt RunType[State]) error {
 
 // describe renders a step for the debug log: its type and field values.
 func describe(step Step) string {
-	return fmt.Sprintf("%s %+v", step.Type(), reflect.Indirect(reflect.ValueOf(step)).Interface())
+	v := reflect.Indirect(reflect.ValueOf(step))
+	if v.Kind() == reflect.Struct && v.NumField() == 0 {
+		return step.Type() // like Rust's Debug of a unit variant: "Release", not "Release {}"
+	}
+	return fmt.Sprintf("%s %+v", step.Type(), v.Interface())
 }
 
 // Problem wraps a step error as `Problem with workflow {name}`. The step error is both the
