@@ -67,13 +67,23 @@ func TestValidateGitHubApp(t *testing.T) {
 		env  map[string]string
 		want string
 	}{
-		"all unset":                 {},
-		"id and path":               {opts: GlobalOptions{GitHubAppID: 1, GitHubAppKeyPath: keyPath}},
-		"id and env key":            {opts: GlobalOptions{GitHubAppID: 1}, env: keyEnv},
-		"id, installation and path": {opts: GlobalOptions{GitHubAppID: 1, GitHubInstallationID: 2, GitHubAppKeyPath: keyPath}},
-		"id without key":            {opts: GlobalOptions{GitHubAppID: 1}, want: "without a private key"},
-		"path without id":           {opts: GlobalOptions{GitHubAppKeyPath: keyPath}, want: "without an App ID"},
-		"env key without id":        {env: keyEnv, want: "without an App ID"},
+		"all unset":      {},
+		"id and path":    {opts: GlobalOptions{GitHubAppID: 1, GitHubAppKeyPath: keyPath}},
+		"id and env key": {opts: GlobalOptions{GitHubAppID: 1}, env: keyEnv},
+		"id, installation and path": {
+			opts: GlobalOptions{GitHubAppID: 1, GitHubInstallationID: 2, GitHubAppKeyPath: keyPath},
+		},
+		"id without key":                {opts: GlobalOptions{GitHubAppID: 1}, want: "without a private key"},
+		"path without id is ignored":    {opts: GlobalOptions{GitHubAppKeyPath: keyPath}},
+		"env key without id is ignored": {env: keyEnv},
+		"negative app id": {
+			opts: GlobalOptions{GitHubAppID: -5, GitHubAppKeyPath: keyPath},
+			want: "must be positive",
+		},
+		"negative installation id": {
+			opts: GlobalOptions{GitHubAppID: 1, GitHubInstallationID: -1, GitHubAppKeyPath: keyPath},
+			want: "must be positive",
+		},
 		"installation without id": {
 			opts: GlobalOptions{GitHubInstallationID: 2},
 			want: "installation ID is set without an App ID",

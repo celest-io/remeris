@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/celest-io/remeris/internal/diag"
@@ -55,5 +56,13 @@ func TestGitHubURLs(t *testing.T) {
 				t.Errorf("got %q %q, want %q %q", cfg.GitHub.APIURL, cfg.GitHub.UploadURL, tc.api, tc.up)
 			}
 		})
+	}
+}
+
+// A rejected URL is printed without its password, so a credential does not end up in CI logs.
+func TestGitHubURLErrorHidesPassword(t *testing.T) {
+	_, err := load(t, "[github]\napi_url = \"ftp://user:not-a-real-secret@ghe.example.com/\"\n")
+	if err == nil || strings.Contains(err.Error(), "not-a-real-secret") || !strings.Contains(err.Error(), "ghe.example.com") {
+		t.Fatalf("error = %v", err)
 	}
 }

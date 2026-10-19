@@ -383,7 +383,7 @@ func TestSetupLogging(t *testing.T) {
 }
 
 func TestGitHubAppOptionsAreValidatedAtStartup(t *testing.T) {
-	cfg := loadConfig(t, twoWorkflows)
+	cfg := loadConfig(t, twoWorkflows+"\n[github]\nowner = \"o\"\nrepo = \"r\"\n")
 	cases := map[string]struct {
 		args    []string
 		env     map[string]string
@@ -402,12 +402,12 @@ func TestGitHubAppOptionsAreValidatedAtStartup(t *testing.T) {
 			args: []string{wfPlain, "--github-app-id=1"},
 			env:  map[string]string{"REMERIS_GITHUB_APP_PRIVATE_KEY": "fake-key-for-tests"},
 		},
-		"key env without id": {
-			args:    []string{wfPlain},
-			env:     map[string]string{"REMERIS_GITHUB_APP_PRIVATE_KEY": "fake-key-for-tests"},
-			wantErr: "without an App ID",
+		"key env without id is ignored": {
+			args: []string{wfPlain},
+			env:  map[string]string{"REMERIS_GITHUB_APP_PRIVATE_KEY": "fake-key-for-tests"},
 		},
-		"installation without id": {args: []string{"--github-installation-id", "2", wfPlain}, wantErr: "without an App ID"},
+		"zero id from env is unset": {args: []string{wfPlain}, env: map[string]string{"REMERIS_GITHUB_APP_ID": "0"}},
+		"installation without id":   {args: []string{"--github-installation-id", "2", wfPlain}, wantErr: "without an App ID"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -422,6 +422,14 @@ func TestGitHubAppOptionsAreValidatedAtStartup(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+// Without [github] the App options are never used, so a leftover setting does not stop other workflows.
+func TestGitHubAppOptionsAreIgnoredWithoutGitHub(t *testing.T) {
+	cfg := loadConfig(t, twoWorkflows)
+	if _, err := run(t, cfg, flagAppID, "1", wfPlain); err != nil {
+		t.Fatal(err)
 	}
 }
 

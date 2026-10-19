@@ -73,6 +73,9 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 				return ctx, err
 			}
 			setupLogging(stdout, global.Verbose, global.Validate)
+			if cfg.GitHub == nil {
+				return ctx, nil // the App options are only used with [github]
+			}
 			return ctx, global.ValidateGitHubApp(os.Getenv)
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {

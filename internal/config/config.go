@@ -106,7 +106,7 @@ type GitHub struct {
 	Repo  string `toml:"repo"`
 	// APIURL is the base URL of the GitHub API, an absolute http or https URL. go-github's WithEnterpriseURLs
 	// appends "api/v3/" to its path unless the path already ends in "/api/v3/" or the host starts with "api."
-	// or contains ".api.". A trailing slash is added when missing.
+	// or contains ".api.", and adds a trailing slash when the path has none; the value here is kept as written.
 	APIURL string `toml:"api_url"`
 	// UploadURL is the base URL for release asset uploads, with the same shape as APIURL. It needs APIURL. When
 	// only APIURL is set, uploads use APIURL too. go-github appends "api/uploads/" to its path unless
@@ -286,7 +286,7 @@ func validateGitHub(g *GitHub, index *tomlIndex, src string) error {
 			continue
 		}
 		if !isHTTPURL(k.value) {
-			d := diag.Newf("`%s` in [github] must be an absolute http or https URL with a host: %s", k.key, k.value).
+			d := diag.Newf("`%s` in [github] must be an absolute http or https URL with a host: %s", k.key, redacted(k.value)).
 				WithCode(codeGitHubURL).
 				WithHelp("Use a value like https://github.example.com/ for `" + k.key + "`.")
 			if s, ok := index.Span("github", k.key); ok {
@@ -305,6 +305,14 @@ func validateGitHub(g *GitHub, index *tomlIndex, src string) error {
 		return d
 	}
 	return nil
+}
+
+// redacted hides the password of a URL, so an error does not print a credential.
+func redacted(s string) string {
+	if u, err := url.Parse(s); err == nil {
+		return u.Redacted()
+	}
+	return "(not a URL)"
 }
 
 func isHTTPURL(s string) bool {

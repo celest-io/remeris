@@ -2,11 +2,7 @@
 // line and the environment (spec F3.1, the readykit pattern).
 package app
 
-import (
-	"fmt"
-
-	"github.com/celest-io/remeris/internal/diag"
-)
+import "github.com/celest-io/remeris/internal/diag"
 
 // Names of the GitHub App flags and of the environment variables that set them (decision D11). The credentials
 // come only from these flags and variables, never from knope.toml.
@@ -62,20 +58,21 @@ func (o *GlobalOptions) GitHubAppPrivateKey(
 }
 
 // ValidateGitHubApp checks that the GitHub App options go together: an App ID needs a private key (a path or
-// REMERIS_GITHUB_APP_PRIVATE_KEY), and a key or an installation ID needs an App ID. All unset is fine.
+// REMERIS_GITHUB_APP_PRIVATE_KEY), an installation ID needs an App ID, and IDs are positive. A key without an App ID
+// is ignored rather than refused: CI environments often export the key variable for jobs that do not use it. All
+// unset is fine. The CLI checks this only when [github] is configured.
 func (o *GlobalOptions) ValidateGitHubApp(getenv func(string) string) error {
 	hasKey := o.GitHubAppKeyPath != "" || getenv(EnvGitHubAppKey) != ""
-	flags := fmt.Sprintf("--%s/%s, --%s/%s and %s", FlagGitHubAppID, EnvGitHubAppID,
-		FlagGitHubAppKeyPath, EnvGitHubAppKeyPath, EnvGitHubAppKey)
 	switch {
+	case o.GitHubAppID < 0 || o.GitHubInstallationID < 0:
+		return diag.New("GitHub App and installation IDs must be positive numbers").
+			WithCode(codeGitHubApp).
+			WithHelp("Check --" + FlagGitHubAppID + " (" + EnvGitHubAppID + ") and --" + FlagGitHubInstallationID +
+				" (" + EnvGitHubInstallationID + ").")
 	case o.GitHubAppID != 0 && !hasKey:
 		return diag.New("A GitHub App ID is set without a private key").
 			WithCode(codeGitHubApp).
 			WithHelp("Also set --" + FlagGitHubAppKeyPath + " (" + EnvGitHubAppKeyPath + ") or " + EnvGitHubAppKey + ".")
-	case o.GitHubAppID == 0 && hasKey:
-		return diag.New("A GitHub App private key is set without an App ID").
-			WithCode(codeGitHubApp).
-			WithHelp("Also set --" + FlagGitHubAppID + " (" + EnvGitHubAppID + "), or remove the key options: " + flags + ".")
 	case o.GitHubAppID == 0 && o.GitHubInstallationID != 0:
 		return diag.New("A GitHub App installation ID is set without an App ID").
 			WithCode(codeGitHubApp).
