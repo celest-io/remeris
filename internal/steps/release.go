@@ -24,6 +24,9 @@ type Release struct{}
 // Type returns "Release".
 func (*Release) Type() string { return "Release" }
 
+// NeedsPackages is true: the step works on the packages.
+func (*Release) NeedsPackages() bool { return true }
+
 // Run creates the tags and releases of the pending actions (spec F14). Afterwards State.PendingActions is empty.
 func (s *Release) Run(
 	ctx context.Context, rt workflow.RunType[workflow.State],

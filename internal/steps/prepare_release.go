@@ -49,6 +49,9 @@ type PrepareRelease struct {
 // Type returns "PrepareRelease".
 func (*PrepareRelease) Type() string { return "PrepareRelease" }
 
+// NeedsPackages is true: the step works on the packages.
+func (*PrepareRelease) NeedsPackages() bool { return true }
+
 // Run prepares the release of every package (spec F13).
 func (s *PrepareRelease) Run(
 	ctx context.Context, rt workflow.RunType[workflow.State],

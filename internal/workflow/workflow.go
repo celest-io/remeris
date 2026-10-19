@@ -106,6 +106,21 @@ func (w Workflow) HasStep(stepType string) bool {
 	return false
 }
 
+// PackageUser is implemented by the steps that read the packages of the project.
+type PackageUser interface {
+	NeedsPackages() bool
+}
+
+// NeedsPackages reports whether any step reads the packages, so that a failure to discover them matters (spec F20.1).
+func (w Workflow) NeedsPackages() bool {
+	for _, step := range w.Steps {
+		if u, ok := step.(PackageUser); ok && u.NeedsPackages() {
+			return true
+		}
+	}
+	return false
+}
+
 // Run executes the steps in order and stops at the first error, which is wrapped by Problem.
 func Run(ctx context.Context, w Workflow, rt RunType[State]) error {
 	for _, step := range w.Steps {

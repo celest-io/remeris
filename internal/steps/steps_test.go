@@ -62,7 +62,7 @@ func TestCommandDryRunDoesNotRun(t *testing.T) {
 
 func TestCommandDryRunSubstitutesVariablesFirst(t *testing.T) {
 	logs := captureLogs(t)
-	step := &Command{Command: "echo $version"} // default variables apply, and Version cannot resolve in M0
+	step := &Command{Command: echoVersion} // default variables apply, and Version cannot resolve in M0
 
 	_, err := step.Run(context.Background(), workflow.DryRun(workflow.State{}))
 

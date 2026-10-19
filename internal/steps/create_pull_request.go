@@ -21,6 +21,11 @@ type CreatePullRequest struct {
 
 func (*CreatePullRequest) Type() string { return "CreatePullRequest" }
 
+// NeedsPackages is true when the title or body uses the Version or ChangelogEntry variable.
+func (s *CreatePullRequest) NeedsPackages() bool {
+	return s.Title.NeedsPackages() || s.Body.NeedsPackages()
+}
+
 // Run substitutes the variables, then creates or updates the pull request on each configured forge. A dry run
 // reads the current branch (a local Git read) and logs what would happen; it builds no client.
 func (s *CreatePullRequest) Run(

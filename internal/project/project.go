@@ -62,9 +62,6 @@ type Options struct {
 
 // Load builds the State for cfg with the default Loader.
 func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State, error) {
-	if err := cfg.DiscoveryError(); err != nil {
-		return workflow.State{}, err
-	}
 	ignore := cfg.Changes != nil && cfg.Changes.IgnoreConventionalCommits
 	l := Loader{GiteaConfigured: cfg.Gitea != nil}
 	if gh := cfg.GitHub; gh != nil {

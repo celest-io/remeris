@@ -190,6 +190,12 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 				return err
 			}
 			prompter := prompt.NewTerminal(os.Stdin, os.Stdout)
+			// A failure to discover the packages matters only to a workflow that reads them (spec F20.1).
+			if w.NeedsPackages() {
+				if err := cfg.DiscoveryError(); err != nil {
+					return err
+				}
+			}
 			state, err := project.Load(ctx, cfg, projectOptions(global, prompter))
 			if err != nil {
 				return err
@@ -230,6 +236,9 @@ func runSpecialMode(
 ) (handled bool, err error) {
 	switch {
 	case global.Validate:
+		if err := cfg.DiscoveryError(); err != nil {
+			return true, err
+		}
 		state, err := project.Load(ctx, cfg, projectOptions(global, nil))
 		if err != nil {
 			return true, err
