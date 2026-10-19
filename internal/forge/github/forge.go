@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	gh "github.com/google/go-github/v92/github"
@@ -43,7 +44,8 @@ type Config struct {
 	// It goes through go-github's WithEnterpriseURLs, which appends "api/v3/" to the path unless it already ends
 	// in "/api/v3/" or the host is an "api." host.
 	APIURL string
-	// UploadURL is the base URL for release assets. Empty means APIURL.
+	// UploadURL is the base URL for release assets. Empty means the host of APIURL, so go-github uploads to
+	// "{host}/api/uploads/".
 	UploadURL string
 }
 
@@ -154,7 +156,7 @@ func (f *Forge) newClient(rt http.RoundTripper, authenticated bool) (*Client, er
 	if f.cfg.APIURL != "" {
 		upload := f.cfg.UploadURL
 		if upload == "" {
-			upload = f.cfg.APIURL
+			upload = defaultUploadURL(f.cfg.APIURL)
 		}
 		opts = append(opts, gh.WithEnterpriseURLs(f.cfg.APIURL, upload))
 	}
@@ -166,6 +168,14 @@ func (f *Forge) newClient(rt http.RoundTripper, authenticated bool) (*Client, er
 			WithCause(err)
 	}
 	return &Client{Client: api, Owner: f.cfg.Owner, Repo: f.cfg.Repo, Authenticated: authenticated}, nil
+}
+
+// defaultUploadURL is the upload base go-github derives the GitHub Enterprise upload URL from when only the API URL
+// is configured: the API URL without its "api/v3/" suffix, so that "https://ghe/api/v3/" uploads to
+// "https://ghe/api/uploads/" and not to "https://ghe/api/v3/api/uploads/".
+func defaultUploadURL(apiURL string) string {
+	base := strings.TrimSuffix(apiURL, "/") + "/"
+	return strings.TrimSuffix(base, "api/v3/")
 }
 
 // tokenSource walks the authentication chain. It returns nil, nil when the request is to be anonymous.
