@@ -44,6 +44,8 @@ type State struct {
 	// GitHubConfigured is true when the configuration has a `[github]` table. PrepareRelease needs it for change
 	// templates that use forge data.
 	GitHubConfigured bool
+	// GiteaConfigured is true when the configuration has a `[gitea]` table. Release needs it to pick the forge.
+	GiteaConfigured bool
 }
 
 // RunType says whether a step may change the world. A dry run must do no writes, make no network

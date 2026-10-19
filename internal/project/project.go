@@ -35,6 +35,8 @@ type Loader struct {
 	ChangeTemplates []releasenotes.ChangeTemplate
 	// GitHubConfigured is true when the configuration has a [github] table.
 	GitHubConfigured bool
+	// GiteaConfigured is true when the configuration has a [gitea] table.
+	GiteaConfigured bool
 	// ReadFile returns the content of the file at the slash-separated relative path. nil reads from disk.
 	ReadFile func(path string) (string, error)
 	// OpenGit opens the repository. nil uses git.Open on the working directory.
@@ -44,7 +46,7 @@ type Loader struct {
 // Load builds the State for cfg with the default Loader.
 func Load(ctx context.Context, cfg *config.Config) (workflow.State, error) {
 	ignore := cfg.Changes != nil && cfg.Changes.IgnoreConventionalCommits
-	l := Loader{GitHubConfigured: cfg.GitHub != nil}
+	l := Loader{GitHubConfigured: cfg.GitHub != nil, GiteaConfigured: cfg.Gitea != nil}
 	if cfg.ReleaseNotes != nil {
 		for _, t := range cfg.ReleaseNotes.ChangeTemplates {
 			l.ChangeTemplates = append(l.ChangeTemplates, releasenotes.ChangeTemplate(t))
@@ -61,7 +63,8 @@ func Load(ctx context.Context, cfg *config.Config) (workflow.State, error) {
 func (l Loader) State(
 	ctx context.Context, pkgs []config.PackageConfig, ignoreConventionalCommits bool,
 ) (workflow.State, error) {
-	state := workflow.State{IgnoreConventionalCommits: ignoreConventionalCommits, GitHubConfigured: l.GitHubConfigured}
+	state := workflow.State{IgnoreConventionalCommits: ignoreConventionalCommits, GitHubConfigured: l.GitHubConfigured,
+		GiteaConfigured: l.GiteaConfigured}
 	if len(pkgs) == 0 {
 		return state, nil
 	}
