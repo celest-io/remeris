@@ -9,8 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/celest-io/remeris/internal/diag"
 )
@@ -175,4 +177,181 @@ func (c *CLI) tagsByCommit(ctx context.Context) (map[string][]string, error) {
 		byCommit[fields[0]] = append(byCommit[fields[0]], strings.TrimPrefix(names[i], "refs/tags/"))
 	}
 	return byCommit, nil
+}
+
+// CommitMessagesAfterTag returns the commits reachable from HEAD but not from the tag, oldest first (spec F9.2).
+// A nil tag, or a tag that is missing or does not peel to a commit, selects every commit. Commits whose message is
+// not valid UTF-8 are skipped, and a commit whose author name is not valid UTF-8 has no Info, like in Knope.
+//
+// Commands: git show-ref --verify --quiet refs/tags/<tag>; git rev-parse --verify --quiet refs/tags/<tag>^{commit};
+// git rev-list --reverse refs/tags/<tag>..HEAD --, whose order is the date-ordered walk of libgit2's revwalk;
+// git cat-file --batch for the raw commit objects. git log is not used because it re-encodes the message and the
+// author name to UTF-8 using the commit's encoding header, while Knope (libgit2) reads the stored bytes.
+func (c *CLI) CommitMessagesAfterTag(ctx context.Context, tag *string) ([]Commit, error) {
+	rng := "HEAD"
+	if tag == nil {
+		slog.DebugContext(ctx, "Using ALL commits")
+	} else {
+		ref := "refs/tags/" + *tag
+		if _, err := c.run(ctx, "", "show-ref", "--verify", "--quiet", ref); err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			slog.DebugContext(ctx, "Tag "+*tag+" not found, using ALL commits")
+		} else {
+			// Knope logs this even when the tag does not peel to a commit, and then uses every commit.
+			slog.DebugContext(ctx, "Using commits since tag "+*tag)
+			if _, err := c.run(ctx, "", "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err == nil {
+				rng = ref + "..HEAD"
+			} else if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+		}
+	}
+	out, err := c.run(ctx, "", "rev-list", "--reverse", rng, "--")
+	if err != nil {
+		return nil, unknownGitError(err)
+	}
+	raws, err := c.rawCommits(ctx, strings.Fields(out))
+	if err != nil {
+		return nil, err
+	}
+	commits := make([]Commit, 0, len(raws))
+	for _, raw := range raws {
+		if utf8.ValidString(raw.message) {
+			commits = append(commits, Commit{Message: raw.message, Info: commitInfoFor(raw.hash, raw.author)})
+		}
+	}
+	return commits, nil
+}
+
+// rawCommit is a commit as stored: the message and author name are the stored bytes, not re-encoded.
+type rawCommit struct {
+	hash, author, message string
+}
+
+// rawCommits reads the commit objects of hashes with git cat-file --batch, in the order given.
+func (c *CLI) rawCommits(ctx context.Context, hashes []string) ([]rawCommit, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+	out, err := c.run(ctx, strings.Join(hashes, "\n")+"\n", "cat-file", "--batch")
+	if err != nil {
+		return nil, unknownGitError(err)
+	}
+	raws := make([]rawCommit, 0, len(hashes))
+	for range hashes {
+		header, rest, ok := strings.Cut(out, "\n")
+		fields := strings.Fields(header)
+		if !ok || len(fields) != 3 || fields[1] != "commit" {
+			return nil, unknownGitError(fmt.Errorf("unexpected cat-file header %q", header))
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil || size < 0 || size >= len(rest) {
+			return nil, unknownGitError(fmt.Errorf("unexpected cat-file header %q", header))
+		}
+		raws = append(raws, parseRawCommit(fields[0], rest[:size]))
+		out = rest[size+1:] // skip the newline that ends the object
+	}
+	return raws, nil
+}
+
+// parseRawCommit splits a raw commit object into its author name and message. The headers end at the first empty
+// line; continuation lines (gpgsig, mergetag) start with a space and never match.
+func parseRawCommit(hash, content string) rawCommit {
+	headers, message, _ := strings.Cut(content, "\n\n")
+	raw := rawCommit{hash: hash, message: message}
+	for line := range strings.SplitSeq(headers, "\n") {
+		if rest, ok := strings.CutPrefix(line, "author "); ok {
+			name, _, _ := strings.Cut(rest, "<")
+			raw.author = strings.TrimSpace(name)
+			break
+		}
+	}
+	return raw
+}
+
+// FirstCommitsForFiles finds, for each path, the first commit whose tree contains it (spec F9.3).
+//
+// The oldest commit whose tree has a path always adds it relative to every parent, so one
+// git log --topo-order --reverse -m --root --diff-filter=A over the paths lists it first. Merges are diffed
+// against each parent (-m) to catch a file that only a merge brings in. Paths are literal, not patterns, and
+// a directory is never found (see Git.FirstCommitsForFiles). Errors are swallowed.
+func (c *CLI) FirstCommitsForFiles(ctx context.Context, paths []string) map[string]*CommitInfo {
+	results := make(map[string]*CommitInfo, len(paths))
+	if len(paths) == 0 {
+		return results
+	}
+	args := []string{"--literal-pathspecs", "log", "--topo-order", "--reverse", "-m", "--root", "--no-renames",
+		"--full-history", "--diff-filter=A", "--name-status", "-z", "--format=%x01%H", "HEAD", "--"}
+	out, err := c.run(ctx, "", append(args, paths...)...)
+	if err != nil {
+		return map[string]*CommitInfo{}
+	}
+	wanted := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		wanted[p] = true
+	}
+	firstHash := make(map[string]string, len(paths))
+	var hashes []string
+	for _, chunk := range strings.Split(out, "\x01")[1:] {
+		fields := strings.Split(chunk, "\x00")
+		for rest := fields[1:]; len(rest) >= 2; rest = rest[2:] {
+			if path := rest[1]; wanted[path] && firstHash[path] == "" {
+				firstHash[path] = fields[0]
+				if !slices.Contains(hashes, fields[0]) {
+					hashes = append(hashes, fields[0])
+				}
+			}
+		}
+	}
+	raws, err := c.rawCommits(ctx, hashes)
+	if err != nil {
+		return map[string]*CommitInfo{}
+	}
+	infos := make(map[string]*CommitInfo, len(raws))
+	for _, raw := range raws {
+		infos[raw.hash] = commitInfoFor(raw.hash, raw.author)
+	}
+	for path, hash := range firstHash {
+		if info := infos[hash]; info != nil {
+			results[path] = info
+		}
+	}
+	return results
+}
+
+// AddFiles stages paths (spec F9.4), with the semantics of libgit2's index add_all with default flags.
+//
+// git add alone fails on a path that matches nothing and on an ignored file, which libgit2 skips silently. So
+// git ls-files first lists what can be staged under the paths: tracked files (including the deleted ones) and
+// untracked files that are not ignored. Then git add -A stages exactly that list, deletions included. Both run
+// from the root of the working tree, with literal pathspecs.
+//
+// Commands: git rev-parse --show-toplevel; git --literal-pathspecs ls-files -z --cached --others --exclude-standard -- paths;
+// git --literal-pathspecs add -A --pathspec-from-file=- --pathspec-file-nul.
+func (c *CLI) AddFiles(ctx context.Context, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	out, err := c.run(ctx, "", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return fail(err, openRepoError)
+	}
+	root := &CLI{Dir: strings.TrimRight(out, "\n"), path: c.path}
+	args := append(
+		[]string{"--literal-pathspecs", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--"},
+		paths...)
+	listed, err := root.run(ctx, "", args...)
+	if err != nil {
+		return fail(err, unknownGitError)
+	}
+	if listed == "" {
+		return nil
+	}
+	if _, err := root.run(ctx, listed, "--literal-pathspecs", "add", "-A",
+		"--pathspec-from-file=-", "--pathspec-file-nul"); err != nil {
+		return fail(err, unknownGitError)
+	}
+	return nil
 }
