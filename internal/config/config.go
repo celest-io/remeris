@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"regexp"
 
@@ -98,9 +99,19 @@ type Asset struct {
 	Name string `toml:"name"`
 }
 
+// GitHub is the [github] table. APIURL and UploadURL are remeris' own keys (Knope ignores them), for GitHub
+// Enterprise Server and for test servers.
 type GitHub struct {
 	Owner string `toml:"owner"`
 	Repo  string `toml:"repo"`
+	// APIURL is the base URL of the GitHub API, an absolute http or https URL. go-github's WithEnterpriseURLs
+	// appends "api/v3/" to its path unless the path already ends in "/api/v3/" or the host starts with "api."
+	// or contains ".api.". A trailing slash is added when missing.
+	APIURL string `toml:"api_url"`
+	// UploadURL is the base URL for release asset uploads, with the same shape as APIURL. It needs APIURL. When
+	// only APIURL is set, uploads use APIURL too (PR 42). go-github appends "api/uploads/" to its path unless
+	// the path already ends in "/api/uploads/" or the host starts with "api." or "uploads." or contains ".api.".
+	UploadURL string `toml:"upload_url"`
 }
 
 type Gitea struct {
@@ -229,6 +240,10 @@ func decode(path string, src []byte, root fs.StatFS) (*Config, error) {
 		return nil, err
 	}
 
+	if err := validateGitHub(r.GitHub, index, string(src)); err != nil {
+		return nil, err
+	}
+
 	for i, rw := range r.Workflows {
 		if !workflowName.MatchString(rw.Name) {
 			return nil, diag.Newf("Workflow names may only contain letters, digits, '-' and '_': %s", rw.Name).
@@ -254,4 +269,45 @@ func tomlError(path string, err error) error {
 		msg = fmt.Sprintf("TOML parse error in %s: %s", path, err)
 	}
 	return diag.New(msg).WithCode("config::toml").WithHelp("Check the TOML is valid.").WithCause(err)
+}
+
+const (
+	codeGitHubURL         = "remeris::config::github_url"
+	codeUploadURLNoAPIURL = "remeris::config::github_upload_url_without_api_url"
+)
+
+// validateGitHub checks the optional api_url and upload_url keys of [github].
+func validateGitHub(g *GitHub, index *tomlIndex, src string) error {
+	if g == nil {
+		return nil
+	}
+	for _, k := range []struct{ key, value string }{{"api_url", g.APIURL}, {"upload_url", g.UploadURL}} {
+		if k.value == "" {
+			continue
+		}
+		if !isHTTPURL(k.value) {
+			d := diag.Newf("`%s` in [github] must be an absolute http or https URL with a host: %s", k.key, k.value).
+				WithCode(codeGitHubURL).
+				WithHelp("Use a value like https://github.example.com/ for `" + k.key + "`.")
+			if s, ok := index.Span("github", k.key); ok {
+				d = d.WithSource(src, diag.Label{Start: s.Start, End: s.End, Text: "`" + k.key + "` defined here"})
+			}
+			return d
+		}
+	}
+	if g.UploadURL != "" && g.APIURL == "" {
+		d := diag.New("`upload_url` in [github] needs `api_url`").
+			WithCode(codeUploadURLNoAPIURL).
+			WithHelp("Set `api_url` in [github] too, or remove `upload_url`.")
+		if s, ok := index.Span("github", "upload_url"); ok {
+			d = d.WithSource(src, diag.Label{Start: s.Start, End: s.End, Text: "`upload_url` defined here"})
+		}
+		return d
+	}
+	return nil
+}
+
+func isHTTPURL(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != ""
 }
