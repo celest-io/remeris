@@ -36,9 +36,29 @@ func TestStatusError(t *testing.T) {
 			500, "https://gitea.example.com/api/v1/x?page=2",
 			"HTTP status server error (500 Internal Server Error) for url (https://gitea.example.com/api/v1/x?page=2)", true,
 		},
-		"unknown status has no reason": {
+		"unknown server status": {
 			599, testURL,
-			"HTTP status server error (599) for url (https://x.test/)", true,
+			"HTTP status server error (599 <unknown status code>) for url (https://x.test/)", true,
+		},
+		"unknown client status": {
+			499, testURL,
+			"HTTP status client error (499 <unknown status code>) for url (https://x.test/)", true,
+		},
+		"payload too large": {
+			413, testURL,
+			"HTTP status client error (413 Payload Too Large) for url (https://x.test/)", true,
+		},
+		"uri too long": {
+			414, testURL,
+			"HTTP status client error (414 URI Too Long) for url (https://x.test/)", true,
+		},
+		"range not satisfiable": {
+			416, testURL,
+			"HTTP status client error (416 Range Not Satisfiable) for url (https://x.test/)", true,
+		},
+		"teapot": {
+			418, testURL,
+			"HTTP status client error (418 I'm a teapot) for url (https://x.test/)", true,
 		},
 		"password is redacted": {
 			401, "https://user:secret@x.test/p",

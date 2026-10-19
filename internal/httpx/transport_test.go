@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -193,8 +197,12 @@ func TestRetryAfter(t *testing.T) {
 		"zero seconds":            {"0", http.StatusTooManyRequests, 0},
 		"seconds on 503":          {"3", http.StatusServiceUnavailable, 3 * time.Second},
 		"longer than the backoff": {"3600", http.StatusTooManyRequests, time.Hour},
-		"http date":               {date, http.StatusTooManyRequests, 90 * time.Second},
-		"http date in the past":   {past, http.StatusTooManyRequests, 0},
+		"huge uint64 is clamped": {
+			"18446744073709551615", http.StatusTooManyRequests, time.Duration(math.MaxInt64),
+		},
+		"above uint32 is kept":  {"4294967296", http.StatusTooManyRequests, 4294967296 * time.Second},
+		"http date":             {date, http.StatusTooManyRequests, 90 * time.Second},
+		"http date in the past": {past, http.StatusTooManyRequests, 0},
 		"rfc 2822 date": {
 			fixedNow.Add(time.Minute).Format(time.RFC1123Z),
 			http.StatusTooManyRequests,
@@ -516,6 +524,30 @@ func TestResetsAreRetried(t *testing.T) {
 	_ = resp.Body.Close()
 	if calls != 2 {
 		t.Errorf("calls = %d, want 2", calls)
+	}
+}
+
+func TestIsTransientError(t *testing.T) {
+	tests := map[string]struct {
+		err  error
+		want bool
+	}{
+		"connection reset":    {syscall.ECONNRESET, true},
+		"connection refused":  {syscall.ECONNREFUSED, true},
+		"connection aborted":  {syscall.ECONNABORTED, true},
+		"broken pipe":         {syscall.EPIPE, true},
+		"wrapped broken pipe": {&net.OpError{Op: "write", Err: os.NewSyscallError("write", syscall.EPIPE)}, true},
+		"unexpected eof":      {io.ErrUnexpectedEOF, true},
+		"bare eof":            {io.EOF, true},
+		"wrapped eof":         {fmt.Errorf("read: %w", io.EOF), true},
+		"other":               {errors.New("tls: bad certificate"), false},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := isTransientError(tt.err); got != tt.want {
+				t.Errorf("isTransientError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
 	}
 }
 

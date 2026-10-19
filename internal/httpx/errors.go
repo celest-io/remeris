@@ -17,6 +17,12 @@ const (
 //
 //	HTTP status client error (404 Not Found) for url (https://api.github.com/repos/o/r)
 //
+// The reason phrase is the one of the Rust http crate (see reasonPhrase). A status code without a phrase
+// prints as "499 <unknown status code>", as reqwest does.
+//
+// The URL is printed with [url.URL.Redacted], so a password in it shows as xxxxx. reqwest prints the URL as is;
+// remeris does not leak a secret into a message.
+//
 // It returns false when the status is neither 4xx nor 5xx (reqwest's error_for_status only fails for those).
 func StatusError(resp *http.Response) (string, bool) {
 	var kind string
@@ -28,15 +34,31 @@ func StatusError(resp *http.Response) (string, bool) {
 	default:
 		return "", false
 	}
-	status := strconv.Itoa(resp.StatusCode)
-	if text := http.StatusText(resp.StatusCode); text != "" {
-		status += " " + text
-	}
+	status := strconv.Itoa(resp.StatusCode) + " " + reasonPhrase(resp.StatusCode)
 	msg := "HTTP status " + kind + " error (" + status + ")"
 	if resp.Request != nil && resp.Request.URL != nil {
 		msg += " for url (" + resp.Request.URL.Redacted() + ")"
 	}
 	return msg, true
+}
+
+// phraseOverrides are the 4xx and 5xx codes whose reason phrase in the Rust http crate (src/status.rs) differs
+// from Go's http.StatusText. The crate has no phrase for 509 or 427, where Go has none either.
+var phraseOverrides = map[int]string{
+	http.StatusRequestEntityTooLarge:        "Payload Too Large",
+	http.StatusRequestURITooLong:            "URI Too Long",
+	http.StatusRequestedRangeNotSatisfiable: "Range Not Satisfiable",
+}
+
+// reasonPhrase returns the http crate's canonical reason for code, or "<unknown status code>".
+func reasonPhrase(code int) string {
+	if text, ok := phraseOverrides[code]; ok {
+		return text
+	}
+	if text := http.StatusText(code); text != "" {
+		return text
+	}
+	return "<unknown status code>"
 }
 
 // NewAPIRequestError is Knope's ApiRequestError: a request to service failed while doing activity.

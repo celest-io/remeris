@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -36,9 +37,12 @@ const (
 //
 // A request is retried up to MaxRetries times when the connection fails (not when its context is
 // done), or the response status is 5xx, 408 or 429. The wait before a retry is the Retry-After header
-// when the response has a valid one (delta-seconds or an HTTP date, never capped, like Knope), else
+// when the response has a valid one (delta-seconds or an HTTP date, like Knope), else
 // exponential backoff with full jitter: a random time between DefaultMinDelay and
-// min(DefaultMaxDelay, DefaultMinDelay*2^retry). A request with a body but without GetBody is sent once.
+// min(DefaultMaxDelay, DefaultMinDelay*2^retry). A Retry-After wait is not capped, as in Knope: a huge value
+// (up to the largest time.Duration) is honoured and only the request's context ends the wait.
+//
+// A request with a body but without GetBody is sent once.
 //
 // Create one with NewRetryTransport. The injectable fields exist for tests.
 type Transport struct {
@@ -155,8 +159,8 @@ func (t *Transport) backoff(retry int) time.Duration {
 
 // retryAfter parses a Retry-After value as delta-seconds or an HTTP date.
 func (t *Transport) retryAfter(v string) (time.Time, bool) {
-	if secs, err := strconv.ParseUint(v, 10, 32); err == nil {
-		return t.now().Add(time.Duration(secs) * time.Second), true
+	if secs, err := strconv.ParseUint(v, 10, 64); err == nil {
+		return t.now().Add(secondsToDuration(secs)), true
 	}
 	if date, err := http.ParseTime(v); err == nil {
 		return date, true
@@ -165,6 +169,14 @@ func (t *Transport) retryAfter(v string) (time.Time, bool) {
 		return date, true
 	}
 	return time.Time{}, false
+}
+
+// secondsToDuration converts delta-seconds to a Duration, clamped to the largest Duration.
+func secondsToDuration(secs uint64) time.Duration {
+	if secs > uint64(math.MaxInt64/time.Second) {
+		return time.Duration(math.MaxInt64)
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // warnRateLimit logs Knope's rate-limit warnings for a 429 that carries Retry-After.
@@ -188,7 +200,7 @@ func isTransientStatus(code int) bool {
 }
 
 // isTransientError reports connection-level failures: dial errors, resets, timeouts and connections
-// cut mid-response. The caller has already excluded a done context.
+// cut mid-response (reset, broken pipe, early EOF), as hyper retries them. The caller has already excluded a done context.
 func isTransientError(err error) bool {
 	var opErr *net.OpError
 	if errors.As(err, &opErr) && opErr.Op == "dial" {
@@ -199,7 +211,8 @@ func isTransientError(err error) bool {
 		return true
 	}
 	return errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ECONNRESET) ||
-		errors.Is(err, syscall.ECONNABORTED) || errors.Is(err, io.ErrUnexpectedEOF)
+		errors.Is(err, syscall.ECONNABORTED) || errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
 }
 
 // drain reads what is left of a discarded response, so the connection can be reused, and closes it.
