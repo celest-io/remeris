@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/fs"
+	"path"
+	"slices"
 
 	gotoml "github.com/pelletier/go-toml/v2"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/glob"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
@@ -77,7 +80,9 @@ func isCargoWorkspace(root fs.StatFS) bool {
 	return gotoml.Unmarshal(data, &doc) == nil && len(doc.Workspace.Members) > 0
 }
 
-// isNPMWorkspace: package.json has a `workspaces` array. Knope ignores the object form.
+// isNPMWorkspace: package.json has a `workspaces` array of which at least one string pattern matches a directory
+// with a readable package.json (Knope's npm_workspaces). Knope ignores the object form, and with no such directory
+// it falls back to the default package. A pattern that does not compile is an error in Knope, so it counts here.
 func isNPMWorkspace(root fs.StatFS) bool {
 	data, err := fs.ReadFile(root, "package.json")
 	if err != nil {
@@ -86,34 +91,112 @@ func isNPMWorkspace(root fs.StatFS) bool {
 	var doc struct {
 		Workspaces []any `json:"workspaces"`
 	}
-	return json.Unmarshal(data, &doc) == nil && len(doc.Workspaces) > 0
+	if json.Unmarshal(data, &doc) != nil {
+		return false
+	}
+	for _, p := range doc.Workspaces {
+		pattern, ok := p.(string)
+		if !ok {
+			continue
+		}
+		matches, err := glob.Glob(root, pattern)
+		if err != nil {
+			return true
+		}
+		for _, m := range matches {
+			if readJSON(root, path.Join(m, "package.json")) != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
-// isDenoWorkspace: deno.json or deno.jsonc has a `workspace` array or object with members.
+// isDenoWorkspace follows Knope's deno_workspaces: it applies when the root has a deno.json or deno.jsonc and at
+// least one folder of the workspace (the root, then each member) has a usable config: a deno.json(c) with a name and
+// a version, or else a package.json with a name and a version. Having a `workspace` key is not enough. The member
+// list is the `workspace` array or the `members` array of the object form.
 func isDenoWorkspace(root fs.StatFS) bool {
+	var cfg map[string]any
 	for _, name := range []string{"deno.json", "deno.jsonc"} {
-		data, err := fs.ReadFile(root, name)
+		if cfg = readJSONC(root, name); cfg != nil {
+			break
+		}
+	}
+	if cfg == nil {
+		return false
+	}
+	if denoFolderUsable(root, ".") {
+		return true
+	}
+	var members []any
+	switch w := cfg["workspace"].(type) {
+	case []any:
+		members = w
+	case map[string]any:
+		members, _ = w["members"].([]any)
+	}
+	for _, m := range members {
+		pattern, ok := m.(string)
+		if !ok {
+			continue
+		}
+		matches, err := glob.Glob(root, pattern)
 		if err != nil {
 			continue
 		}
-		var doc struct {
-			Workspace json.RawMessage `json:"workspace"`
-		}
-		if json.Unmarshal(stripJSONC(data), &doc) != nil || len(doc.Workspace) == 0 {
-			continue
-		}
-		var list []any
-		var obj map[string]any
-		if json.Unmarshal(doc.Workspace, &list) == nil && len(list) > 0 ||
-			json.Unmarshal(doc.Workspace, &obj) == nil && len(obj) > 0 {
+		if slices.ContainsFunc(matches, func(dir string) bool { return denoFolderUsable(root, dir) }) {
 			return true
 		}
 	}
 	return false
 }
 
+// denoFolderUsable reports whether dir holds a deno.json(c) with a name and version, or a package.json with both.
+func denoFolderUsable(root fs.StatFS, dir string) bool {
+	for _, name := range []string{"deno.json", "deno.jsonc"} {
+		if hasNameAndVersion(readJSONC(root, path.Join(dir, name))) {
+			return true
+		}
+	}
+	return hasNameAndVersion(readJSON(root, path.Join(dir, "package.json")))
+}
+
+func hasNameAndVersion(doc map[string]any) bool {
+	name, _ := doc["name"].(string)
+	version, _ := doc["version"].(string)
+	return name != "" && version != ""
+}
+
+// readJSON returns the object at name, or nil if the file is missing, unreadable or not a JSON object.
+func readJSON(root fs.StatFS, name string) map[string]any {
+	data, err := fs.ReadFile(root, name)
+	if err != nil {
+		return nil
+	}
+	var doc map[string]any
+	if json.Unmarshal(data, &doc) != nil {
+		return nil
+	}
+	return doc
+}
+
+// readJSONC is readJSON for files that may hold comments and trailing commas.
+func readJSONC(root fs.StatFS, name string) map[string]any {
+	data, err := fs.ReadFile(root, name)
+	if err != nil {
+		return nil
+	}
+	var doc map[string]any
+	if json.Unmarshal(stripJSONC(data), &doc) != nil {
+		return nil
+	}
+	return doc
+}
+
 // stripJSONC removes comments and trailing commas, which deno.jsonc allows, so encoding/json can read it.
 func stripJSONC(in []byte) []byte {
+	in = bytes.TrimPrefix(in, []byte("\xef\xbb\xbf"))
 	out := make([]byte, 0, len(in))
 	for i := 0; i < len(in); i++ {
 		c := in[i]

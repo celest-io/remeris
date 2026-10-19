@@ -19,6 +19,17 @@ const (
 	packageJSONName = "package.json"
 	cargoMembers    = "[workspace]\nmembers = [\"a\"]\n"
 	noWorkspace     = ""
+	denoJSONName    = "deno.json"
+	denoJSONCName   = "deno.jsonc"
+	denoMemberJSON  = "a/deno.json"
+	kindNPM         = "npm"
+	kindDeno        = "Deno"
+	emptyObject     = "{}"
+	denoWorkspaceA  = `{"workspace":["./a"]}`
+	nameOnlyA       = `{"name":"a"}`
+	memberPkgJSON   = "a/package.json"
+	workspacesA     = `{"workspaces":["a"]}`
+	nameVersionA    = `{"name":"a","version":"1.0.0"}`
 )
 
 func rootOf(files map[string]string) fstest.MapFS {
@@ -51,7 +62,7 @@ func TestDiscoverPackages(t *testing.T) {
 			wantChangelog: defaultChangelog,
 		},
 		"changelog alone": {files: map[string]string{defaultChangelog: ""}},
-		"no deno.jsonc":   {files: map[string]string{"deno.jsonc": "{}"}},
+		"no deno.jsonc":   {files: map[string]string{denoJSONCName: emptyObject}},
 		"empty cargo members": {
 			files:     map[string]string{cargoTomlName: "[workspace]\nmembers = []\n"},
 			wantFiles: []string{cargoTomlName},
@@ -63,6 +74,44 @@ func TestDiscoverPackages(t *testing.T) {
 		"npm object form": {
 			files:     map[string]string{packageJSONName: `{"workspaces":{"packages":["a"]}}`},
 			wantFiles: []string{packageJSONName},
+		},
+		"cargo workspace.package only": {
+			files:     map[string]string{cargoTomlName: "[workspace.package]\nversion = \"1.0.0\"\n"},
+			wantFiles: []string{cargoTomlName},
+		},
+		"npm empty workspaces": {
+			files:     map[string]string{packageJSONName: `{"workspaces":[]}`},
+			wantFiles: []string{packageJSONName},
+		},
+		"npm patterns match nothing": {
+			files:     map[string]string{packageJSONName: `{"workspaces":["packages/*"]}`, "packages/a/README.md": ""},
+			wantFiles: []string{packageJSONName},
+		},
+		"npm non-string entries": {
+			files:     map[string]string{packageJSONName: `{"workspaces":[1,null]}`},
+			wantFiles: []string{packageJSONName},
+		},
+		"deno empty workspace": {
+			files:     map[string]string{denoJSONName: `{"workspace":[]}`},
+			wantFiles: []string{denoJSONName},
+		},
+		"deno members without name and version": {
+			files: map[string]string{
+				denoJSONName: denoWorkspaceA, denoMemberJSON: nameOnlyA, memberPkgJSON: nameOnlyA,
+			},
+			wantFiles: []string{denoJSONName},
+		},
+		"deno object without members": {
+			files:     map[string]string{denoJSONName: `{"workspace":{}}`},
+			wantFiles: []string{denoJSONName},
+		},
+		"deno root without name or version": {
+			files:     map[string]string{denoJSONName: `{"imports":{}}`},
+			wantFiles: []string{denoJSONName},
+		},
+		"unparseable deno.json": {
+			files:     map[string]string{denoJSONName: `{"name": "x", "version": `},
+			wantFiles: []string{denoJSONName},
 		},
 		"broken cargo": {files: map[string]string{cargoTomlName: "[[["}, wantFiles: []string{cargoTomlName}},
 	}
@@ -98,13 +147,65 @@ func TestDiscoverWorkspaces(t *testing.T) {
 		want  string
 	}{
 		"cargo": {map[string]string{cargoTomlName: cargoMembers}, "Cargo"},
-		"npm":   {map[string]string{packageJSONName: `{"workspaces":["a"]}`}, "npm"},
-		"deno":  {map[string]string{"deno.json": `{"workspace":["./a"]}`}, "Deno"},
+		kindNPM: {map[string]string{packageJSONName: workspacesA, memberPkgJSON: nameOnlyA}, kindNPM},
+		"deno": {
+			map[string]string{
+				denoJSONName:   denoWorkspaceA,
+				denoMemberJSON: nameVersionA,
+			},
+			kindDeno,
+		},
 		"deno jsonc with comments": {
-			map[string]string{"deno.jsonc": "{\n// members\n\"workspace\": [\"./a\", /* x */],\n}\n"}, "Deno",
+			map[string]string{
+				denoJSONCName: "{\n// members\n\"workspace\": [\"./a\", /* x */],\n}\n",
+				memberPkgJSON: nameVersionA,
+			}, kindDeno,
+		},
+		"npm member with a package.json": {
+			map[string]string{
+				packageJSONName:           `{"workspaces":["packages/*"]}`,
+				"packages/a/package.json": nameOnlyA,
+			},
+			kindNPM,
+		},
+		"npm member without a name": {
+			map[string]string{packageJSONName: workspacesA, memberPkgJSON: `{}`}, kindNPM,
+		},
+		"deno member with deno.json": {
+			map[string]string{
+				denoJSONName:   denoWorkspaceA,
+				denoMemberJSON: nameVersionA,
+			},
+			kindDeno,
+		},
+		"deno member with package.json": {
+			map[string]string{
+				denoJSONName:  `{"workspace":["a"]}`,
+				memberPkgJSON: nameVersionA,
+			},
+			kindDeno,
+		},
+		"deno member by glob": {
+			map[string]string{
+				denoJSONName:        `{"workspace":["pkgs/*"]}`,
+				"pkgs/a/deno.jsonc": nameVersionA,
+			},
+			kindDeno,
+		},
+		"deno object form": {
+			map[string]string{
+				denoJSONName: `{"workspace":{"members":["./a"]}}`, denoMemberJSON: nameVersionA,
+			}, kindDeno,
+		},
+		"deno root with name and version": {map[string]string{denoJSONName: nameVersionA}, kindDeno},
+		"deno.jsonc root with name and version": {
+			map[string]string{denoJSONCName: "{\n// x\n\"name\":\"a\",\"version\":\"1.0.0\",\n}"}, kindDeno,
+		},
+		"deno root with a named package.json": {
+			map[string]string{denoJSONName: `{}`, packageJSONName: nameVersionA}, kindDeno,
 		},
 		"cargo wins over npm": {
-			map[string]string{cargoTomlName: cargoMembers, packageJSONName: `{"workspaces":["a"]}`}, "Cargo",
+			map[string]string{cargoTomlName: cargoMembers, packageJSONName: workspacesA}, "Cargo",
 		},
 	}
 	for name, tc := range cases {
@@ -169,5 +270,68 @@ func TestLoadFSDefersWorkspaceError(t *testing.T) {
 	}
 	if cfg.DiscoveryError() == nil || cfg.PackageCount() != 0 {
 		t.Errorf("DiscoveryError = %v, count = %d", cfg.DiscoveryError(), cfg.PackageCount())
+	}
+}
+
+func TestStripJSONC(t *testing.T) {
+	cases := map[string]struct{ in, want string }{
+		"comment markers in strings": {`{"a":"// no /* no */"}`, `{"a":"// no /* no */"}`},
+		"escaped quote":              {`{"a":"\" // still a string"} // gone`, "{\"a\":\"\\\" // still a string\"} \n"},
+		"line comment":               {"{} // x\n", "{} \n"},
+		"block comment":              {"{/* x */}", "{ }"},
+		"unterminated block comment": {"{\"a\":1 /* x", `{"a":1 `},
+		"trailing comma array":       {`[1,2,]`, `[1,2]`},
+		"trailing comma object":      {`{"a":1,}`, `{"a":1}`},
+		"comment between comma, ]":   {"[1,\n// x\n]", "[1]"},
+		"comment between comma, }":   {"{\"a\":1, /* x */ }", "{\"a\":1}"},
+		"comma in string before ]":   {`["a,"]`, `["a,"]`},
+		"bom":                        {"\xef\xbb\xbf{}", emptyObject},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := string(stripJSONC([]byte(tc.in))); got != tc.want {
+				t.Errorf("stripJSONC(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSourceValues(t *testing.T) {
+	cases := map[string]struct {
+		toml string
+		want Source
+	}{
+		"no file":                {"", SourceDefault},
+		"file with workflows":    {"[[workflows]]\nname = \"a\"\n", SourceFile},
+		"file without workflows": {"[changes]\n", SourceHybrid},
+		"packages, no workflows": {"[package]\nversioned_files = [\"" + cargoTomlName + "\"]\n", SourceHybrid},
+	}
+	root := rootOf(map[string]string{cargoTomlName: "[package]\n"})
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "knope.toml")
+			if tc.toml != "" {
+				if err := os.WriteFile(path, []byte(tc.toml), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cfg, err := LoadFS(path, root)
+			if err != nil || cfg.Source != tc.want {
+				t.Errorf("Source = %v, %v; want %v", cfg.Source, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestEmptyPackagesBeatsDiscovery(t *testing.T) {
+	root := rootOf(map[string]string{cargoTomlName: cargoMembers})
+	path := filepath.Join(t.TempDir(), "knope.toml")
+	if err := os.WriteFile(path, []byte("[packages]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadFS(path, root)
+	var d *diag.Error
+	if !errors.As(err, &d) || d.Code() != codeEmptyPackages {
+		t.Errorf("error = %v, want %s", err, codeEmptyPackages)
 	}
 }

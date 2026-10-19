@@ -2,14 +2,15 @@
 ! exec remeris release --dry-run
 cmp stderr release.log
 
-# deno.jsonc is a supported name for versioned_files, but default detection does not look for it (Quirk Q11).
+# Default detection does not look for deno.jsonc, as in Knope (see testdata/deviations.md); Q11 only accepts the name
+# in an explicit versioned_files.
 ! exec remeris release --dry-run
 stderr 'No packages to operate on'
 
 -- README.md --
 Nothing to release.
 -- deno.jsonc --
-{ "name": "x", "version": "1.0.0" }
+{ "imports": {} }
 -- release.log --
 Error: Problem with workflow release
   ╰─▶ No packages to operate on

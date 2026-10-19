@@ -1,0 +1,17 @@
+# A workspace key without a usable member is no workspace: Knope falls back to the default package.
+# The default package holds package.json, which the workflow below does not even read.
+exec remeris --dry-run show
+stdout shown
+! stderr .
+
+-- knope.toml --
+[[workflows]]
+name = "show"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo shown"
+-- package.json --
+{ "version": "1.0.0", "workspaces": ["packages/*"] }
+-- packages/readme/README.md --
+no package.json here
