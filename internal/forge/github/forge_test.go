@@ -462,3 +462,18 @@ func TestGitHubAppKeyReadError(t *testing.T) {
 		t.Errorf("err = %v, want boom", err)
 	}
 }
+
+// An empty stored token (an empty answer saved by an earlier prompt) is no token: no "Authorization: Bearer " is sent.
+func TestEmptyStoredTokenIsNoToken(t *testing.T) {
+	srv := newFakeGitHub(t)
+	store := storeIn(t, nil, failingPrompter{t: t})
+	writeStored(t, store, "")
+	c, err := github.New(srv.config(), nil, store).MaybeAuthenticated(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	getRepo(t, c)
+	if got := srv.last(t); got.Auth != "" || c.Authenticated {
+		t.Errorf("auth = %q, authenticated = %v, want an anonymous request", got.Auth, c.Authenticated)
+	}
+}

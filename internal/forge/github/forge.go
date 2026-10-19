@@ -236,6 +236,9 @@ func (f *Forge) tokenSource(ctx context.Context, require bool) (oauth2.TokenSour
 	if err != nil {
 		return nil, err
 	}
+	// An empty stored token (Knope saves an empty answer to the prompt as it is) is no token: sending
+	// "Authorization: Bearer " would only fail.
+	found = found && token != ""
 	switch {
 	case found && f.fromEnv(token):
 		slog.DebugContext(ctx, "Using "+credentials.GitHubToken.Env())
