@@ -39,7 +39,9 @@ func TestWrapError(t *testing.T) {
 		"secondary rate limit": {
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
-				_, _ = w.Write([]byte(`{"message":"slow down","documentation_url":"https://docs.github.com/rest#secondary-rate-limits"}`))
+				_, _ = w.Write(
+					[]byte(`{"message":"slow down","documentation_url":"https://docs.github.com/rest#secondary-rate-limits"}`),
+				)
 			},
 			want: "Trouble communicating with GitHub while getting the repository: " +
 				"HTTP status client error (403 Forbidden) for url (URL) with body: " +

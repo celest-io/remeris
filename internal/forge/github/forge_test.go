@@ -27,16 +27,18 @@ import (
 
 const (
 	// Fake secrets, made up for the tests.
-	envToken    = "fake-env-token"
-	storedToken = "fake-stored-token"
-	typedToken  = "fake-typed-token"
-	instToken   = "fake-installation-token"
+	envValue     = "fake-env-token"
+	storedValue  = "fake-stored-token"
+	typedValue   = "fake-typed-token"
+	installValue = "fake-installation-token"
 
+	userAgent = "Remeris"
+	ghePath   = "https://ghe.example.com/api/v3/"
 	apiPath   = "/api/v3/"
 	repoPath  = apiPath + "repos/o/r"
 	appID     = 4242
 	instID    = 77
-	tokenName = "GITHUB_TOKEN"
+	envName   = "GITHUB_TOKEN"
 )
 
 // request is what the fake API saw of one request.
@@ -76,7 +78,7 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		}
 		w.WriteHeader(http.StatusCreated)
 		exp := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
-		_, _ = w.Write([]byte(`{"token":"` + instToken + `","expires_at":"` + exp + `"}`))
+		_, _ = w.Write([]byte(`{"token":"` + installValue + `","expires_at":"` + exp + `"}`))
 	})
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
@@ -196,14 +198,14 @@ func TestTokenSources(t *testing.T) {
 		wantLog  string
 	}{
 		"environment variable": {
-			env: map[string]string{tokenName: envToken}, wantAuth: "Bearer " + envToken, wantLog: "Using GITHUB_TOKEN",
+			env: map[string]string{envName: envValue}, wantAuth: "Bearer " + envValue, wantLog: "Using GITHUB_TOKEN",
 		},
 		"environment beats the stored token": {
-			env: map[string]string{tokenName: envToken}, stored: storedToken,
-			wantAuth: "Bearer " + envToken, wantLog: "Using GITHUB_TOKEN",
+			env: map[string]string{envName: envValue}, stored: storedValue,
+			wantAuth: "Bearer " + envValue, wantLog: "Using GITHUB_TOKEN",
 		},
 		"stored token": {
-			stored: storedToken, wantAuth: "Bearer " + storedToken, wantLog: "Using the stored GitHub token",
+			stored: storedValue, wantAuth: "Bearer " + storedValue, wantLog: "Using the stored GitHub token",
 		},
 	}
 	for name, tc := range tests {
@@ -226,7 +228,7 @@ func TestTokenSources(t *testing.T) {
 				}
 				getRepo(t, c)
 				got := srv.last(t)
-				if got.Auth != tc.wantAuth || got.UserAgent != "Remeris" || got.Path != repoPath {
+				if got.Auth != tc.wantAuth || got.UserAgent != userAgent || got.Path != repoPath {
 					t.Errorf("request = %+v, want auth %q, user agent Remeris, path %s", got, tc.wantAuth, repoPath)
 				}
 				if !c.Authenticated {
@@ -235,7 +237,7 @@ func TestTokenSources(t *testing.T) {
 				if !strings.Contains(logs.String(), tc.wantLog) {
 					t.Errorf("log = %q, want %q", logs, tc.wantLog)
 				}
-				for _, secret := range []string{envToken, storedToken} {
+				for _, secret := range []string{envValue, storedValue} {
 					if strings.Contains(logs.String(), secret) {
 						t.Errorf("the log leaks %q: %s", secret, logs)
 					}
@@ -248,7 +250,7 @@ func TestTokenSources(t *testing.T) {
 func TestRequireAuthenticationPrompts(t *testing.T) {
 	logs := captureLog(t)
 	srv := newFakeGitHub(t)
-	p := prompt.NewScripted(prompt.Answer{Message: credentials.GitHubToken.Prompt(), Text: typedToken})
+	p := prompt.NewScripted(prompt.Answer{Message: credentials.GitHubToken.Prompt(), Text: typedValue})
 	store := storeIn(t, nil, p)
 	forge := github.New(srv.config(), nil, store)
 
@@ -257,14 +259,14 @@ func TestRequireAuthenticationPrompts(t *testing.T) {
 		t.Fatal(err)
 	}
 	getRepo(t, c)
-	if got := srv.last(t).Auth; got != "Bearer "+typedToken {
+	if got := srv.last(t).Auth; got != "Bearer "+typedValue {
 		t.Errorf("Authorization = %q", got)
 	}
 	saved, err := os.ReadFile(filepath.Join(store.Dir, "remeris", "github_token"))
-	if err != nil || string(saved) != typedToken {
+	if err != nil || string(saved) != typedValue {
 		t.Errorf("stored token = %q, %v", saved, err)
 	}
-	if strings.Contains(logs.String(), typedToken) {
+	if strings.Contains(logs.String(), typedValue) {
 		t.Errorf("the log leaks the token: %s", logs)
 	}
 }
@@ -289,7 +291,7 @@ func TestMaybeAuthenticatedIsAnonymous(t *testing.T) {
 	}
 	getRepo(t, c)
 	got := srv.last(t)
-	if got.Auth != "" || got.UserAgent != "Remeris" {
+	if got.Auth != "" || got.UserAgent != userAgent {
 		t.Errorf("request = %+v, want no Authorization and user agent Remeris", got)
 	}
 	if c.Authenticated {
@@ -302,7 +304,7 @@ func TestMaybeAuthenticatedIsAnonymous(t *testing.T) {
 
 func TestClientCaching(t *testing.T) {
 	srv := newFakeGitHub(t)
-	p := prompt.NewScripted(prompt.Answer{Text: typedToken})
+	p := prompt.NewScripted(prompt.Answer{Text: typedValue})
 	forge := github.New(srv.config(), nil, storeIn(t, nil, p))
 	ctx := context.Background()
 
@@ -338,12 +340,12 @@ func TestEnterpriseURLs(t *testing.T) {
 		wantBase, wantUpl string
 	}{
 		"api only": {
-			api: "https://ghe.example.com", wantBase: "https://ghe.example.com/api/v3/",
+			api: "https://ghe.example.com", wantBase: ghePath,
 			wantUpl: "https://ghe.example.com/api/uploads/",
 		},
 		"both": {
-			api: "https://ghe.example.com/api/v3/", upload: "https://up.example.com/api/uploads/",
-			wantBase: "https://ghe.example.com/api/v3/", wantUpl: "https://up.example.com/api/uploads/",
+			api: ghePath, upload: "https://up.example.com/api/uploads/",
+			wantBase: ghePath, wantUpl: "https://up.example.com/api/uploads/",
 		},
 		"none": {wantBase: "https://api.github.com/", wantUpl: "https://uploads.github.com/"},
 	}
@@ -390,7 +392,7 @@ func TestGitHubApp(t *testing.T) {
 				PrivateKey: func() ([]byte, error) { return key, nil },
 			}
 			// An App wins over GITHUB_TOKEN and the stored token.
-			store := storeIn(t, map[string]string{tokenName: envToken}, failingPrompter{t: t})
+			store := storeIn(t, map[string]string{envName: envValue}, failingPrompter{t: t})
 			forge := github.New(srv.config(), app, store)
 
 			c, err := forge.RequireAuthentication(context.Background())
@@ -401,7 +403,7 @@ func TestGitHubApp(t *testing.T) {
 			getRepo(t, c)
 
 			got := srv.last(t)
-			if got.Auth != "Bearer "+instToken || got.UserAgent != "Remeris" {
+			if got.Auth != "Bearer "+installValue || got.UserAgent != userAgent {
 				t.Errorf("request = %+v, want the installation token", got)
 			}
 			if srv.tokenCalls != 1 {
@@ -424,7 +426,7 @@ func TestGitHubApp(t *testing.T) {
 			if !strings.Contains(logs.String(), "Using GitHub App installation 77") {
 				t.Errorf("log = %q", logs)
 			}
-			for _, secret := range []string{instToken, envToken, "PRIVATE KEY"} {
+			for _, secret := range []string{installValue, envValue, "PRIVATE KEY"} {
 				if strings.Contains(logs.String(), secret) {
 					t.Errorf("the log leaks %q: %s", secret, logs)
 				}
