@@ -1,0 +1,16 @@
+# Nothing the default detection knows: no package, as before.
+! exec remeris release --dry-run
+cmp stderr release.log
+
+# deno.jsonc is a supported name for versioned_files, but default detection does not look for it (Quirk Q11).
+! exec remeris release --dry-run
+stderr 'No packages to operate on'
+
+-- README.md --
+Nothing to release.
+-- deno.jsonc --
+{ "name": "x", "version": "1.0.0" }
+-- release.log --
+Error: Problem with workflow release
+  ╰─▶ No packages to operate on
+      help: There must be at least one package for remeris to work with, no supported package files were found in this directory.

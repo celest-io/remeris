@@ -1,0 +1,44 @@
+# A Cargo workspace root is Cargo workspace discovery (milestone M10): it is an error, not a single package
+# (spec F20.1). The error is reported when the project is loaded, so --help still works.
+exec remeris --help
+stdout 'release +Prepare and create a new release'
+stdout 'document-change'
+! stdout 'get-version'
+! stderr .
+
+! exec remeris release --dry-run
+cmp stderr workspace.log
+
+# A knope.toml without packages is discovered the same way, so --validate fails too.
+cp knope.toml.empty knope.toml
+! exec remeris --validate
+stderr 'Package discovery for Cargo workspaces is not implemented yet'
+
+# A knope.toml that declares the packages needs no discovery.
+cp knope.toml.declared knope.toml
+exec remeris --dry-run show
+stdout shown
+! stderr .
+
+-- Cargo.toml --
+[workspace]
+members = ["first"]
+-- first/Cargo.toml --
+[package]
+name = "first-package"
+version = "1.0.0"
+-- knope.toml.empty --
+[changes]
+-- knope.toml.declared --
+[package]
+versioned_files = ["first/Cargo.toml"]
+
+[[workflows]]
+name = "show"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo shown"
+-- workspace.log --
+Error: Package discovery for Cargo workspaces is not implemented yet (milestone M10)
+  help: Declare the packages in knope.toml, or wait for milestone M10.
