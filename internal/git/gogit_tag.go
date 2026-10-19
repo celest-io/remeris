@@ -2,8 +2,11 @@ package git
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
+	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -11,8 +14,10 @@ import (
 
 // CreateTag creates an annotated tag with an empty message on HEAD (spec F9.5). Sign is ignored.
 //
-// go-git's Repository.CreateTag validates its options and may refuse an empty message, so the tag object is
-// written here. The tagger is user.name and user.email from the system, global and repository configuration.
+// The spec (F9.0) names Repository.CreateTag, but its CreateTagOptions refuses an empty message, so the tag object
+// is encoded and written by hand here. The tagger is user.name and user.email from the system, global and repository
+// configuration, trimmed like git does. go-git also rejects some names that git accepts (for example "@"), and a
+// name that starts with "-" is refused, as git does.
 func (g *GoGit) CreateTag(ctx context.Context, name string, _ TagOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -21,11 +26,11 @@ func (g *GoGit) CreateTag(ctx context.Context, name string, _ TagOptions) error 
 	if err != nil {
 		return err
 	}
-	head, err := repo.Head()
+	head, err := g.head(repo)
 	if err != nil {
-		return unknownGitError(err)
+		return err
 	}
-	commit, err := repo.CommitObject(head.Hash())
+	commit, err := repo.CommitObject(head)
 	if err != nil {
 		return unknownGitError(err)
 	}
@@ -33,7 +38,7 @@ func (g *GoGit) CreateTag(ctx context.Context, name string, _ TagOptions) error 
 	if err != nil {
 		return unknownGitError(err)
 	}
-	userName, userEmail := cfg.User.Name, cfg.User.Email
+	userName, userEmail := strings.TrimSpace(cfg.User.Name), strings.TrimSpace(cfg.User.Email)
 	if userName == "" {
 		return noCommitterError(missingConfigError(configUserName))
 	}
@@ -42,6 +47,9 @@ func (g *GoGit) CreateTag(ctx context.Context, name string, _ TagOptions) error 
 	}
 
 	refName := plumbing.NewTagReferenceName(name)
+	if strings.HasPrefix(name, "-") {
+		return unknownGitError(invalidTagNameError(name))
+	}
 	if err := refName.Validate(); err != nil {
 		return unknownGitError(err)
 	}
@@ -77,13 +85,29 @@ func (g *GoGit) HeadCommitSHA(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	head, err := repo.Head()
+	head, err := g.head(repo)
 	if err != nil {
-		return "", unknownGitError(err)
+		return "", err
 	}
-	commit, err := repo.CommitObject(head.Hash())
+	commit, err := repo.CommitObject(head)
 	if err != nil {
 		return "", unknownGitError(err)
 	}
 	return commit.Hash.String(), nil
+}
+
+// head resolves HEAD. A missing reference is reported as libgit2 does, naming the branch of an unborn HEAD.
+func (g *GoGit) head(repo *gogit.Repository) (plumbing.Hash, error) {
+	ref, err := repo.Head()
+	if err == nil {
+		return ref.Hash(), nil
+	}
+	if !errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return plumbing.ZeroHash, unknownGitError(err)
+	}
+	name := plumbing.HEAD
+	if sym, serr := repo.Reference(plumbing.HEAD, false); serr == nil && sym.Type() == plumbing.SymbolicReference {
+		name = sym.Target()
+	}
+	return plumbing.ZeroHash, unknownGitError(refNotFoundError(name.String()))
 }

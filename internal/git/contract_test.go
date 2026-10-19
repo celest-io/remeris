@@ -456,6 +456,7 @@ func isolateConfig(t *testing.T) {
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("GIT_COMMITTER_NAME", "Env Committer")
 	t.Setenv("GIT_COMMITTER_EMAIL", "env@example.com")
+	t.Setenv("GIT_COMMITTER_DATE", "2001-02-03T04:05:06Z")
 }
 
 // tagRepo returns a repository with one commit and, when identity is true, user.name and user.email set.
@@ -500,8 +501,14 @@ func runTagContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 		if message != "" {
 			t.Fatalf("message = %q, want empty", message)
 		}
-		if !regexp.MustCompile(`(?m)^tagger Config Name <config@example\.com> \d+ [+-]\d{4}$`).MatchString(raw) {
+		m := regexp.MustCompile(`(?m)^tagger Config Name <config@example\.com> (\d+) [+-]\d{4}$`).FindStringSubmatch(raw)
+		if m == nil {
 			t.Fatalf("tagger is not the configured identity:\n%s", raw)
+		}
+		// GIT_COMMITTER_DATE (2001, see isolateConfig) must not leak into the tag.
+		secs, _ := strconv.ParseInt(m[1], 10, 64)
+		if age := time.Since(time.Unix(secs, 0)); age < -5*time.Minute || age > 5*time.Minute {
+			t.Fatalf("tagger time is %v away from now:\n%s", age, raw)
 		}
 		if out := r.git("fsck", "--strict"); strings.Contains(out, "error") {
 			t.Fatalf("fsck: %s", out)
@@ -515,8 +522,8 @@ func runTagContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 		r.commit("two")
 		err := open(t, r.dir).CreateTag(ctx, "v1.0.0", TagOptions{})
 		wantDiagCode(t, err, "remeris::git::command")
-		if !strings.Contains(err.Error(), "Unknown Git error: ") || !strings.Contains(err.Error(), "already exists") {
-			t.Fatalf("error = %v", err)
+		if want := "Unknown Git error: tag 'v1.0.0' already exists"; err.Error() != want {
+			t.Fatalf("error = %q, want %q", err.Error(), want)
 		}
 		if after := strings.TrimSpace(r.git("rev-parse", "v1.0.0")); after != before {
 			t.Fatalf("tag moved from %s to %s", before, after)
@@ -549,6 +556,51 @@ func runTagContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 		}
 	})
 
+	t.Run("a name that looks like an option is refused", func(t *testing.T) {
+		for _, name := range []string{"--force", "-d"} {
+			r := tagRepo(t, true)
+			err := open(t, r.dir).CreateTag(ctx, name, TagOptions{})
+			wantDiagCode(t, err, "remeris::git::command")
+			if out := r.git("tag", "--list"); out != "" {
+				t.Fatalf("%s: tags = %q, want none", name, out)
+			}
+		}
+	})
+
+	t.Run("the identity is trimmed", func(t *testing.T) {
+		r := tagRepo(t, true)
+		r.git("config", "user.name", "  Spaced Name  ")
+		if err := open(t, r.dir).CreateTag(ctx, "v1.0.0", TagOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		raw := r.git("cat-file", "tag", "v1.0.0")
+		if !regexp.MustCompile(`(?m)^tagger Spaced Name <config@example\.com> \d+ [+-]\d{4}$`).MatchString(raw) {
+			t.Fatalf("tagger is not trimmed:\n%s", raw)
+		}
+	})
+
+	t.Run("a whitespace-only name is missing", func(t *testing.T) {
+		r := tagRepo(t, true)
+		r.git("config", "user.name", "   ")
+		wantDiagCode(t, open(t, r.dir).CreateTag(ctx, "v1.0.0", TagOptions{}), "remeris::git::no_committer")
+	})
+
+	t.Run("a cancelled context", func(t *testing.T) {
+		r := tagRepo(t, true)
+		cancelled, cancel := context.WithCancel(ctx)
+		cancel()
+		g := open(t, r.dir)
+		if err := g.CreateTag(cancelled, "v1.0.0", TagOptions{}); !errors.Is(err, context.Canceled) {
+			t.Fatalf("CreateTag error = %v, want context.Canceled", err)
+		}
+		if _, err := g.HeadCommitSHA(cancelled); !errors.Is(err, context.Canceled) {
+			t.Fatalf("HeadCommitSHA error = %v, want context.Canceled", err)
+		}
+		if out := r.git("tag", "--list"); out != "" {
+			t.Fatalf("tags = %q, want none", out)
+		}
+	})
+
 	t.Run("the new tag is on the branch", func(t *testing.T) {
 		r := tagRepo(t, true)
 		g := open(t, r.dir)
@@ -567,9 +619,17 @@ func runTagContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 		r.git("config", "user.name", cfgName)
 		r.git("config", "user.email", cfgEmail)
 		g := open(t, r.dir)
+		want := "Unknown Git error: reference 'refs/heads/main' not found"
 		_, err := g.HeadCommitSHA(ctx)
 		wantDiagCode(t, err, "remeris::git::command")
-		wantDiagCode(t, g.CreateTag(ctx, "v1.0.0", TagOptions{}), "remeris::git::command")
+		if err.Error() != want {
+			t.Fatalf("HeadCommitSHA error = %q, want %q", err.Error(), want)
+		}
+		err = g.CreateTag(ctx, "v1.0.0", TagOptions{})
+		wantDiagCode(t, err, "remeris::git::command")
+		if err.Error() != want {
+			t.Fatalf("CreateTag error = %q, want %q", err.Error(), want)
+		}
 	})
 
 	t.Run("HeadCommitSHA", func(t *testing.T) {

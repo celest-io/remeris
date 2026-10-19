@@ -29,3 +29,16 @@ func missingConfigError(key string) error {
 func tagExistsError(name string) error {
 	return fmt.Errorf("tag '%s' already exists", name)
 }
+
+// refNotFoundError is libgit2's error for a reference that does not exist, such as the branch of an unborn HEAD.
+func refNotFoundError(ref string) error {
+	return fmt.Errorf("reference '%s' not found", ref)
+}
+
+// invalidTagNameError is the error for a tag name that git refuses.
+func invalidTagNameError(name string) error {
+	return fmt.Errorf("'%s' is not a valid tag name", name)
+}
+
+// headRef is the name of the HEAD reference, as an argument to git.
+const headRef = "HEAD"
