@@ -43,9 +43,10 @@ func (c *CLI) CurrentBranch(ctx context.Context) (string, error) {
 // FirstRemoteURL returns the fetch URL of the first remote, in the order of git remote (alphabetical, which is also the
 // order of libgit2's repo.remotes()). It is false when there is no remote, or on any error, like Knope's get_first_remote.
 //
-// The URL is remote.<name>.url as configured: insteadOf rewriting is not applied.
+// The url.<base>.insteadOf rewriting is applied, like libgit2's remote lookup does. With several url values the first is
+// used (libgit2 would take the last).
 //
-// Commands: git remote; git config --get remote.name.url.
+// Commands: git remote; git remote get-url name.
 func (c *CLI) FirstRemoteURL(ctx context.Context) (string, bool) {
 	out, err := c.run(ctx, "", "remote")
 	if err != nil {
@@ -55,8 +56,9 @@ func (c *CLI) FirstRemoteURL(ctx context.Context) (string, bool) {
 	if len(names) == 0 {
 		return "", false
 	}
-	url, ok, err := c.configValue(ctx, "remote."+names[0]+".url")
-	if err != nil || !ok || url == "" {
+	out, err = c.run(ctx, "", "remote", "get-url", "--", names[0])
+	url := strings.TrimSpace(out)
+	if err != nil || url == "" {
 		return "", false
 	}
 	return url, true

@@ -454,6 +454,7 @@ func isolateConfig(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_COUNT", "0") // settings passed through the environment (an insteadOf rule, for one) must not leak
 	t.Setenv("GIT_COMMITTER_NAME", "Env Committer")
 	t.Setenv("GIT_COMMITTER_EMAIL", "env@example.com")
 	t.Setenv("GIT_COMMITTER_DATE", "2001-02-03T04:05:06Z")
@@ -747,11 +748,11 @@ func runBranchContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 		}
 	})
 
-	t.Run("FirstRemoteURL ignores insteadOf", func(t *testing.T) {
+	t.Run("FirstRemoteURL applies insteadOf", func(t *testing.T) {
 		isolateConfig(t)
 		r := newTestRepo(t, true)
-		r.git("remote", "add", "origin", remoteHTTPS)
-		r.git("config", "url.ssh://example.com/.insteadOf", "https://github.com/")
+		r.git("remote", "add", "origin", remoteSCP)
+		r.git("config", "url.https://github.com/.insteadOf", "git@github.com:")
 		if got, ok := open(t, r.dir).FirstRemoteURL(ctx); !ok || got != remoteHTTPS {
 			t.Fatalf("FirstRemoteURL = %q, %t, want %q", got, ok, remoteHTTPS)
 		}

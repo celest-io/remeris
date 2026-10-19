@@ -32,7 +32,8 @@ func (g *GoGit) CurrentBranch(ctx context.Context) (string, error) {
 	return strings.TrimPrefix(target.String(), branchRefPrefix), nil
 }
 
-// FirstRemoteURL returns the fetch URL of the first remote by name, like the CLI backend.
+// FirstRemoteURL returns the fetch URL of the first remote by name, like the CLI backend: insteadOf is applied, and with
+// several url values the first is used.
 func (g *GoGit) FirstRemoteURL(ctx context.Context) (string, bool) {
 	if ctx.Err() != nil {
 		return "", false
@@ -50,10 +51,9 @@ func (g *GoGit) FirstRemoteURL(ctx context.Context) (string, bool) {
 		names = append(names, name)
 	}
 	slices.Sort(names)
-	// RemoteConfig.URLs has the insteadOf rules applied, so the raw values are read.
-	urls := cfg.Raw.Section("remote").Subsection(names[0]).OptionAll("url")
-	if len(urls) == 0 || urls[len(urls)-1] == "" {
+	urls := cfg.Remotes[names[0]].URLs // the insteadOf rules are already applied
+	if len(urls) == 0 || urls[0] == "" {
 		return "", false
 	}
-	return urls[len(urls)-1], true // the last value wins, as in git config --get
+	return urls[0], true // the first value, like git remote get-url
 }

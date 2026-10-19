@@ -43,8 +43,9 @@ type Git interface {
 	// branch." error, and an unborn branch fails with "reference 'refs/heads/main' not found", like libgit2's repo.head().
 	CurrentBranch(ctx context.Context) (string, error)
 	// FirstRemoteURL returns the configured URL of the first remote in git remote order (alphabetical by name, which is
-	// also libgit2's order), without insteadOf rewriting. It is false when there is no remote, or on any error, like
-	// Knope's get_first_remote (spec F9.6).
+	// also libgit2's order), with url.<base>.insteadOf applied like libgit2's remote lookup (with several url values the
+	// first is used; libgit2 would take the last). It is false when there is no remote, or on any error, like Knope's
+	// get_first_remote (spec F9.6).
 	FirstRemoteURL(ctx context.Context) (string, bool)
 }
 
