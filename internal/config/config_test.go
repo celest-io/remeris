@@ -548,7 +548,7 @@ project = "PRJ"
 	) {
 		t.Errorf("extra sections = %+v", cfg.Package.ExtraChangelogSections)
 	}
-	if want := []Asset{{Path: "dist/*.zip", Name: "bundle"}}; !reflect.DeepEqual(cfg.Package.Assets, want) {
+	if want := (&Assets{List: []Asset{{Path: "dist/*.zip", Name: "bundle"}}}); !reflect.DeepEqual(cfg.Package.Assets, want) {
 		t.Errorf("assets = %+v", cfg.Package.Assets)
 	}
 	if *cfg.GitHub != (GitHub{Owner: "celest-io", Repo: "remeris"}) || *cfg.Jira != (Jira{"https://x.atlassian.net", "PRJ"}) {
@@ -563,10 +563,28 @@ func TestDecodeGitea(t *testing.T) {
 	}
 }
 
-func TestAssetsAsGlobString(t *testing.T) {
-	cfg := mustLoad(t, "[package]\nassets = \"dist/*\"\n")
-	if want := []Asset{{Path: "dist/*"}}; !reflect.DeepEqual(cfg.Package.Assets, want) {
-		t.Errorf("assets = %+v, want %+v", cfg.Package.Assets, want)
+const distGlob = "dist/*"
+
+func TestAssetsFormsStayApart(t *testing.T) {
+	cases := map[string]struct {
+		toml string
+		want *Assets
+	}{
+		"glob":             {"[package]\nassets = \"dist/*\"\n", &Assets{IsGlob: true, Glob: distGlob}},
+		"list of one star": {"[package]\nassets = [{ path = \"dist/*\" }]\n", &Assets{List: []Asset{{Path: distGlob}}}},
+		"empty list":       {"[package]\nassets = []\n", &Assets{List: []Asset{}}},
+		"absent":           {"[package]\n", nil},
+		"array of tables": {
+			"[[package.assets]]\npath = \"a\"\nname = \"b\"\n", &Assets{List: []Asset{{Path: "a", Name: "b"}}},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := mustLoad(t, tc.toml).Package.Assets
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("assets = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 

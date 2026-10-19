@@ -231,7 +231,7 @@ assets = [{ path = "dist/*.zip", name = "bundle" }]
 			p.ExtraChangelogSections, want) {
 			t.Errorf("sections = %+v", p.ExtraChangelogSections)
 		}
-		if want := []Asset{{Path: "dist/*.zip", Name: "bundle"}}; !reflect.DeepEqual(p.Assets, want) {
+		if want := (&Assets{List: []Asset{{Path: "dist/*.zip", Name: "bundle"}}}); !reflect.DeepEqual(p.Assets, want) {
 			t.Errorf("assets = %+v", p.Assets)
 		}
 	})

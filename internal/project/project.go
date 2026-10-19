@@ -131,8 +131,27 @@ func (l Loader) State(
 			pkg.ReleaseNotes.Changelog = &changelog
 		}
 		state.Packages = append(state.Packages, pkg)
+		if assets := releaseAssets(p.Assets); assets != nil {
+			state.ReleaseAssets = append(state.ReleaseAssets, workflow.PackageAssets{Name: p.Name, Assets: assets})
+		}
 	}
 	return state, nil
+}
+
+// releaseAssets converts the `assets` setting to the GitHub forge's type, keeping its form: a pattern is expanded
+// when the release is made, the entries of a list are literal paths.
+func releaseAssets(in *config.Assets) *github.Assets {
+	switch {
+	case in == nil:
+		return nil
+	case in.IsGlob:
+		return github.GlobAssets(in.Glob)
+	}
+	entries := make([]github.AssetEntry, len(in.List))
+	for i, a := range in.List {
+		entries[i] = github.AssetEntry{Path: a.Path, Name: a.Name}
+	}
+	return github.ListAssets(entries)
 }
 
 // extraSections converts the extra_changelog_sections of a package to the versioning core's type (F7.1, F12.1).

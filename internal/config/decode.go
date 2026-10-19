@@ -18,7 +18,7 @@ import (
 var (
 	stepType          = reflect.TypeFor[workflow.Step]()
 	versionedFileType = reflect.TypeFor[VersionedFile]()
-	assetsType        = reflect.TypeFor[[]Asset]()
+	assetsType        = reflect.TypeFor[*Assets]()
 	entriesType       = reflect.TypeFor[[]variables.Entry]()
 )
 
@@ -31,9 +31,7 @@ func decodeHook(_, to reflect.Type, data any) (any, error) {
 	case versionedFileType:
 		return decodeVersionedFile(data)
 	case assetsType:
-		if glob, ok := data.(string); ok {
-			return []Asset{{Path: glob}}, nil
-		}
+		return decodeAssets(data)
 	case entriesType:
 		return decodeEntries(data)
 	}
@@ -220,4 +218,15 @@ func reorder(entries []variables.Entry, keys []string) []variables.Entry {
 	}
 	sort.SliceStable(entries, func(i, j int) bool { return position(entries[i].Key) < position(entries[j].Key) })
 	return entries
+}
+
+// decodeAssets reads `assets`: a string is a glob pattern, anything else is decoded as a list of entries.
+func decodeAssets(data any) (any, error) {
+	switch v := data.(type) {
+	case string:
+		return map[string]any{"IsGlob": true, "Glob": v}, nil
+	case []any, []map[string]any:
+		return map[string]any{"List": v}, nil
+	}
+	return data, nil
 }

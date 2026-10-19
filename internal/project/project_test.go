@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/celest-io/remeris/internal/config"
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
@@ -282,5 +285,59 @@ func TestStateLoadsSections(t *testing.T) {
 	got := state.Packages[0].ReleaseNotes.Sections.ChangesetTypes()
 	if want := []string{"major", "minor", "patch", "docs"}; !slices.Equal(got, want) {
 		t.Errorf("change types = %v, want %v", got, want)
+	}
+}
+
+const uploadHeader = "Would upload assets to GitHub:"
+
+func TestStateKeepsTheFormOfAssets(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.zip"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]struct {
+		assets *config.Assets
+		want   []string // the lines DescribeRelease adds after the release line; nil means no assets
+	}{
+		"none": {},
+		"glob": {
+			assets: &config.Assets{IsGlob: true, Glob: "*.zip"},
+			want:   []string{uploadHeader, "- a.zip from a.zip"},
+		},
+		"a list entry is a path, not a pattern": {
+			assets: &config.Assets{List: []config.Asset{{Path: "*.zip", Name: "x"}}},
+			want:   []string{uploadHeader, "- x from *.zip"},
+		},
+		"empty list": {assets: &config.Assets{List: []config.Asset{}}, want: []string{uploadHeader}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			l := Loader{
+				ReadFile: func(string) (string, error) { return versionBody, nil },
+				OpenGit:  func(context.Context) (git.Git, error) { return nil, errors.New("no git") },
+			}
+			p := pkgCfg(versioning.DefaultName(), regexCfg(t, versionTxt))
+			p.Assets = tc.assets
+
+			state, err := l.State(context.Background(), []config.PackageConfig{p}, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assets := state.AssetsOf(versioning.DefaultName())
+			if tc.assets == nil {
+				if assets != nil {
+					t.Errorf("assets = %v, want none", assets)
+				}
+				return
+			}
+			lines, err := github.DescribeRelease(github.ReleaseInput{Name: "n", TagName: "t"}, assets, dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(lines[1:], tc.want) {
+				t.Errorf("lines = %q, want %q", lines[1:], tc.want)
+			}
+		})
 	}
 }

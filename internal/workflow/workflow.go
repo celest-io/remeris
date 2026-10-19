@@ -45,8 +45,27 @@ type State struct {
 	// GitHub is the GitHub forge, or nil when the configuration has no `[github]` table. It builds its client on
 	// demand and caches it; a step must not ask for the client in a dry run. Clones of the state share it.
 	GitHub *github.Forge
+	// ReleaseAssets are the `assets` of the packages that have some, for the GitHub release. They are kept beside
+	// the packages, not in them: the versioning core knows nothing about forges. Use [State.AssetsOf].
+	ReleaseAssets []PackageAssets
 	// GiteaConfigured is true when the configuration has a `[gitea]` table. Release needs it to pick the forge.
 	GiteaConfigured bool
+}
+
+// PackageAssets is the `assets` setting of one package.
+type PackageAssets struct {
+	Name   versioning.PackageName
+	Assets *github.Assets
+}
+
+// AssetsOf returns the assets of the package called name, or nil when it has none.
+func (s State) AssetsOf(name versioning.PackageName) *github.Assets {
+	for _, a := range s.ReleaseAssets {
+		if a.Name.Equal(name) {
+			return a.Assets
+		}
+	}
+	return nil
 }
 
 // RunType says whether a step may change the world. A dry run must do no writes, make no network

@@ -70,7 +70,7 @@ type Package struct {
 	Changelog               string          `toml:"changelog"`
 	Scopes                  []string        `toml:"scopes"`
 	ExtraChangelogSections  []ExtraSection  `toml:"extra_changelog_sections"`
-	Assets                  []Asset         `toml:"assets"`
+	Assets                  *Assets         `toml:"assets"`
 	IgnoreGoMajorVersioning bool            `toml:"ignore_go_major_versioning"`
 }
 
@@ -93,7 +93,18 @@ type ExtraSection struct {
 	Types   []string `toml:"types"`
 }
 
-// Asset is a release asset. A bare `assets = "glob"` string becomes an Asset with only a Path.
+// Assets is the `assets` setting of a package: a glob pattern (`assets = "dist/*"`) or a list of files
+// (`assets = [{ path = "dist/app", name = "app" }]`). The two forms stay apart because Knope expands a pattern
+// and takes a list entry as a literal path, even when it holds a `*`.
+type Assets struct {
+	// IsGlob is true for the string form. Then Glob is the pattern and List is nil.
+	IsGlob bool
+	Glob   string
+	// List holds the entries of the list form; an empty non-nil list is `assets = []`.
+	List []Asset
+}
+
+// Asset is an entry of the list form of `assets`.
 type Asset struct {
 	Path string `toml:"path"`
 	Name string `toml:"name"`

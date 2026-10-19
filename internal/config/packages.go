@@ -31,8 +31,8 @@ type PackageConfig struct {
 	Scopes []string
 	// ExtraChangelogSections are the `extra_changelog_sections` entries (F12.1).
 	ExtraChangelogSections []ExtraSection
-	// Assets are the release assets, decoded only (used by the forge steps in M7). nil means none.
-	Assets []Asset
+	// Assets are the release assets of the GitHub release, in the form they were written. nil means none.
+	Assets *Assets
 	// IgnoreGoMajorVersioning is the `ignore_go_major_versioning` flag.
 	IgnoreGoMajorVersioning bool
 }
