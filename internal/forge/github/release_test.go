@@ -319,9 +319,9 @@ func TestResolveAssets(t *testing.T) {
 		},
 		"no match is not an error": {assets: github.GlobAssets("nope/*")},
 		badPattern:                 {assets: github.GlobAssets("dist/[a"), wantErr: invalidGlob},
-		"list keeps order and names": {
+		"list keeps order, names and paths as written": {
 			assets: github.ListAssets([]github.AssetEntry{{Path: readmeMD, Name: "R"}, {Path: "./dist/a.zip"}}),
-			want:   []github.Asset{{Path: readmeMD, Name: "R"}, {Path: distA}},
+			want:   []github.Asset{{Path: readmeMD, Name: "R"}, {Path: "./dist/a.zip"}},
 		},
 	}
 	for name, tc := range tests {

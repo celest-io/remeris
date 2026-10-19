@@ -89,7 +89,7 @@ func (a *Assets) Resolve(fsys fs.FS) ([]Asset, error) {
 	if !a.isGlob {
 		out := make([]Asset, len(a.entries))
 		for i, e := range a.entries {
-			out[i] = Asset{Path: path.Clean(filepath.ToSlash(e.Path)), Name: e.Name}
+			out[i] = Asset{Path: filepath.ToSlash(e.Path), Name: e.Name} // kept as written, like Knope's messages
 		}
 		return out, nil
 	}
@@ -207,17 +207,20 @@ func (c *Client) uploadAsset(ctx context.Context, releaseID int64, a Asset, dir 
 	return WrapError("uploading asset "+name+". "+notPublished, err)
 }
 
-// openAsset opens a regular file, or fails with Knope's "could not read" diagnostic.
+// openAsset opens a regular file, or fails with Knope's "could not read" diagnostic. The type is checked before the
+// file is opened: opening a FIFO would block until something writes to it, and a device would never end.
 func openAsset(dir, p string) (*os.File, error) {
-	file, err := os.Open(filepath.Join(rootOrDot(dir), filepath.FromSlash(p)))
-	if err == nil {
-		var info fs.FileInfo
-		if info, err = file.Stat(); err == nil && info.IsDir() {
-			err = errors.New("is a directory")
-		}
-		if err != nil {
-			_ = file.Close()
-		}
+	full := filepath.Join(rootOrDot(dir), filepath.FromSlash(p))
+	info, err := os.Stat(full)
+	var file *os.File
+	switch {
+	case err != nil:
+	case info.IsDir():
+		err = errors.New("is a directory")
+	case !info.Mode().IsRegular():
+		err = errors.New("not a regular file")
+	default:
+		file, err = os.Open(full) //nolint:gosec // G304: asset paths come from the user's configuration, as in Knope
 	}
 	if err != nil {
 		var pe *fs.PathError
