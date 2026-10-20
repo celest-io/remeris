@@ -481,7 +481,8 @@ func TestEmptyStoredTokenIsNoToken(t *testing.T) {
 // TestNoRealGitHubInTests proves the guard of TestMain: a forge without a trusted URL talks to api.github.com,
 // and the request must fail before it leaves the machine.
 func TestNoRealGitHubInTests(t *testing.T) {
-	c, err := github.New(github.Config{Owner: "o", Repo: "r"}, nil, nil).MaybeAuthenticated(context.Background())
+	c, err := github.New(github.Config{Owner: "o", Repo: "r"}, nil, storeIn(t, nil, nil)).
+		MaybeAuthenticated(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

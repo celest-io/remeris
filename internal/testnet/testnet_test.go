@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -34,6 +35,15 @@ func TestGuard(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "tests must use httptest") {
 			t.Errorf("err = %v", err)
+		}
+	}
+}
+
+// The guard gives the tests an empty home, so no test reads the user's stored tokens.
+func TestGuardIsolatesHome(t *testing.T) {
+	for _, name := range []string{"HOME", "XDG_CONFIG_HOME", "APPDATA"} {
+		if v := os.Getenv(name); v == "" || !strings.Contains(v, "remeris-test-home-") {
+			t.Errorf("%s = %q, want the test home", name, v)
 		}
 	}
 }
