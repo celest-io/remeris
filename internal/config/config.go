@@ -173,12 +173,26 @@ func Load(path string) (*Config, error) { return LoadFS(path, osRoot{}) }
 
 // LoadFS is Load with the file system that the existence checks of `versioned_files` use. Paths are
 // slash-separated and relative to its root, which is the working directory for Load.
-func LoadFS(path string, root fs.StatFS) (*Config, error) {
+func LoadFS(path string, root fs.StatFS) (*Config, error) { return LoadFSWithRemote(path, root, nil) }
+
+// LoadWithRemote is Load with the getter of the first Git remote that forge detection reads (spec F20.6).
+func LoadWithRemote(path string, remote RemoteFunc) (*Config, error) {
+	return LoadFSWithRemote(path, osRoot{}, remote)
+}
+
+// LoadFSWithRemote is LoadFS with the getter of the first Git remote. The remote is read only when there is no
+// file, as in Knope: a knope.toml without [github] stays without GitHub. A nil remote disables detection.
+func LoadFSWithRemote(path string, root fs.StatFS, remote RemoteFunc) (*Config, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		cfg := Default()
 		cfg.packages, cfg.discoveryErr = discoverPackages(root)
-		cfg.Workflows = DefaultWorkflows(false, len(cfg.packages))
+		if remote != nil {
+			if url, ok := remote(); ok {
+				cfg.GitHub, _ = GitHubFromRemote(url)
+			}
+		}
+		cfg.Workflows = DefaultWorkflows(cfg.HasForge(), len(cfg.packages))
 		return cfg, nil
 	}
 	cfg, err := decode(path, src, root)
@@ -197,8 +211,8 @@ func LoadFS(path string, root fs.StatFS) (*Config, error) {
 }
 
 // Default returns the bare configuration used when there is no knope.toml: no packages, no forge and
-// the default workflows. LoadFS adds the package discovered at the root (spec F20.1); forge discovery is not
-// implemented yet.
+// the default workflows. LoadFS adds the package discovered at the root (spec F20.1) and
+// LoadFSWithRemote the GitHub detected from the first remote (F20.6).
 func Default() *Config {
 	return &Config{Source: SourceDefault, Workflows: DefaultWorkflows(false, 0)}
 }

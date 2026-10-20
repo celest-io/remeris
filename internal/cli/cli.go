@@ -14,6 +14,7 @@ import (
 	"github.com/celest-io/remeris/internal/credentials"
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/forge/github"
+	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/project"
 	"github.com/celest-io/remeris/internal/prompt"
 	"github.com/celest-io/remeris/internal/steps"
@@ -34,7 +35,7 @@ const (
 // Main loads the configuration, runs the command line in args and returns the process exit code.
 // Logs go to stdout, rendered errors to stderr.
 func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	cfg, err := config.Load(config.KnopeFile)
+	cfg, err := config.LoadWithRemote(config.KnopeFile, firstRemote(ctx))
 	if err == nil {
 		err = New(cfg, stdout, stderr).Run(ctx, args)
 	}
@@ -43,6 +44,17 @@ func Main(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// firstRemote reads the first remote of the repository in the working directory for forge detection.
+func firstRemote(ctx context.Context) config.RemoteFunc {
+	return func() (string, bool) {
+		g, err := git.Open(ctx, ".")
+		if err != nil {
+			return "", false
+		}
+		return g.FirstRemoteURL(ctx)
+	}
 }
 
 // New builds the root command for cfg.
