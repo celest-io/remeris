@@ -20,6 +20,7 @@ UPDATE_SCRIPTS=1 go test ./cmd/remeris      # rewrite the files compared with cm
 | `command` | The `Command` step. `shell` and `replace_version` are ported from Knope; the rest are ours. |
 | `git_release` | The `Release` step in a repository with no forge, ported from Knope's `git_release` suite (`<dir>_<case>.txtar`). `split_workflow` is skipped until remeris prints all of Knope's `--verbose` debug lines; `split_workflow_quiet` (ours) runs the same case without `--verbose`. |
 | `github_release` | The `Release` step with `[github]`, ported from Knope's `github_release` suite (`<dir>_<case>.txtar`). All are dry runs, as in Knope: a real release needs the GitHub API, which remeris tests with a fake server in Go (`internal/steps/release_github_test.go`). |
+| `create_pull_requests` | The `CreatePullRequest` step with `[github]`, ported from Knope's `create_pull_requests` suite (`<case>.txtar`). All are dry runs, as in Knope; the real run is tested with a fake server in Go (`internal/steps/create_pull_request_test.go`). The branch is printed as `main`, not `refs/heads/main` (Q3, see `deviations.md`). |
 | `default_workflows` | Knope's `default_workflows` suite (`<dir>_<case>.txtar`, where `<dir>` is `release` or `get_version`). Help is compared by content, as in `cli`. Ports that need a forge or package discovery are skipped until their milestones (see below). |
 | `prepare_release` | The `PrepareRelease` step. `changesets_*`, `enable_prerelease_*`, `second_prerelease`, `release_after_prerelease`, `override_*`, `scopes_*`, `multiple_packages` (skipped: needs M9), `allow_empty` (skipped: needs M10), `no_version_change`, `branching_history_*`, `cargo_*`, `changelog_*`, `custom_change_entries_all_custom`, `deno_*`, `gleam_toml`, `go_modules_*`, `handle_pre_versions_that_are_too_new`, `ignore_conventional_commits{,_toplevel}`, `inconsistent_versions`, `no_versioned_files`, `npm_*`, `override_version_multiple_packages`, `package_selection`, `prerelease_after_release`, `pubspec_yaml`, `pyproject_toml_*`, `readme_version`, `tauri_conf_json` and `verbose` are ported from Knope's `prepare_release` suite (skipped ones are listed below) (`<dir>_<case>.txtar`); `no_packages_ready`, `stages_files`, `forge_variable` (it also checks the dry-run pull request data of F16.4, which no Knope script covers: Knope's only test of it, `integration_github`, needs real credentials) and `go_modules_major_version_directories_quiet` are ours. Scripts set `REMERIS_FAKE_DATE=2026-01-01` and write that date where Knope has `[DATE]`; `rstrip` (defined in `cmd/remeris/main_test.go`) removes trailing spaces from a dry run's output before it is compared. |
 
@@ -84,6 +85,12 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | --- | --- |
 | `simple`, `auto_generate_release_notes`, `multiple_packages`, `no_previous_tag`, `version_go_mod` | Ported: `script/github_release/<name>.txtar`. |
 | `release_assets/glob`, `release_assets/list` | Ported: `script/github_release/release_assets_{glob,list}.txtar`. |
+
+### Status of `crates/knope/tests/create_pull_requests/*`
+
+| Fixture | Status |
+| --- | --- |
+| `default_variables`, `disable_default_variables`, `explicit_variables`, `unused_variables` | Ported: `script/create_pull_requests/<name>.txtar`, with `main` where Knope's `stdout.log` has `refs/heads/main` (Q3). |
 
 ### Status of `crates/knope/tests/default_workflows/*`
 
