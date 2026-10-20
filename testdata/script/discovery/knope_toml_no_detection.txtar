@@ -1,0 +1,49 @@
+# A knope.toml without [github] stays without GitHub even when the first remote is on github.com: detection runs only
+# when there is no file (spec F20.6). The default workflows are the no-forge ones (Release, git push, git push --tags).
+# [COMMIT] is the HEAD commit, matched as 40 hex digits.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git remote add origin git@github.com:o/r.git
+exec git add .
+exec git commit -m 'feat: Existing' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New Feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+cmp stdout_actual.log stdout.log
+! stderr .
+
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+-- Cargo.toml --
+[package]
+name = "my-package"
+version = "1.0.0"
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- Existing
+-- stdout.log --
+Would add the following to Cargo.toml: version = 1.1.0
+Would add the following to CHANGELOG.md:
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- New Feature
+
+Would add files to git:
+  Cargo.toml
+  CHANGELOG.md
+Would run git commit -m "chore: prepare release 1.1.0"
+Would create Git tag v1.1.0
+Would run git push
+Would run git push --tags
