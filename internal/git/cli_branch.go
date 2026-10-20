@@ -50,6 +50,10 @@ func (c *CLI) CurrentBranch(ctx context.Context) (string, error) {
 //
 // Commands: git config --null --get-regexp ^remote\..*\.(push)?url$; git remote get-url -- name.
 func (c *CLI) FirstRemoteURL(ctx context.Context) (string, bool) {
+	// Outside a repository, git config would read remotes from the global config.
+	if _, err := c.run(ctx, "", "rev-parse", "--git-dir"); err != nil {
+		return "", false
+	}
 	out, err := c.run(ctx, "", "config", "--null", "--get-regexp", `^remote\..*\.(push)?url$`)
 	if err != nil {
 		return "", false

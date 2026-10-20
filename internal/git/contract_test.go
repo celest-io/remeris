@@ -784,6 +784,19 @@ func runBranchContract(t *testing.T, open func(t *testing.T, dir string) Git) {
 			t.Fatalf("FirstRemoteURL = %q, %t, want none", got, ok)
 		}
 	})
+
+	t.Run("FirstRemoteURL ignores a remote of the global config outside a repository", func(t *testing.T) {
+		isolateConfig(t)
+		global := filepath.Join(t.TempDir(), "gitconfig")
+		if err := os.WriteFile(global, []byte("[remote \"origin\"]\n\turl = "+remoteHTTPS+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GIT_CONFIG_GLOBAL", global)
+		r := newTestRepo(t, false)
+		if got, ok := open(t, r.dir).FirstRemoteURL(ctx); ok || got != "" {
+			t.Fatalf("FirstRemoteURL = %q, %t, want none", got, ok)
+		}
+	})
 }
 
 func TestCLIBranch(t *testing.T) { runBranchContract(t, openGit) } //nolint:paralleltest // sets environment variables
