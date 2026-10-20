@@ -579,7 +579,7 @@ func TestAssetsFormsStayApart(t *testing.T) {
 		"glob":             {"[package]\nassets = \"dist/*\"\n", &Assets{IsGlob: true, Glob: distGlob}},
 		"list of one star": {"[package]\nassets = [{ path = \"dist/*\" }]\n", &Assets{List: []Asset{{Path: distGlob}}}},
 		"empty list":       {"[package]\nassets = []\n", &Assets{List: []Asset{}}},
-		"absent":           {"[package]\n", nil},
+		"absent":           {packageHeader, nil},
 		"array of tables": {
 			"[[package.assets]]\npath = \"a\"\nname = \"b\"\n", &Assets{List: []Asset{{Path: "a", Name: "b"}}},
 		},

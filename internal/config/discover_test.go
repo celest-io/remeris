@@ -227,7 +227,7 @@ func TestDiscoverWorkspaces(t *testing.T) {
 }
 
 func TestLoadFSDiscoversPackages(t *testing.T) {
-	root := rootOf(map[string]string{cargoTomlName: "[package]\n", defaultChangelog: ""})
+	root := rootOf(map[string]string{cargoTomlName: packageHeader, defaultChangelog: ""})
 	dir := t.TempDir()
 
 	cfg, err := LoadFS(filepath.Join(dir, "knope.toml"), root)
@@ -306,7 +306,7 @@ func TestSourceValues(t *testing.T) {
 		"file without workflows": {"[changes]\n", SourceHybrid},
 		"packages, no workflows": {"[package]\nversioned_files = [\"" + cargoTomlName + "\"]\n", SourceHybrid},
 	}
-	root := rootOf(map[string]string{cargoTomlName: "[package]\n"})
+	root := rootOf(map[string]string{cargoTomlName: packageHeader})
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "knope.toml")
