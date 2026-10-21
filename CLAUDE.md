@@ -115,7 +115,7 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 Milestones M0 to M5 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
 `PrepareRelease` steps, with the SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod,
 regex), packages, Git tags and staging, conventional commits, change files, changelogs, prompts and the `Version`
-and `ChangelogEntry` variables. Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; forges, workspace discovery (a workspace root is an error until M10), `--generate` and `--upgrade` come later (see spec section 1).
+and `ChangelogEntry` variables. `Release` publishes on GitHub and Gitea (GitHub first, each package in turn). Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; the other forge steps, workspace discovery (a workspace root is an error until M10), `--generate` and `--upgrade` come later (see spec section 1).
 
 ```
 cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests

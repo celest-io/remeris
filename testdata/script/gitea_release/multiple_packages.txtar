@@ -1,0 +1,62 @@
+# Ported from knope-dev/knope, crates/knope/tests/gitea_release/multiple_packages (MIT, see testdata/README.md).
+# Release operates on all defined packages independently, one Gitea release each.
+# Knope only runs this as a dry run (a real release needs the Gitea API); so does this script. A dry run reads no
+# credentials and makes no request. [COMMIT] is the HEAD commit, matched as 40 hex digits.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag first/v1.2.3
+exec git tag second/v0.4.6
+exec git commit --allow-empty -m 'feat!: New breaking feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+grep '(?s)\AWould add the following to Cargo\.toml: version = 2\.0\.0\nWould add the following to pyproject\.toml: 2\.0\.0\nWould add the following to package\.json: version = 0\.5\.0\nWould add the following to FIRST_CHANGELOG\.md:\n## 2\.0\.0 \(2026-01-01\)\n\n### Breaking Changes\n\n- New breaking feature\n\nWould add the following to SECOND_CHANGELOG\.md:\n## 0\.5\.0 \(2026-01-01\)\n\n### Breaking Changes\n\n- New breaking feature\n\nWould add files to git:\n  Cargo\.toml\n  pyproject\.toml\n  package\.json\n  FIRST_CHANGELOG\.md\n  SECOND_CHANGELOG\.md\nWould create a release on Gitea \[https://codeberg\.org\] with name first 2\.0\.0 \(2026-01-01\) and tag first/v2\.0\.0 at commit [0-9a-f]{40} and body:\n## Breaking Changes\n\n- New breaking feature\nWould create a release on Gitea \[https://codeberg\.org\] with name second 0\.5\.0 \(2026-01-01\) and tag second/v0\.5\.0 at commit [0-9a-f]{40} and body:\n## Breaking Changes\n\n- New breaking feature\n\z' stdout_actual.log
+! stderr .
+
+exec git tag --list
+! stdout 'v1\.1\.0|2\.0\.0|0\.5\.0|go/v1\.1\.0'
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.2.3"
+-- FIRST_CHANGELOG.md --
+## 1.2.3
+
+Some existing content
+-- SECOND_CHANGELOG.md --
+## 0.4.6
+
+Some existing content
+-- knope.toml --
+[packages.first]
+versioned_files = ["Cargo.toml", "pyproject.toml"]
+changelog = "FIRST_CHANGELOG.md"
+
+[packages.second]
+versioned_files = ["package.json"]
+changelog = "SECOND_CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
+
+[gitea]
+owner = "knope-dev"
+repo = "knope"
+host = "https://codeberg.org"
+-- package.json --
+{
+  "version": "0.4.6"
+}
+-- pyproject.toml --
+[tool.poetry]
+version = "1.2.3"

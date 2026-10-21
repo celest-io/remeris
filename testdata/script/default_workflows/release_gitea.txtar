@@ -1,6 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/default_workflows/release/gitea (MIT, see testdata/README.md).
-skip 'needs the Gitea forge (milestone M8)'
-
 env REMERIS_FAKE_DATE=2026-01-01
 
 exec git init --initial-branch=main
