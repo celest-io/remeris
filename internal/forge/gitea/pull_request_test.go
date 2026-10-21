@@ -101,7 +101,11 @@ func TestCreateOrUpdatePullRequest(t *testing.T) {
 				`{"number":5}`,
 				`{"number":6,"head":{"ref":"main","repo":{"owner":null}},"base":{"ref":"main"}}`,
 			)},
-			wantReqs: []string{"GET " + pullsPath + "?" + wantList, "POST " + pullsPath},
+			wantReqs: []string{
+				"GET " + pullsPath + "?" + wantList,
+				"GET " + pullsPath + "?base_branch=main&limit=50&page=2&state=open",
+				"POST " + pullsPath,
+			},
 			wantBody: `{"title":"` + pullTitle + `","body":"a <b> & c\n\nline","head":"main","base":"main"}`,
 		},
 		"first match wins": {
@@ -163,12 +167,21 @@ func TestCreateOrUpdatePullRequestPaging(t *testing.T) {
 				"PATCH " + pullPath,
 			},
 		},
-		"short page 2 ends the search": {
+		"a short page does not end the search": {
 			pages: []string{list(full...), list(pr(8, "other", "o", mainBranch))},
 			wantReqs: []string{
 				"GET " + pullsPath + "?" + wantList,
 				"GET " + pullsPath + "?base_branch=main&limit=50&page=2&state=open",
+				"GET " + pullsPath + "?base_branch=main&limit=50&page=3&state=open",
 				"POST " + pullsPath,
+			},
+		},
+		"a server with a smaller page size": {
+			pages: []string{list(full[:30]...), list(pr(7, mainBranch, "o", mainBranch))},
+			wantReqs: []string{
+				"GET " + pullsPath + "?" + wantList,
+				"GET " + pullsPath + "?base_branch=main&limit=50&page=2&state=open",
+				"PATCH " + pullPath,
 			},
 		},
 		"empty page 2 ends the search": {

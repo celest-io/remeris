@@ -1453,7 +1453,7 @@ The activities are `creating a release`, `fetching existing pull requests`, `upd
   result. **Deviation:** Gitea's list endpoint has no `head` filter (its query parameters are `state`, `sort`,
   `milestone`, `labels`, `poster`, `page`, `limit` and `base_branch`), so a server ignores `head` and Knope may update an
   unrelated open pull request. remeris sends `GET …/pulls?state=open&base_branch={base}&limit=50&page={n}`, reads pages
-  until a short or empty one (at most 20 pages, then it creates), and takes the first pull request whose `head.ref` is
+  until an empty one (a server may cap the page size below 50) (at most 20 pages, then it creates), and takes the first pull request whose `head.ref` is
   the branch, whose `head.repo.owner.login` is the configured owner (case-insensitive; a null `head.repo`, a deleted fork,
   never matches) and whose `base.ref` is the base. Unknown or missing JSON fields are tolerated. Then
   `PATCH …/pulls/{number}` `{body,title}`, or `POST …/pulls` `{title,body,head,base}` (any JSON answer is accepted).

@@ -63,7 +63,8 @@ type createPullRequest struct {
 // (spec F18). branch is the full short name of the branch, such as feature/x. Call it only in a real run.
 //
 // Gitea's list endpoint has no `head` filter (Knope sends one, a server ignores it, and Knope may then update an
-// unrelated pull request). The open pull requests into base are therefore listed, 50 per page and at most 20 pages,
+// unrelated pull request). The open pull requests into base are therefore listed, 50 per page (a server may give
+// fewer) until a page is empty and at most 20 pages,
 // and the first whose head is branch of a repository owned by the configured owner is chosen. When none of the 20
 // pages holds it, a new pull request is created.
 func (c *Client) CreateOrUpdatePullRequest(ctx context.Context, title, body, base, branch string) error {
@@ -107,7 +108,8 @@ func (c *Client) findPullRequest(ctx context.Context, base, branch string) (*pul
 				return &pulls[i], nil
 			}
 		}
-		if len(pulls) < pullsPageSize {
+		// Only an empty page ends the search: a server may cap the page size below what was asked for.
+		if len(pulls) == 0 {
 			break
 		}
 	}
