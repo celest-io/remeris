@@ -1449,8 +1449,14 @@ The activities are `creating a release`, `fetching existing pull requests`, `upd
 
 - Releases: `POST {base}/repos/{o}/{r}/releases`. Same JSON as GitHub, with `draft=false` (assets are not supported).
   Dry run: `Would create a {kind} on Gitea [{host}] with name … and tag …[ at commit …] and …`.
-- Pulls: `GET {base}/repos/{o}/{r}/pulls?state=open&head={owner}:{branch}&base={base}` → `[{number,url}]`. Then
-  `PATCH …/pulls/{number}` `{body,title}`, or `POST …/pulls` `{title,body,head,base}`.
+- Pulls: Knope sends `GET {base}/repos/{o}/{r}/pulls?state=open&head={owner}:{branch}&base={base}` and takes the first
+  result. **Deviation:** Gitea's list endpoint has no `head` filter (its query parameters are `state`, `sort`,
+  `milestone`, `labels`, `poster`, `page`, `limit` and `base_branch`), so a server ignores `head` and Knope may update an
+  unrelated open pull request. remeris sends `GET …/pulls?state=open&base_branch={base}&limit=50&page={n}`, reads pages
+  until a short or empty one (at most 20 pages, then it creates), and takes the first pull request whose `head.ref` is
+  the branch, whose `head.repo.owner.login` is the configured owner (case-insensitive; a null `head.repo`, a deleted fork,
+  never matches) and whose `base.ref` is the base. Unknown or missing JSON fields are tolerated. Then
+  `PATCH …/pulls/{number}` `{body,title}`, or `POST …/pulls` `{title,body,head,base}` (any JSON answer is accepted).
 - Issues: `GET {base}/repos/{o}/{r}/issues?labels={comma-joined}&state=open&limit=30` → `[{number,title}]`.
 - `TryFromRemote(url)`: `git@host:owner/repo(.git)` → host `https://host`. `https://host/owner/repo(.git)` → the same.
   Anything else → none. Known public Gitea hosts for auto-detection: `codeberg.org`.
@@ -1466,13 +1472,13 @@ The activities are `creating a release`, `fetching existing pull requests`, `upd
      `\tTitle: {title}`, `\tBody: {body}`.
    - GitHub (go-github, F16.0): `PullRequests.List` with `Head: owner+":"+branch`, `Base: base`. If one exists →
      `PullRequests.Edit` with `{title, body}`. Else → `PullRequests.Create` with `{title, body, head: branch, base}`.
-   - Gitea: as in F17, using only the **last path segment** of the branch ref as `branch`.
+   - Gitea: as in F17 (Pulls), with the full short branch name as `branch` (Q3).
 
 **Quirk Q3:** for GitHub, Knope sends `head=owner:refs/heads/<branch>` and `"head": "refs/heads/<branch>"`, and the
 dry-run text shows `refs/heads/main`. **Decision:** use the short branch name everywhere in Go (this fixes a real
 bug). Update the three `tests/create_pull_requests/*/stdout.log` golden files and record the deviation. Using the
-last segment (as the Gitea code does) is also wrong for branches that contain `/`. Use the full short name (`git
-rev-parse --abbrev-ref HEAD`).
+last path segment (as Knope's Gitea code does) is also wrong for branches that contain `/`, so Gitea gets the full short
+name too, in the dry-run text, the lookup and the `head` of the new pull request (`git rev-parse --abbrev-ref HEAD`).
 
 ---
 
