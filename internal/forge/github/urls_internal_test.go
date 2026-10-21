@@ -2,6 +2,8 @@ package github
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -10,6 +12,7 @@ import (
 )
 
 const (
+	gheFrom       = "https://ghe.example.com/x"
 	gheAPI        = gheRoot + "api/v3/"
 	gheUpload     = "https://up.example.com/api/uploads/"
 	evilOrigin    = "https://evil.example.net:8443"
@@ -166,6 +169,50 @@ func TestURLPolicyCodes(t *testing.T) {
 			var d diag.Diagnostic
 			if !errors.As(err, &d) || d.Code() != tc.wantCode || err.Error() != tc.wantText {
 				t.Errorf("err = %v, want code %s and message %q", err, tc.wantCode, tc.wantText)
+			}
+		})
+	}
+}
+
+// TestURLPolicyRedirectWording pins the refusals of redirects: their message, help and code.
+func TestURLPolicyRedirectWording(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		from, to string
+		hops     int
+		wantMsg  string
+		wantHelp string
+	}{
+		"other host": {
+			from: gheFrom, to: "https://evil.example.net/y",
+			wantMsg: "GitHub redirected the request from https://ghe.example.com to https://evil.example.net, " +
+				"which remeris does not follow",
+			wantHelp: "Check the API URL.",
+		},
+		"downgrade": {
+			from: gheFrom, to: "http://ghe.example.com/y",
+			wantMsg: "GitHub redirected the request from https to plain http at http://ghe.example.com, " +
+				"which remeris does not follow",
+		},
+		"too many": {
+			from: gheFrom, to: "https://ghe.example.com/y", hops: 10,
+			wantMsg: "Stopped after 10 redirects from GitHub",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			via := make([]*http.Request, max(tc.hops, 1))
+			for i := range via {
+				via[i] = httptest.NewRequest(http.MethodGet, tc.from, http.NoBody)
+			}
+			err := urlPolicy.CheckRedirect(httptest.NewRequest(http.MethodGet, tc.to, http.NoBody), via)
+			var d diag.Diagnostic
+			if !errors.As(err, &d) {
+				t.Fatalf("err = %v", err)
+			}
+			if d.Code() != "remeris::github::redirect" || err.Error() != tc.wantMsg || d.Help() != tc.wantHelp {
+				t.Errorf("code %q, message %q, help %q", d.Code(), err, d.Help())
 			}
 		})
 	}
