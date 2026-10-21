@@ -409,22 +409,6 @@ func TestReleaseGitHubAPIError(t *testing.T) {
 	}
 }
 
-func TestReleaseGitHubThenGiteaStub(t *testing.T) {
-	api := newFakeAPI(t)
-	state, _ := githubState(t, api, "")
-	state.Gitea = giteaForge()
-	state.PendingActions = []action.Action{release("1.2.0", "x", nil)}
-
-	_, err := runRelease(state, false)
-
-	if want := "Step Release is not implemented yet (milestone M8)"; err == nil || err.Error() != want {
-		t.Errorf("err = %v, want %q", err, want)
-	}
-	if keys := api.keys(); !slices.Equal(keys, []string{createCall}) {
-		t.Errorf("requests = %q: GitHub runs before Gitea", keys)
-	}
-}
-
 // failingStore is a credential store that fails the test when anything reads it or asks the user.
 func failingStore(t *testing.T) *credentials.Store {
 	t.Helper()

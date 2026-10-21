@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -260,22 +259,6 @@ func TestReleaseDryRunWithoutGit(t *testing.T) {
 	}
 	if got := logLines(logs); !slices.Equal(got, []string{"Would create Git tag " + tagV120}) {
 		t.Errorf("log = %q", got)
-	}
-}
-
-func TestReleaseGiteaIsNotImplemented(t *testing.T) {
-	for _, dry := range []bool{false, true} {
-		t.Run(fmt.Sprintf("dry run %v", dry), func(t *testing.T) {
-			g := &recordingGit{forbidTag: t}
-			state := releaseState(t, []string{tagV100}, false, "")
-			state.Git, state.Gitea = g, giteaForge()
-
-			_, err := runRelease(state, dry)
-
-			if want := "Step Release is not implemented yet (milestone M8)"; err == nil || err.Error() != want {
-				t.Errorf("err = %v, want %q", err, want)
-			}
-		})
 	}
 }
 
