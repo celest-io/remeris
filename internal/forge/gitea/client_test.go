@@ -42,7 +42,7 @@ func TestRequestShape(t *testing.T) {
 			var out struct{ ID int }
 
 			err := c.do(context.Background(), http.MethodPost, c.cfg.releasesURL(), nil,
-				map[string]string{"tag_name": "v1"}, &out, activity)
+				map[string]string{"tag_name": tagV1}, &out, activity)
 
 			if err != nil {
 				t.Fatal(err)
@@ -155,7 +155,7 @@ func TestRedirectToAnotherOriginIsRefused(t *testing.T) {
 }
 
 func TestRedirectDowngradeIsRefused(t *testing.T) {
-	c := newClient(t, "https://gitea.example.com")
+	c := newClient(t, hostExample)
 	tests := map[string]struct {
 		from, to string
 		wantErr  bool
@@ -235,7 +235,7 @@ func TestHostValidation(t *testing.T) {
 		"plain http":       {host: "http://gitea.example.com", wantCode: insecureCode},
 		"plain http ip":    {host: "http://10.0.0.1:3000", wantCode: insecureCode},
 		"ftp":              {host: "ftp://gitea.example.com", wantCode: "remeris::gitea::invalid_url"},
-		"https":            {host: "https://gitea.example.com"},
+		"https":            {host: hostExample},
 		"https prefix":     {host: "https://gitea.example.com/gitea/"},
 		"http localhost":   {host: "http://localhost:3000"},
 		"http loopback":    {host: "http://127.0.0.1:3000/"},
@@ -321,7 +321,7 @@ func TestTokenIsRequestedOnce(t *testing.T) {
 }
 
 func TestEmptyTokenIsAnError(t *testing.T) {
-	f := newForge("https://gitea.example.com", storeWith(t, nil, prompt.NewScripted(prompt.Answer{Text: "  "})))
+	f := newForge(hostExample, storeWith(t, nil, prompt.NewScripted(prompt.Answer{Text: "  "})))
 
 	_, err := f.RequireAuthentication(context.Background())
 
@@ -342,22 +342,22 @@ func TestErrorWording(t *testing.T) {
 	}{
 		"status error": {
 			status: http.StatusNotFound, body: missing, out: new(map[string]any),
-			wantCode: "remeris::api_request_error",
+			wantCode: codeAPIRequest,
 			wantMessage: "Trouble communicating with {host} while creating a release: " +
 				"HTTP status client error (404 Not Found) for url ({host}" + releasesPath + ") with body: " + missing,
 			wantHelpPart: "There was a problem communicating with {host}, this may be a network issue or a permissions issue.",
 		},
 		"server error": {
 			status: http.StatusBadGateway, body: "", out: nil,
-			wantCode: "remeris::api_request_error",
+			wantCode: codeAPIRequest,
 			wantMessage: "Trouble communicating with {host} while creating a release: " +
 				"HTTP status server error (502 Bad Gateway) for url ({host}" + releasesPath + ") with body: ",
 			wantHelpPart: "There was a problem communicating with {host}, this may be a network issue or a permissions issue.",
 		},
 		"decode error": {
 			status: http.StatusOK, body: `{"id":`, out: new(map[string]any),
-			wantCode:    "remeris::gitea::api_response_error",
-			wantMessage: "Trouble decoding the response from Gitea while creating a release: unexpected end of JSON input",
+			wantCode:    codeAPIResponse,
+			wantMessage: msgDecodeEOF,
 			wantHelpPart: "Failure to decode a response from the Gitea instance at {host} is probably a bug. " +
 				"Please report it at https://github.com/celest-io/remeris",
 		},
@@ -406,7 +406,7 @@ func TestStatusErrorUsesTheHostAsWritten(t *testing.T) {
 }
 
 func TestWrapErrorKeepsTheCause(t *testing.T) {
-	c := newClient(t, "https://gitea.example.com")
+	c := newClient(t, hostExample)
 	if c.WrapError(activity, nil) != nil {
 		t.Error("nil should stay nil")
 	}
