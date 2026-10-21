@@ -15,7 +15,7 @@ grep '(?s)\AWould create a release on Gitea \[https://codeberg\.org\] with name 
 ! stderr .
 
 exec git tag --list
-! stdout 'v1\.1\.0|2\.0\.0|0\.5\.0|go/v1\.1\.0'
+! stdout 'v1\.0\.0|v1\.1\.0|2\.0\.0|0\.5\.0|go/v1\.1\.0'
 -- CHANGELOG.md --
 ## 1.0.0 (2026-01-01)
 
