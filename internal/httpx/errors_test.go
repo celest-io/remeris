@@ -125,7 +125,7 @@ func TestNewDecodeError(t *testing.T) {
 		wantMsg  string
 		wantHelp string
 	}{
-		"GitHub": {
+		serviceName: {
 			"GitHub",
 			"Trouble decoding the response from GitHub while getting the release: unexpected EOF",
 			"Failure to decode a response from GitHub is probably a bug. Please report it at https://github.com/celest-io/remeris",

@@ -1,24 +1,20 @@
 package github
 
 import (
-	"net"
 	"net/url"
 	"strings"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/httpx"
 )
 
 const (
-	codeInvalidURL    = "remeris::github::invalid_url"
-	codeInsecureURL   = "remeris::github::insecure_url"
-	codeUntrustedAPI  = "remeris::github::untrusted_api_url"
-	codeUntrustedUp   = "remeris::github::untrusted_upload_url"
-	codeUploadNoAPI   = "remeris::github::upload_url_without_api_url"
-	flagAPIURL        = "--github-api-url or REMERIS_GITHUB_API_URL"
-	flagUploadURL     = "--github-upload-url or REMERIS_GITHUB_UPLOAD_URL"
-	schemeHTTP        = "http"
-	schemeHTTPS       = "https"
-	unknownHostMarker = "an unknown host"
+	codeInvalidURL   = "remeris::github::invalid_url"
+	codeUntrustedAPI = "remeris::github::untrusted_api_url"
+	codeUntrustedUp  = "remeris::github::untrusted_upload_url"
+	codeUploadNoAPI  = "remeris::github::upload_url_without_api_url"
+	flagAPIURL       = "--github-api-url or REMERIS_GITHUB_API_URL"
+	flagUploadURL    = "--github-upload-url or REMERIS_GITHUB_UPLOAD_URL"
 )
 
 // resolveURLs decides which API and upload base URLs the client uses, from the [github] values of the configuration
@@ -54,7 +50,7 @@ func resolveURLs(cfg Config) (api, upload string, err error) {
 }
 
 func untrustedError(configured, key, flags, code string) error {
-	host := originOf(configured)
+	host := httpx.OriginOf(configured)
 	return diag.New("The [github] " + key + " in knope.toml points to " + host +
 		", which remeris does not send GitHub credentials to").
 		WithCode(code).
@@ -75,71 +71,18 @@ func normalizeURL(s string) string {
 		return s
 	}
 	u.Scheme = strings.ToLower(u.Scheme)
-	u.Host = hostPort(u)
+	u.Host = httpx.HostPort(u)
 	u.Path = strings.TrimRight(u.Path, "/") + "/"
 	u.RawPath = ""
 	return u.String()
 }
 
-// hostPort is the lowercase host of u, with the port unless it is the default one of the scheme.
-func hostPort(u *url.URL) string {
-	host := strings.ToLower(u.Hostname())
-	port := u.Port()
-	if port == "" || (port == "80" && strings.EqualFold(u.Scheme, schemeHTTP)) ||
-		(port == "443" && strings.EqualFold(u.Scheme, schemeHTTPS)) {
-		if strings.Contains(host, ":") {
-			return "[" + host + "]"
-		}
-		return host
-	}
-	return net.JoinHostPort(host, port)
-}
-
-// originOf is scheme://host[:port] of a URL given as text, without userinfo, path or query. It is what messages
-// print about a URL, and it is how the credential guard compares hosts.
-func originOf(s string) string {
-	u, err := url.Parse(s)
-	if err != nil || u.Host == "" {
-		return unknownHostMarker
-	}
-	return urlOrigin(u)
-}
-
-func urlOrigin(u *url.URL) string {
-	return strings.ToLower(u.Scheme) + "://" + hostPort(u)
-}
-
-// checkSecure refuses a URL that would carry a token over plain http to a host that is not on this machine, and
-// any scheme other than http and https.
-func checkSecure(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		return diag.New("The GitHub API URL is not valid").
-			WithCode(codeInvalidURL).
-			WithHelp("Check api_url and upload_url in the [github] table.")
-	}
-	switch strings.ToLower(u.Scheme) {
-	case schemeHTTPS:
-		return nil
-	case schemeHTTP:
-		if isLoopback(u.Hostname()) {
-			return nil
-		}
-		return diag.New("Refusing to send GitHub credentials over plain http to " + strings.ToLower(u.Hostname())).
-			WithCode(codeInsecureURL).
-			WithHelp("Use an https URL. Plain http is accepted only for localhost and other loopback addresses.")
-	default:
-		return diag.New("The GitHub API URL must use http or https: " + originOf(raw)).
-			WithCode(codeInvalidURL).
-			WithHelp("Check api_url and upload_url in the [github] table.")
-	}
-}
-
-// isLoopback reports whether host is localhost or a loopback IP address (127.0.0.0/8, ::1).
-func isLoopback(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+// urlPolicy is the wording of the diagnostics about GitHub's URLs (codes remeris::github::invalid_url, insecure_url
+// and redirect); the rules are those of httpx.
+var urlPolicy = httpx.URLPolicy{
+	Service:      service,
+	CodePrefix:   "remeris::github",
+	URLName:      "GitHub API URL",
+	InvalidHelp:  "Check api_url and upload_url in the [github] table.",
+	RedirectHelp: "Check the API URL.",
 }
