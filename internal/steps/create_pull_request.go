@@ -5,14 +5,15 @@ import (
 	"log/slog"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/forge/gitea"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/variables"
 	"github.com/celest-io/remeris/internal/workflow"
 )
 
 // CreatePullRequest creates a pull request from the current branch to Base, or updates the one that exists
-// (spec F18). Title and Body are templates. GitHub is done (M7); Gitea arrives in milestone M8 and the step fails
-// with "not implemented" until then, in a dry run too. With both configured, GitHub runs first, as in Knope.
+// (spec F18). Title and Body are templates. With both forges configured, GitHub runs first, as in Knope, and a
+// failure stops the step: Gitea gets no request after a GitHub error.
 type CreatePullRequest struct {
 	Base  string             `toml:"base"`
 	Title variables.Template `toml:"title"`
@@ -45,35 +46,42 @@ func (s *CreatePullRequest) Run(
 			WithCode("remeris::create_pull_request::forge::not_configured").
 			WithHelp("A forge must be configured in order to use the CreatePullRequest step")
 	}
+	// The branch is read once, before the dry-run check: a detached HEAD fails in a dry run too.
+	branch, err := currentBranch(ctx, &rt.State)
+	if err != nil {
+		return rt, err
+	}
+	if rt.DryRun {
+		// Like Knope, the lines are printed once per configured forge.
+		for _, present := range []bool{rt.State.GitHub != nil, rt.State.Gitea != nil} {
+			if !present {
+				continue
+			}
+			for _, line := range gitea.DescribePullRequest(title, body, s.Base, branch) {
+				slog.InfoContext(ctx, line)
+			}
+		}
+		return rt, nil
+	}
 	if rt.State.GitHub != nil {
-		if err := s.onGitHub(ctx, &rt, title, body); err != nil {
+		client, err := rt.State.GitHub.RequireAuthentication(ctx)
+		if err != nil {
+			return rt, err
+		}
+		if err := client.CreateOrUpdatePullRequest(ctx, title, body, branch, s.Base); err != nil {
 			return rt, err
 		}
 	}
 	if rt.State.Gitea != nil {
-		return rt, notImplemented(s, "M8")
+		client, err := rt.State.Gitea.RequireAuthentication(ctx)
+		if err != nil {
+			return rt, err
+		}
+		if err := client.CreateOrUpdatePullRequest(ctx, title, body, s.Base, branch); err != nil {
+			return rt, err
+		}
 	}
 	return rt, nil
-}
-
-func (s *CreatePullRequest) onGitHub(
-	ctx context.Context, rt *workflow.RunType[workflow.State], title, body string,
-) error {
-	branch, err := currentBranch(ctx, &rt.State)
-	if err != nil {
-		return err
-	}
-	if rt.DryRun {
-		slog.InfoContext(ctx, "Would create or update a pull request from "+branch+" to "+s.Base+":")
-		slog.InfoContext(ctx, "\tTitle: "+title)
-		slog.InfoContext(ctx, "\tBody: "+body)
-		return nil
-	}
-	client, err := rt.State.GitHub.RequireAuthentication(ctx)
-	if err != nil {
-		return err
-	}
-	return client.CreateOrUpdatePullRequest(ctx, title, body, branch, s.Base)
 }
 
 // currentBranch is the short name of the branch HEAD points to (Quirk Q3). Like Knope, it opens the repository

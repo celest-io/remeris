@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/celest-io/remeris/internal/forge/gitea"
 	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/steps"
 	"github.com/celest-io/remeris/internal/workflow"
@@ -327,6 +326,3 @@ func TestReleaseOpensGitWhenStateHasNone(t *testing.T) {
 }
 
 // giteaForge is a Gitea forge that is never asked for a client: the M8 stubs only test that it is there.
-func giteaForge() *gitea.Forge {
-	return gitea.New(gitea.Config{Owner: "o", Repo: "r", Host: "https://gitea.example.com"}, nil)
-}

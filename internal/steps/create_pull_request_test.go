@@ -285,29 +285,6 @@ func TestCreatePullRequestNoForge(t *testing.T) {
 	}
 }
 
-func TestCreatePullRequestGitHubThenGitea(t *testing.T) {
-	api := newPRAPI(t, prNoPR)
-	state := workflow.State{
-		Git: &branchGit{branch: prBase}, GitHub: api.forge(t, tokenStore(t)), Gitea: giteaForge(),
-	}
-
-	_, err := runPR(state, false)
-
-	if err == nil || err.Error() != "Step CreatePullRequest is not implemented yet (milestone M8)" {
-		t.Fatalf("error = %v", err)
-	}
-	if got, want := api.keys(), []string{"GET " + prPulls, "POST " + prPulls}; !slices.Equal(got, want) {
-		t.Errorf("requests = %q, want GitHub to run first: %q", got, want)
-	}
-}
-
-func TestCreatePullRequestGiteaOnly(t *testing.T) {
-	_, err := runPR(workflow.State{Gitea: giteaForge()}, true)
-	if err == nil || !strings.Contains(err.Error(), "milestone M8") {
-		t.Fatalf("error = %v", err)
-	}
-}
-
 func TestCreatePullRequestDryRun(t *testing.T) {
 	logs := captureLogs(t)
 	api := newPRAPI(t, prNoPR)
