@@ -24,9 +24,9 @@ func TestGitHubFromRemote(t *testing.T) {
 		"trailing slash":           {"https://github.com/o/r/", "r", "", true},
 		"github.com anywhere":      {"https://example.com/github.com/x/r.git", "x", "r", true},
 		"gitlab":                   {"https://gitlab.com/o/r.git", "", "", false},
-		"codeberg is M8":           {"https://codeberg.org/o/r.git", "", "", false},
+		"codeberg is Gitea":        {"https://codeberg.org/o/r.git", "", "", false},
 		"local path":               {"/srv/git/r.git", "", "", false},
-		"empty":                    {"", "", "", false},
+		"empty url":                {"", "", "", false},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -55,8 +55,18 @@ func TestLoadFSWithRemote(t *testing.T) {
 			t.Errorf("release has %d steps, want the forge order of 4", workflowSteps(cfg))
 		}
 	})
-	t.Run("no remote, no github remote or no getter", func(t *testing.T) {
-		for _, r := range []RemoteFunc{remote("", false), remote("https://gitlab.com/o/r.git", true), nil} {
+	t.Run("gitea detected without a file", func(t *testing.T) {
+		cfg, err := LoadFSWithRemote(filepath.Join(t.TempDir(), "knope.toml"), root, remote("git@codeberg.org:/o/r.git", true))
+		if err != nil || cfg.GitHub != nil || cfg.Gitea == nil || cfg.Gitea.Host != codebergHost || !cfg.HasForge() {
+			t.Fatalf("config = %+v, %v", cfg, err)
+		}
+		if workflowSteps(cfg) != 4 {
+			t.Errorf("release has %d steps, want the forge order of 4", workflowSteps(cfg))
+		}
+	})
+	t.Run("no remote, no known remote or no getter", func(t *testing.T) {
+		unknown := remote("https://evil.example/codeberg.org/r", true)
+		for _, r := range []RemoteFunc{remote("", false), remote("https://gitlab.com/o/r.git", true), unknown, nil} {
 			cfg, err := LoadFSWithRemote(filepath.Join(t.TempDir(), "knope.toml"), root, r)
 			if err != nil || cfg.HasForge() || workflowSteps(cfg) != 5 {
 				t.Errorf("config = %+v, %v", cfg, err)

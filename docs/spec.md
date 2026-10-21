@@ -1620,7 +1620,8 @@ get-version (help "Get the current version of the project")      ← only when E
 First remote URL:
 - Contains `github.com`: split on `/`. owner = the second-to-last part without a `git@github.com:` prefix. repo =
   the last part without `.git`.
-- Contains a known Gitea host (`codeberg.org`): `TryFromRemote` (F17).
+- Otherwise, a known Gitea host (`codeberg.org`): `TryFromRemote` (F17). Knope tests `remote.contains(host)`;
+  remeris requires the parsed host to equal the known host and drops the userinfo (testdata/deviations.md).
 
 ### F20.7 `--generate` output
 Serialise:

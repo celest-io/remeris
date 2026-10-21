@@ -1,4 +1,4 @@
-# Without a knope.toml, a remote that is not GitHub gives the no-forge workflow: Release, git push, git push --tags. A codeberg.org remote would be Gitea, which is milestone M8.
+# Without a knope.toml, a remote that is not GitHub gives the no-forge workflow: Release, git push, git push --tags. A codeberg.org remote is Gitea (codeberg_remote_*.txtar).
 # Ours; Knope's config::generate does the detection (spec F20.6). A dry run reads no credentials and makes no request.
 # [COMMIT] is the HEAD commit, matched as 40 hex digits.
 env REMERIS_FAKE_DATE=2026-01-01

@@ -564,7 +564,7 @@ project = "PRJ"
 
 func TestDecodeGitea(t *testing.T) {
 	cfg := mustLoad(t, "[gitea]\nowner = \"o\"\nrepo = \"r\"\nhost = \"https://codeberg.org\"\n")
-	if *cfg.Gitea != (Gitea{"o", "r", "https://codeberg.org"}) {
+	if *cfg.Gitea != (Gitea{"o", "r", codebergHost}) {
 		t.Errorf("gitea = %+v", cfg.Gitea)
 	}
 }

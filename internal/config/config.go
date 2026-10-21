@@ -189,7 +189,10 @@ func LoadFSWithRemote(path string, root fs.StatFS, remote RemoteFunc) (*Config, 
 		cfg.packages, cfg.discoveryErr = discoverPackages(root)
 		if remote != nil {
 			if url, ok := remote(); ok {
-				cfg.GitHub, _ = GitHubFromRemote(url)
+				// GitHub first, as in Knope; Gitea only for a known public host.
+				if cfg.GitHub, _ = GitHubFromRemote(url); cfg.GitHub == nil {
+					cfg.Gitea = GiteaFromRemote(url)
+				}
 			}
 		}
 		cfg.Workflows = DefaultWorkflows(cfg.HasForge(), len(cfg.packages))
