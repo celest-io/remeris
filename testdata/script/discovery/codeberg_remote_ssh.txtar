@@ -1,6 +1,5 @@
 # Without a knope.toml, a codeberg.org first remote (scp style) is detected as Gitea and enables the forge workflow: git push, then Release (spec F17, F20.5, F20.6).
 # Ours; Knope's config::generate does the detection.
-skip 'needs the Gitea release (milestone M8, PR 50)'
 env REMERIS_FAKE_DATE=2026-01-01
 
 exec git init --initial-branch=main
