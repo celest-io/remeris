@@ -50,6 +50,11 @@ func TestCreateReleaseBody(t *testing.T) {
 			in:   ReleaseInput{TagName: tagV120, Name: ver120, TargetCommitish: sha},
 			want: `{"tag_name":"v1.2.0","name":"1.2.0","prerelease":false,"generate_release_notes":true,"draft":false,"target_commitish":"` + sha + `"}`,
 		},
+		"html characters are not escaped": {
+			in: ReleaseInput{TagName: tagV120, Name: ver120, Body: "a <b> & c"},
+			want: `{"tag_name":"v1.2.0","name":"1.2.0","body":"a <b> & c","prerelease":false,` +
+				`"generate_release_notes":false,"draft":false}`,
+		},
 		"without the commit": {
 			in:   ReleaseInput{TagName: tagV120, Name: ver120, Body: bodyNotes},
 			want: `{"tag_name":"v1.2.0","name":"1.2.0","body":"notes","prerelease":false,"generate_release_notes":false,"draft":false}`,

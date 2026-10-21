@@ -51,11 +51,14 @@ func (c *Client) do(
 	}
 	var payload io.Reader
 	if body != nil {
-		data, err := json.Marshal(body)
-		if err != nil {
+		// Like serde_json, do not escape <, > and & (release notes hold them).
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(body); err != nil {
 			return c.WrapError(activity, err)
 		}
-		payload = bytes.NewReader(data)
+		payload = bytes.NewReader(bytes.TrimSuffix(buf.Bytes(), []byte("\n")))
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), payload)
 	if err != nil {
