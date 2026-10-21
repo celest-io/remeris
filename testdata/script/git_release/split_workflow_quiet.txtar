@@ -1,0 +1,40 @@
+# Knope's git_release/split_workflow without --verbose (ours): a Release step on its own, after a PrepareRelease run in
+# another workflow. The version is already in Cargo.toml, so the release has no notes and only the tag is created.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+cmp stdout dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+exec git tag --contains HEAD
+stdout '(?m)\Av1\.1\.0\n\z'
+
+# The version is tagged now, so a second run has nothing to release.
+exec remeris release --dry-run
+! stdout .
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.1.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "Release"
+-- dryrun_stdout.log --
+Would create Git tag v1.1.0

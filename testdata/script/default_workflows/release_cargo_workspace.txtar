@@ -1,0 +1,33 @@
+# Ported from knope-dev/knope, crates/knope/tests/default_workflows/release/cargo_workspace (MIT, see testdata/README.md).
+skip 'needs the GitHub forge (milestone M7) and package discovery (milestone M10)'
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing Feature' --author 'Knope <knope@example.com>'
+exec git tag first-package/v1.0.0
+exec git tag second-package/v0.1.0
+exec git commit --allow-empty -m 'feat: New Feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+grep '(?s)\AWould add the following to first/Cargo\.toml: version = 1\.1\.0\nWould add the following to second/Cargo\.toml: version = 0\.1\.1\nWould add files to git:\n  first/Cargo\.toml\n  second/Cargo\.toml\nWould run git commit -m "chore: prepare releases"\nWould run git push\nWould create a release on GitHub with name first-package 1\.1\.0 \(2026-01-01\) and tag first-package/v1\.1\.0 at commit [0-9a-f]{40} and body:\n## Features\n\n- New Feature\nWould create a release on GitHub with name second-package 0\.1\.1 \(2026-01-01\) and tag second-package/v0\.1\.1 at commit [0-9a-f]{40} and body:\n## Features\n\n- New Feature\n\z' stdout_actual.log
+! stderr .
+
+-- Cargo.toml --
+[workspace]
+members = ["first", "second"]
+-- knope.toml --
+[github]
+owner = "knope-dev"
+repo = "knope"
+-- first/Cargo.toml --
+[package]
+name = "first-package"
+version = "1.0.0"
+-- second/Cargo.toml --
+[package]
+name = "second-package"
+version = "0.1.0"

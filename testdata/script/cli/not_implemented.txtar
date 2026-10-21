@@ -20,14 +20,14 @@ stderr 'unknown flag|not defined|flag provided but not defined'
 -- knope.toml --
 [[workflows]]
 name = "release"
-steps = [{ type = "Release" }]
+steps = [{ type = "SelectGitHubIssue" }]
 
 [[workflows]]
 name = "before"
 steps = [{ type = "Command", command = "echo first" }]
 -- release.log --
 Error: Problem with workflow release
-  ╰─▶ Step Release is not implemented yet (milestone M6)
+  ╰─▶ Step SelectGitHubIssue is not implemented yet (milestone M11)
 -- before.log --
 Would run echo first
 -- upgrade.log --

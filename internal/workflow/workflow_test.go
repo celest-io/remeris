@@ -124,3 +124,34 @@ func TestStateCloneIsolatesPackages(t *testing.T) {
 		t.Errorf("a state without packages must stay without: %v", empty.Packages)
 	}
 }
+
+// unitStep is a step without fields, like Release.
+type unitStep struct{}
+
+const unitType = "Unit"
+
+func (unitStep) Type() string { return unitType }
+
+func (unitStep) Run(_ context.Context, rt RunType[State]) (RunType[State], error) { return rt, nil }
+
+func TestDescribe(t *testing.T) {
+	var ran []string
+	tests := map[string]struct {
+		step   Step
+		prefix string
+		exact  bool
+	}{
+		"a step without fields is its type, like Rust's Debug of a unit variant": {
+			step: &unitStep{}, prefix: unitType, exact: true,
+		},
+		"a step with fields shows them": {step: fakeStep{"A", nil, &ran}, prefix: "A {"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := describe(tc.step)
+			if !strings.HasPrefix(got, tc.prefix) || (tc.exact && got != tc.prefix) {
+				t.Errorf("describe = %q, want %q", got, tc.prefix)
+			}
+		})
+	}
+}

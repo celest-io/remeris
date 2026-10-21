@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/no_versioned_files (MIT, see testdata/README.md).
-skip 'needs the Release step (milestone M6)'
 
 env REMERIS_FAKE_DATE=2026-01-01
 
@@ -19,6 +18,9 @@ exec remeris release
 ! stdout .
 ! stderr .
 cmp CHANGELOG.md out/CHANGELOG.md
+# The tags Knope expects on HEAD (expected_tags in its mod.rs).
+exec git tag --contains HEAD
+cmp stdout tags.txt
 
 -- CHANGELOG.md --
 ## 1.0.0
@@ -62,3 +64,5 @@ Would create Git tag v1.1.0
 ### Features
 
 - Existing features
+-- tags.txt --
+v1.1.0

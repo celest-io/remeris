@@ -1,5 +1,5 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/changelog/header_level_detection (MIT, see testdata/README.md).
-skip 'needs the GitHub forge (milestone M7) and the Release step (milestone M6)'
+skip 'needs the GitHub forge (milestone M7)'
 
 env REMERIS_FAKE_DATE=2026-01-01
 

@@ -127,8 +127,12 @@ internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
 internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines
 internal/fsx/       dry-run aware file writes
+internal/glob/      Glob(fs.FS, pattern) with the semantics of Rust's glob crate (`**`, brackets, no backslash escape)
 internal/git/       Git access: the Git interface, the git CLI backend, the go-git fallback, Open picks one
 internal/project/   reads the packages, versioned files and Git tags into a workflow.State
+internal/httpx/     HTTP behaviour (F15.1): User-Agent, retrying RoundTripper with Retry-After and rate-limit warnings, ApiRequestError diagnostics
+internal/credentials/ stored tokens and email: env, remeris/ file, knope/ migration, prompt, save (F15.2)
+internal/forge/github/ GitHub client on go-github: the auth chain (App, GITHUB_TOKEN, stored token, prompt), WrapError; a leaf
 internal/prompt/    Prompter interface (select, multi-select, input, password) on huh v2, and a scripted fake
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
@@ -142,7 +146,8 @@ pkg/versioning/     pure core (the knope-versioning equivalent): no file system,
   internal/jsonedit/ ordered JSON tree printed exactly like serde_json to_string_pretty (package.json & co.)
 ```
 
-Imports flow one way: `workflow` imports only `diag`, `internal/git`, `internal/prompt` and `pkg/versioning/...`,
+Imports flow one way: `workflow` imports only `diag`, `internal/git`, `internal/prompt`, `internal/forge/github` and
+`pkg/versioning/...`,
 then `variables`, `steps`, `config`, `project`, `cli`. Keep it so.
 `pkg/versioning` may import `internal/diag` (pure) and nothing else from `internal/`.
 Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.

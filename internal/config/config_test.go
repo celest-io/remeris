@@ -551,7 +551,7 @@ project = "PRJ"
 	if want := []Asset{{Path: "dist/*.zip", Name: "bundle"}}; !reflect.DeepEqual(cfg.Package.Assets, want) {
 		t.Errorf("assets = %+v", cfg.Package.Assets)
 	}
-	if *cfg.GitHub != (GitHub{"celest-io", "remeris"}) || *cfg.Jira != (Jira{"https://x.atlassian.net", "PRJ"}) {
+	if *cfg.GitHub != (GitHub{Owner: "celest-io", Repo: "remeris"}) || *cfg.Jira != (Jira{"https://x.atlassian.net", "PRJ"}) {
 		t.Errorf("forge sections: %+v %+v %+v", cfg.GitHub, cfg.Gitea, cfg.Jira)
 	}
 }

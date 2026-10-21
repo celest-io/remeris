@@ -32,6 +32,12 @@ type recordingGit struct {
 	tagArg  *string
 	called  bool
 	staged  []string
+	// tagged are the names given to CreateTag, in order.
+	tagged []string
+	// tagErr is returned by CreateTag.
+	tagErr error
+	// forbidTag, when set, makes every CreateTag call fail this test.
+	forbidTag *testing.T
 }
 
 func (*recordingGit) AllTagsOnBranch(context.Context) ([]string, error) { return nil, nil }
@@ -49,6 +55,20 @@ func (g *recordingGit) AddFiles(_ context.Context, paths []string) error {
 	g.staged = append(g.staged, paths...)
 	return nil
 }
+
+func (g *recordingGit) CreateTag(_ context.Context, name string, _ git.TagOptions) error {
+	if g.forbidTag != nil {
+		g.forbidTag.Errorf("CreateTag(%q) must not be called", name)
+	}
+	g.tagged = append(g.tagged, name)
+	return g.tagErr
+}
+
+func (*recordingGit) HeadCommitSHA(context.Context) (string, error) { return "", nil }
+
+func (*recordingGit) CurrentBranch(context.Context) (string, error) { return "", nil }
+
+func (*recordingGit) FirstRemoteURL(context.Context) (string, bool) { return "", false }
 
 func commits(messages ...string) []git.Commit {
 	out := make([]git.Commit, len(messages))
@@ -250,7 +270,10 @@ func TestPrepareReleaseForgeVariable(t *testing.T) {
 			prepareDir(t, nil)
 			g := &recordingGit{commits: commits(tc.commits...)}
 			state := stateFor(t, []string{tagV123}, cargo(v123), "")
-			state.Git, state.GitHubConfigured = g, tc.github
+			state.Git = g
+			if tc.github {
+				state.GitHub = newTestForge()
+			}
 			state.Packages[0].ReleaseNotes.ChangeTemplates = []releasenotes.ChangeTemplate{
 				releasenotes.ChangeTemplate(tc.template),
 			}

@@ -1,0 +1,148 @@
+# Knope's prepare_release/go_modules/major_version_directories without --verbose (ours; the fixture is MIT, see
+# testdata/README.md): the files, the changelogs and the module tags of every major version directory. The dry run
+# is Knope's dryrun_stdout.log without its debug lines.
+
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git tag v2.0.0
+exec git tag sub_dir/v1.0.0
+exec git tag sub_dir/v2.0.0
+exec git commit --allow-empty -m 'fix(v1): A fix' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'feat(v2): New feature' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+rstrip stdout dryrun_actual.log
+cmp dryrun_actual.log dryrun_stdout.log
+! stderr .
+
+exec remeris release
+! stdout .
+! stderr .
+cmp go.mod out/go.mod
+cmp CHANGELOG.md out/CHANGELOG.md
+cmp sub_dir/go.mod out/sub_dir/go.mod
+cmp sub_dir/v2/go.mod out/sub_dir/v2/go.mod
+cmp v2/go.mod out/v2/go.mod
+cmp v2/CHANGELOG.md out/v2/CHANGELOG.md
+# The tags Knope expects on HEAD (expected_tags in its mod.rs).
+exec git tag --contains HEAD
+cmp stdout tags.txt
+
+-- CHANGELOG.md --
+# CHANGELOG
+
+## 1.0.0
+
+- Initial commit
+-- go.mod --
+module knope
+-- knope.toml --
+[packages.v1]
+versioned_files = ["go.mod", "sub_dir/go.mod"]
+scopes = ["v1"]
+changelog = "CHANGELOG.md"
+
+[packages.v2]
+versioned_files = ["v2/go.mod", "sub_dir/v2/go.mod"]
+scopes = ["v2"]
+changelog = "v2/CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
+-- sub_dir/EXPECTED_go.mod --
+-- sub_dir/go.mod --
+module sub_dir/knope
+-- sub_dir/v2/go.mod --
+module sub_dir/knope/v2
+-- v2/CHANGELOG.md --
+# CHANGELOG
+
+## 2.0.0
+
+- Initial commit
+-- v2/EXPECTED_CHANGELOG.md --
+-- v2/EXPECTED_go.mod --
+-- v2/go.mod --
+module knope/v2
+-- out/CHANGELOG.md --
+# CHANGELOG
+
+## 1.0.1 (2026-01-01)
+
+### Fixes
+
+- A fix
+
+## 1.0.0
+
+- Initial commit
+-- out/go.mod --
+module knope // v1.0.1
+-- out/sub_dir/go.mod --
+module sub_dir/knope // v1.0.1
+-- out/sub_dir/v2/go.mod --
+module sub_dir/knope/v2 // v2.1.0
+-- out/v2/CHANGELOG.md --
+# CHANGELOG
+
+## 2.1.0 (2026-01-01)
+
+### Features
+
+- New feature
+
+## 2.0.0
+
+- Initial commit
+-- out/v2/go.mod --
+module knope/v2 // v2.1.0
+-- tags.txt --
+sub_dir/v1.0.1
+sub_dir/v2.1.0
+v1.0.1
+v1/v1.0.1
+v2.1.0
+v2/v2.1.0
+-- dryrun_stdout.log --
+Would add the following to go.mod: 1.0.1
+Would add the following to sub_dir/go.mod: 1.0.1
+Would add the following to v2/go.mod: 2.1.0
+Would add the following to sub_dir/v2/go.mod: 2.1.0
+Would add the following to CHANGELOG.md:
+## 1.0.1 (2026-01-01)
+
+### Fixes
+
+- A fix
+
+Would add the following to v2/CHANGELOG.md:
+## 2.1.0 (2026-01-01)
+
+### Features
+
+- New feature
+
+Would add files to git:
+  go.mod
+  sub_dir/go.mod
+  v2/go.mod
+  sub_dir/v2/go.mod
+  CHANGELOG.md
+  v2/CHANGELOG.md
+Would create Git tag v1.0.1
+Would create Git tag sub_dir/v1.0.1
+Would create Git tag v2.1.0
+Would create Git tag sub_dir/v2.1.0
+Would create Git tag v1/v1.0.1
+Would create Git tag v2/v2.1.0

@@ -76,7 +76,7 @@ func (s *PrepareRelease) Run(
 			return rt, err
 		}
 		if len(list) > 0 && forgeVariable != "" {
-			if !state.GitHubConfigured {
+			if state.GitHub == nil {
 				return rt, diag.Newf("You must configure [github] to use the variable %s in a change template", forgeVariable).
 					WithCode(codeNeedsForge)
 			}

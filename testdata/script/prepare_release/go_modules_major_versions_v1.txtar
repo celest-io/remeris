@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/go_modules/major_versions/v1 (MIT, see testdata/README.md).
-skip 'needs the Release step (milestone M6)'
 
 env REMERIS_FAKE_DATE=2026-01-01
 
@@ -20,6 +19,9 @@ exec remeris release
 ! stderr .
 cmp go.mod out/go.mod
 cmp CHANGELOG.md out/CHANGELOG.md
+# The tags Knope expects on HEAD (expected_tags in its mod.rs).
+exec git tag --contains HEAD
+cmp stdout tags.txt
 
 -- CHANGELOG.md --
 ## 1.0.0
@@ -91,3 +93,5 @@ example.com/thatmodule v1.2.3
 
 replace example.com/thatmodule => ../thatmodule
 exclude example.com/thismodule v1.3.0
+-- tags.txt --
+v1.1.0

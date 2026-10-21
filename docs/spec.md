@@ -1345,6 +1345,15 @@ if cfg.GitHub.APIURL != "" { gh, _ = gh.WithEnterpriseURLs(cfg.GitHub.APIURL, cf
 and let tests point the client at an `httptest.Server`. Unknown to Knope, but ignored by it, so the file stays
 compatible.
 
+The two keys are not trusted on their own, because a repository's configuration must not choose where the GitHub token
+goes. The URLs that may receive credentials come from `--github-api-url` / `REMERIS_GITHUB_API_URL` and
+`--github-upload-url` / `REMERIS_GITHUB_UPLOAD_URL`. With only the flag or variable, it is used as is. A configured
+`api_url` or `upload_url` is used only when it equals the trusted value after normalisation (lowercase scheme and host,
+default port removed, one trailing slash); otherwise building the client fails with `remeris::github::untrusted_api_url`
+or `remeris::github::untrusted_upload_url`. Credentials are attached only to requests for the scheme, host and port of
+the API and upload URLs, a redirect to another host or from https to http is refused, and plain `http` is accepted only
+for loopback hosts (`remeris::github::insecure_url`).
+
 | Knope call | go-github method |
 | --- | --- |
 | Create release | `Repositories.CreateRelease(ctx, o, r, &github.RepositoryRelease{TagName, Name, Body, Prerelease, Draft, GenerateReleaseNotes, TargetCommitish})` |

@@ -63,9 +63,32 @@ func gitEnv(environ []string) []string {
 //
 // --no-replace-objects keeps refs/replace out of the picture, as libgit2 ignores it.
 func (c *CLI) run(ctx context.Context, stdin string, args ...string) (string, error) {
+	return c.runEnv(ctx, stdin, nil, nil, args...)
+}
+
+// withoutVars returns env without the entries named in names.
+func withoutVars(env, names []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		if !slices.Contains(names, name) {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
+// runEnv is run with extra environment variables and a list of inherited variables to drop. An inherited variable with
+// the name of an extra one is removed too, so that the extra value is the only one git can see.
+func (c *CLI) runEnv(ctx context.Context, stdin string, extraEnv, dropEnv []string, args ...string) (string, error) {
 	full := append([]string{"--no-replace-objects", "-C", c.Dir}, args...)
 	cmd := exec.CommandContext(ctx, c.path, full...) //nolint:gosec // path comes from LookPath
-	cmd.Env = gitEnv(os.Environ())
+	drop := slices.Clone(dropEnv)
+	for _, kv := range extraEnv {
+		name, _, _ := strings.Cut(kv, "=")
+		drop = append(drop, name)
+	}
+	cmd.Env = append(withoutVars(gitEnv(os.Environ()), drop), extraEnv...)
 	cmd.WaitDelay = waitDelay
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
@@ -124,7 +147,7 @@ func (c *CLI) AllTagsOnBranch(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
-	walk, err := c.run(ctx, "", "rev-list", "HEAD", "--")
+	walk, err := c.run(ctx, "", "rev-list", headRef, "--")
 	if err != nil {
 		return nil, fail(err, unknownGitError)
 	}
@@ -188,7 +211,7 @@ func (c *CLI) tagsByCommit(ctx context.Context) (map[string][]string, error) {
 // git cat-file --batch for the raw commit objects. git log is not used because it re-encodes the message and the
 // author name to UTF-8 using the commit's encoding header, while Knope (libgit2) reads the stored bytes.
 func (c *CLI) CommitMessagesAfterTag(ctx context.Context, tag *string) ([]Commit, error) {
-	rng := "HEAD"
+	rng := headRef
 	if tag == nil {
 		slog.DebugContext(ctx, "Using ALL commits")
 	} else {

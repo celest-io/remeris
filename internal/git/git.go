@@ -32,6 +32,27 @@ type Git interface {
 	// Like Knope, paths that match nothing, and untracked files that are ignored, are skipped without an error.
 	// Paths are literal names, not patterns. An empty list does nothing, not even opening the repository.
 	AddFiles(ctx context.Context, paths []string) error
+	// CreateTag creates the tag name on HEAD (spec F9.5). Like Knope's repo.tag(name, HEAD, signature, "", false), it is
+	// an annotated tag with an empty message, tagged by the committer from the Git configuration (user.name and
+	// user.email only: GIT_COMMITTER_* is ignored), and it fails when the tag already exists.
+	CreateTag(ctx context.Context, name string, opts TagOptions) error
+	// HeadCommitSHA returns the full 40-character id of the commit HEAD points to (spec F9.6).
+	HeadCommitSHA(ctx context.Context) (string, error)
+	// CurrentBranch returns the short name of the branch HEAD points to, such as "main" or "feature/x" (spec F9.6,
+	// Quirk Q3: Knope returns the full "refs/heads/..." name). A detached HEAD is Knope's "Not on the tip of a Git
+	// branch." error, and an unborn branch fails with "reference 'refs/heads/main' not found", like libgit2's repo.head().
+	CurrentBranch(ctx context.Context) (string, error)
+	// FirstRemoteURL returns the configured URL of the first remote in git remote order (alphabetical by name, which is
+	// also libgit2's order), with url.<base>.insteadOf applied like libgit2's remote lookup (with several url values the
+	// first is used; libgit2 would take the last). It is false when there is no remote, or on any error, like Knope's
+	// get_first_remote (spec F9.6).
+	FirstRemoteURL(ctx context.Context) (string, bool)
+}
+
+// TagOptions are the options of CreateTag.
+type TagOptions struct {
+	// Sign asks for a signed tag. It is a Phase 1 hook for the signing extension (spec E2): both backends ignore it.
+	Sign bool
 }
 
 // Commit is a commit with its full message, as returned by CommitMessagesAfterTag.

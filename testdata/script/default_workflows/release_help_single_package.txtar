@@ -1,0 +1,21 @@
+# Ported from knope-dev/knope, crates/knope/tests/default_workflows/release/help_single_package (MIT, see testdata/README.md).
+# The help is compared by content: urfave/cli lays it out differently from clap (spec F3.1).
+skip 'needs package discovery (milestone M10)'
+
+exec remeris release --help
+stdout 'Prepare and create a new release \(update changelog, bump version, create release\)'
+stdout 'remeris release \[options\]'
+stdout 'Pretend to run a workflow, outputting what _would_ happen without actually doing it\.'
+stdout '--override-version'
+stdout 'Override the version set by `BumpVersion` or `PrepareRelease` for the package\.'
+stdout '--prerelease-label'
+stdout 'REMERIS_PRERELEASE_LABEL'
+stdout 'KNOPE_PRERELEASE_LABEL'
+stdout '--verbose, -v'
+stdout '--help, -h'
+! stderr .
+
+-- Cargo.toml --
+[package]
+name = "my-package"
+version = "0.1.0"

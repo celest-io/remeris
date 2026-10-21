@@ -30,7 +30,7 @@ steps = [{ type = "Command", command = "echo hi" }]
 
 [[workflows]]
 name = "later"
-steps = [{ type = "Command", command = "echo hi" }, { type = "Release" }]
+steps = [{ type = "Command", command = "echo hi" }, { type = "SelectGitHubIssue" }]
 -- knope-many.toml --
 [[workflows]]
 name = "first"
@@ -50,7 +50,7 @@ steps = [{ type = "SelectGitHubIssue" }]
 -- later.log --
 Error: There are problems with the defined workflows
   ╰─▶ Problem with workflow later
-      ╰─▶ Step Release is not implemented yet (milestone M6)
+      ╰─▶ Step SelectGitHubIssue is not implemented yet (milestone M11)
 -- many.log --
 Error: There are problems with the defined workflows
   ╰─▶ Problem with workflow second

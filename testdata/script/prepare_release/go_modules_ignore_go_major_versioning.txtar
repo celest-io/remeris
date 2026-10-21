@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/go_modules/ignore_go_major_versioning (MIT, see testdata/README.md).
-skip 'needs the Release step (milestone M6)'
 
 exec git init --initial-branch=main
 exec git config user.email fake@remeris.dev
@@ -10,6 +9,7 @@ exec git commit --allow-empty -m 'fix!: Breaking change' --author 'Knope <knope@
 exec git tag v2.0.0
 exec git commit --allow-empty -m 'fix: A fix' --author 'Knope <knope@example.com>'
 
+cp knope.toml knope.toml.orig
 exec remeris --dry-run release
 rstrip stdout dryrun_actual.log
 cmp dryrun_actual.log dryrun_stdout.log
@@ -19,6 +19,10 @@ exec remeris release
 ! stdout .
 ! stderr .
 cmp go.mod out/go.mod
+cmp knope.toml knope.toml.orig
+# The tags Knope expects on HEAD (expected_tags in its mod.rs).
+exec git tag --contains HEAD
+cmp stdout tags.txt
 
 -- go.mod --
 module something/test
@@ -42,3 +46,5 @@ Would add files to git:
 Would create Git tag v2.0.1
 -- out/go.mod --
 module something/test // v2.0.1
+-- tags.txt --
+v2.0.1

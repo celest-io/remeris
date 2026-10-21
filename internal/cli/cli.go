@@ -11,7 +11,9 @@ import (
 
 	"github.com/celest-io/remeris/internal/app"
 	"github.com/celest-io/remeris/internal/config"
+	"github.com/celest-io/remeris/internal/credentials"
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/project"
 	"github.com/celest-io/remeris/internal/prompt"
 	"github.com/celest-io/remeris/internal/steps"
@@ -73,14 +75,17 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 				return ctx, err
 			}
 			setupLogging(stdout, global.Verbose, global.Validate)
-			return ctx, nil
+			if cfg.GitHub == nil {
+				return ctx, nil // the App options are only used with [github]
+			}
+			return ctx, global.ValidateGitHubApp(os.Getenv)
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if handled, err := runSpecialMode(ctx, global, cfg, nil); handled {
 				return err
 			}
 			// Knope builds the state, and so reports package errors, before it looks for the workflow.
-			if _, err := project.Load(ctx, cfg); err != nil {
+			if _, err := project.Load(ctx, cfg, projectOptions(global, nil)); err != nil {
 				return err
 			}
 			if cmd.Args().Present() {
@@ -105,6 +110,34 @@ func rootFlags(cfg *config.Config) []cli.Flag {
 			Name:    "verbose",
 			Aliases: []string{"v"},
 			Usage:   "Print extra information (for debugging)",
+		},
+		&cli.Int64Flag{
+			Name:    app.FlagGitHubAppID,
+			Usage:   "ID of the GitHub App to authenticate as",
+			Sources: cli.EnvVars(app.EnvGitHubAppID),
+		},
+		&cli.Int64Flag{
+			Name:    app.FlagGitHubInstallationID,
+			Usage:   "ID of the GitHub App installation",
+			Sources: cli.EnvVars(app.EnvGitHubInstallationID),
+		},
+		&cli.StringFlag{
+			Name: app.FlagGitHubAppKeyPath,
+			Usage: "Path to the GitHub App private key (PEM); " + app.EnvGitHubAppKey +
+				" may hold the key itself",
+			Sources: cli.EnvVars(app.EnvGitHubAppKeyPath),
+		},
+		&cli.StringFlag{
+			Name: app.FlagGitHubAPIURL,
+			Usage: "API base URL of the GitHub instance to send credentials to, for GitHub Enterprise. " +
+				"The api_url of [github] must be the same URL to be used",
+			Sources: cli.EnvVars(app.EnvGitHubAPIURL),
+		},
+		&cli.StringFlag{
+			Name: app.FlagGitHubUploadURL,
+			Usage: "Upload base URL of the GitHub instance, when it is not the default for the API URL. " +
+				"The upload_url of [github] must be the same URL to be used",
+			Sources: cli.EnvVars(app.EnvGitHubUploadURL),
 		},
 	}
 	if cfg.Source == config.SourceDefault {
@@ -156,14 +189,15 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 			if handled, err := runSpecialMode(ctx, global, cfg, opts.OverrideVersion); handled {
 				return err
 			}
-			state, err := project.Load(ctx, cfg)
+			prompter := prompt.NewTerminal(os.Stdin, os.Stdout)
+			state, err := project.Load(ctx, cfg, projectOptions(global, prompter))
 			if err != nil {
 				return err
 			}
 			if err := applyOverrides(state.Packages, opts.OverrideVersion); err != nil {
 				return err
 			}
-			state.Prompter = prompt.NewTerminal(os.Stdin, os.Stdout)
+			state.Prompter = prompter
 			rt := workflow.Real(state)
 			if global.DryRun {
 				rt = workflow.DryRun(state)
@@ -196,7 +230,7 @@ func runSpecialMode(
 ) (handled bool, err error) {
 	switch {
 	case global.Validate:
-		state, err := project.Load(ctx, cfg)
+		state, err := project.Load(ctx, cfg, projectOptions(global, nil))
 		if err != nil {
 			return true, err
 		}
@@ -210,6 +244,31 @@ func runSpecialMode(
 		return true, notImplemented("--upgrade", "M10")
 	}
 	return false, nil
+}
+
+// projectOptions says how the GitHub forge authenticates: with the GitHub App of the global options, if any,
+// else with GITHUB_TOKEN or the stored token, else (when p can ask) with a token typed by the user. The private
+// key is read only when a client is built, never in a dry run.
+func projectOptions(global *app.GlobalOptions, p prompt.Prompter) project.Options {
+	opts := project.Options{
+		Credentials:            &credentials.Store{Prompter: p},
+		TrustedGitHubAPIURL:    global.GitHubAPIURL,
+		TrustedGitHubUploadURL: global.GitHubUploadURL,
+	}
+	if global.GitHubAppID != 0 {
+		opts.GitHubApp = &github.App{
+			ID:             global.GitHubAppID,
+			InstallationID: global.GitHubInstallationID,
+			PrivateKey: func() ([]byte, error) {
+				key, found, err := global.GitHubAppPrivateKey(os.Getenv, os.ReadFile)
+				if err == nil && !found {
+					err = diag.New("A GitHub App ID is set without a private key").WithCode("remeris::github::app_options")
+				}
+				return key, err
+			},
+		}
+	}
+	return opts
 }
 
 func notImplemented(what, milestone string) error {

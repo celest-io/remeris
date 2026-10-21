@@ -15,6 +15,8 @@ import (
 )
 
 const (
+	flagAppID    = "--github-app-id"
+	errNoKey     = "without a private key"
 	flagVerbose  = "verbose"
 	flagValidate = "validate"
 	flagUpgrade  = "upgrade"
@@ -377,5 +379,65 @@ func TestSetupLogging(t *testing.T) {
 				t.Errorf("output = %q, want %q", buf.String(), tc.want)
 			}
 		})
+	}
+}
+
+func TestGitHubAppOptionsAreValidatedAtStartup(t *testing.T) {
+	cfg := loadConfig(t, twoWorkflows+"\n[github]\nowner = \"o\"\nrepo = \"r\"\n")
+	cases := map[string]struct {
+		args    []string
+		env     map[string]string
+		wantErr string
+	}{
+		"unset":                 {args: []string{wfPlain}},
+		"id without key":        {args: []string{flagAppID, "1", wfPlain}, wantErr: errNoKey},
+		"id after the workflow": {args: []string{wfPlain, flagAppID, "1"}, wantErr: errNoKey},
+		"id from env, no key": {
+			args:    []string{wfPlain},
+			env:     map[string]string{"REMERIS_GITHUB_APP_ID": "1"},
+			wantErr: errNoKey,
+		},
+		"id and path": {args: []string{flagAppID, "1", "--github-app-private-key-path", "k.pem", wfPlain}},
+		"id and key env": {
+			args: []string{wfPlain, "--github-app-id=1"},
+			env:  map[string]string{"REMERIS_GITHUB_APP_PRIVATE_KEY": "fake-key-for-tests"},
+		},
+		"key env without id is ignored": {
+			args: []string{wfPlain},
+			env:  map[string]string{"REMERIS_GITHUB_APP_PRIVATE_KEY": "fake-key-for-tests"},
+		},
+		"zero id from env is unset": {args: []string{wfPlain}, env: map[string]string{"REMERIS_GITHUB_APP_ID": "0"}},
+		"installation without id":   {args: []string{"--github-installation-id", "2", wfPlain}, wantErr: "without an App ID"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			_, err := run(t, cfg, tc.args...)
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatal(err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("error = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// Without [github] the App options are never used, so a leftover setting does not stop other workflows.
+func TestGitHubAppOptionsAreIgnoredWithoutGitHub(t *testing.T) {
+	cfg := loadConfig(t, twoWorkflows)
+	if _, err := run(t, cfg, flagAppID, "1", wfPlain); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGitHubAppFlagsAreListed(t *testing.T) {
+	names := flagNames(New(loadConfig(t, twoWorkflows), nil, nil))
+	for _, f := range []string{"github-app-id", "github-installation-id", "github-app-private-key-path", "github-api-url", "github-upload-url"} {
+		if !has(names, f) {
+			t.Errorf("missing flag --%s in %v", f, names)
+		}
 	}
 }

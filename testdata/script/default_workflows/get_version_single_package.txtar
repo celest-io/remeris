@@ -1,0 +1,13 @@
+# Ported from knope-dev/knope, crates/knope/tests/default_workflows/get_version/single_package (MIT, see testdata/README.md).
+skip 'needs package discovery (milestone M10)'
+
+exec remeris get-version
+cmp stdout stdout.log
+! stderr .
+
+-- Cargo.toml --
+[package]
+name = "single-package-get-version"
+version = "1.23.45"
+-- stdout.log --
+1.23.45
