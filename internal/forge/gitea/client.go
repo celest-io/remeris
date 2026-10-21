@@ -120,17 +120,39 @@ func (c *Client) scrub(s string) string {
 	return s
 }
 
-// scrubDiag returns d with the token removed from its message and help. The cause stays reachable through
-// errors.Is and errors.As, but its text is not part of any message.
-func (c *Client) scrubDiag(d *diag.Error) *diag.Error {
-	out := diag.New(c.scrub(d.Error())).WithCode(d.Code()).WithHelp(c.scrub(d.Help()))
+// scrubDiag returns d with the token removed from its message, help, link, source and related errors, and its
+// other fields kept. The cause stays reachable through errors.Is and errors.As, but its text is not part of any
+// message: see [scrubbed].
+func (c *Client) scrubDiag(d diag.Diagnostic) *diag.Error {
+	out := diag.New(c.scrub(d.Error())).
+		WithCode(d.Code()).
+		WithHelp(c.scrub(d.Help())).
+		WithURL(c.scrub(d.URL()))
+	if src := d.SourceCode(); src != "" || len(d.Labels()) > 0 {
+		out = out.WithSource(c.scrub(src), d.Labels()...)
+	}
+	for _, rel := range d.Related() {
+		out = out.WithRelated(c.scrubRelated(rel))
+	}
 	if cause := errors.Unwrap(d); cause != nil {
 		out = out.WithCause(scrubbed{msg: c.scrub(cause.Error()), err: cause})
 	}
 	return out
 }
 
+func (c *Client) scrubRelated(err error) error {
+	var d diag.Diagnostic
+	if errors.As(err, &d) {
+		return c.scrubDiag(d)
+	}
+	return errors.New(c.scrub(err.Error()))
+}
+
 // scrubbed is an error whose text has been cleaned and whose cause is still reachable.
+//
+// Unwrap exposes the original cause so that errors.Is and errors.As keep working (context.Canceled and
+// context.DeadlineExceeded matter to callers). That cause may hold the token in its own text: it must never be
+// formatted, rendered or logged. Nothing in remeris prints the chain; print the error itself.
 type scrubbed struct {
 	msg string
 	err error

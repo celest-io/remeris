@@ -13,6 +13,8 @@ import (
 )
 
 const (
+	userinfoText = "user name or password"
+	insecureCode = "remeris::gitea::insecure_url"
 	// userinfoHost is a host the client must refuse.
 	userinfoHost = "https://user:pw@gitea.example.com" //nolint:gosec // G101: not a credential, an invalid host
 	prefix       = "/gitea"
@@ -183,27 +185,55 @@ func TestHostValidation(t *testing.T) {
 		host     string
 		wantCode string
 		wantText string
+		// noEcho is text that the message must not repeat.
+		noEcho string
 	}{
 		"no scheme": {
-			host:     bareHost,
+			host:     "corp.internal",
 			wantCode: codeInvalidHost,
-			wantText: `"gitea.example.com" is not a URL`,
+			wantText: "is not a URL with a scheme",
+			noEcho:   "corp.internal",
 		},
-		"host and port": {host: "localhost:3000", wantCode: codeInvalidHost},
-		"empty":         {host: "", wantCode: codeInvalidHost},
+		"password that does not parse": {
+			host: "https://user:pw%40host", wantCode: codeInvalidHost, wantText: "is not a URL with a scheme", noEcho: "pw",
+		},
+		"backslash hides an authority": {
+			host: `https://good.example\@evil.example`, wantCode: codeInvalidHost, wantText: userinfoText,
+			noEcho: "evil",
+		},
+		"fragment hides an authority": {
+			host: "https://evil.example#@good.example", wantCode: codeInvalidHost, wantText: userinfoText,
+			noEcho: "evil",
+		},
+		"one slash":                       {host: "https:/h", wantCode: codeInvalidHost, noEcho: "https:/h"},
+		"no scheme with two slashes":      {host: "//h", wantCode: codeInvalidHost, noEcho: "//h"},
+		"opaque":                          {host: "https:h", wantCode: codeInvalidHost, noEcho: "https:h"},
+		"upper case scheme":               {host: "HTTPS://Host"},
+		"localhost as a prefix of a name": {host: "https://localhost.evil.example"},
+		"http to localhost as a prefix of a name": {
+			host: "http://localhost.evil.example", wantCode: insecureCode,
+		},
+		"http to a name that starts like an ip": {
+			host: "http://127.0.0.1.evil.example", wantCode: insecureCode,
+		},
+		// The rule is net.IP.IsLoopback, which sees through the IPv4-mapped form, so this is accepted.
+		"http to a mapped loopback": {host: "http://[::ffff:127.0.0.1]"},
+		"https ipv6 loopback":       {host: "https://[::1]"},
+		"host and port":             {host: "localhost:3000", wantCode: codeInvalidHost},
+		"empty":                     {host: "", wantCode: codeInvalidHost},
 		"userinfo": {
 			host:     userinfoHost,
 			wantCode: codeInvalidHost,
-			wantText: "user name or password",
+			wantText: userinfoText,
 		},
-		"userinfo no host": {host: "user:pw@gitea.example.com", wantCode: codeInvalidHost, wantText: "user name or password"},
+		"userinfo no host": {host: "user:pw@gitea.example.com", wantCode: codeInvalidHost, wantText: userinfoText},
 		"control char":     {host: "https://gitea.example.com/\x00", wantCode: codeInvalidHost, wantText: "control characters"},
 		"newline":          {host: "https://gitea.example.com/a\nb", wantCode: codeInvalidHost, wantText: "control characters"},
 		"space":            {host: "https://gitea.example.com/a b", wantCode: codeInvalidHost},
 		"query":            {host: "https://gitea.example.com?x=1", wantCode: codeInvalidHost, wantText: "query or a fragment"},
 		"fragment":         {host: "https://gitea.example.com/#f", wantCode: codeInvalidHost, wantText: "query or a fragment"},
-		"plain http":       {host: "http://gitea.example.com", wantCode: "remeris::gitea::insecure_url"},
-		"plain http ip":    {host: "http://10.0.0.1:3000", wantCode: "remeris::gitea::insecure_url"},
+		"plain http":       {host: "http://gitea.example.com", wantCode: insecureCode},
+		"plain http ip":    {host: "http://10.0.0.1:3000", wantCode: insecureCode},
 		"ftp":              {host: "ftp://gitea.example.com", wantCode: "remeris::gitea::invalid_url"},
 		"https":            {host: "https://gitea.example.com"},
 		"https prefix":     {host: "https://gitea.example.com/gitea/"},
@@ -229,6 +259,9 @@ func TestHostValidation(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tc.wantText) {
 				t.Errorf("message = %q, want it to contain %q", err, tc.wantText)
+			}
+			if tc.noEcho != "" && strings.Contains(err.Error()+helpOf(err), tc.noEcho) {
+				t.Errorf("the error repeats %q: %v", tc.noEcho, err)
 			}
 			for _, leak := range []string{"pw", "user:", "\x00", "x=1"} {
 				if strings.Contains(err.Error()+helpOf(err), leak) {
@@ -292,7 +325,7 @@ func TestEmptyTokenIsAnError(t *testing.T) {
 
 	_, err := f.RequireAuthentication(context.Background())
 
-	if err == nil || codeOf(t, err) != codeAuth || err.Error() != "No Gitea token was given" {
+	if err == nil || codeOf(t, err) != "remeris::app_config::blank_answer" || err.Error() != "No Gitea token was given" {
 		t.Errorf("err = %v", err)
 	}
 }

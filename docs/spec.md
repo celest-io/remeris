@@ -93,7 +93,6 @@ internal/variables/            # Template + Variable substitution
 internal/git/                  # Git interface + implementation
 internal/forge/github/         # go-github client, auth (token or GitHub App), releases, PRs, issues
 internal/forge/gitea/          # Gitea client on net/http (leaf): header auth, hardened host, releases, PRs, issues
-internal/forge/gitea/
 internal/issues/jira/
 internal/httpx/                # client with retry/backoff/rate-limit logging, ApiRequestError
 internal/credentials/          # token/email store in user config dir, prompting

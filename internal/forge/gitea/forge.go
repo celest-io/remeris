@@ -33,7 +33,6 @@ const (
 	apiPath = "/api/v1"
 
 	codeInvalidHost = "remeris::gitea::invalid_host"
-	codeAuth        = "remeris::gitea::authentication"
 	codeAPIResponse = "remeris::gitea::api_response_error"
 
 	hostHelp = "Set host in the [gitea] table to the URL of your Gitea instance, for example https://gitea.example.com."
@@ -145,12 +144,8 @@ func (f *Forge) token(ctx context.Context) (string, error) {
 		return "", err
 	}
 	// A stored token is the raw file content, which may end in a newline that a header cannot carry.
+	// The store never returns a blank token, so what is left is not empty.
 	token := strings.TrimSpace(raw)
-	if token == "" {
-		return "", diag.New("No Gitea token was given").
-			WithCode(codeAuth).
-			WithHelp("Set the GITEA_TOKEN environment variable or enter a token when asked.")
-	}
 	slog.DebugContext(ctx, "Using the Gitea token")
 	return token, nil
 }
@@ -167,7 +162,8 @@ func apiBase(host string) (string, error) {
 	u, err := url.Parse(host)
 	switch {
 	case err != nil || u.Scheme == "" || u.Host == "":
-		return "", invalidHost("The [gitea] host " + quote(host) + "is not a URL with a scheme such as https://")
+		// The host is never echoed: it may hold a password that did not parse as userinfo.
+		return "", invalidHost("The [gitea] host is not a URL with a scheme such as https://")
 	case u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(host, "#"):
 		return "", invalidHost("The [gitea] host must not have a query or a fragment")
 	}
@@ -180,6 +176,3 @@ func apiBase(host string) (string, error) {
 func invalidHost(msg string) error {
 	return diag.New(msg).WithCode(codeInvalidHost).WithHelp(hostHelp)
 }
-
-// quote returns host in quotes and followed by a space, ready to go into a message.
-func quote(host string) string { return `"` + host + `" ` }

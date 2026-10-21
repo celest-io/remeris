@@ -66,6 +66,12 @@ func TestTokenNeverLeaks(t *testing.T) {
 			},
 			wantLog: "API rate limited; retrying in 7 seconds",
 		},
+		"refused redirect whose Location echoes the token": {
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Location", "http://user:"+testToken+"@127.0.0.1:1/x/"+testToken+"?t="+testToken)
+				w.WriteHeader(http.StatusTemporaryRedirect)
+			},
+		},
 		"closed server": {host: closedURL},
 		"transport error that echoes the token": {
 			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
