@@ -40,7 +40,7 @@ func (s *CreatePullRequest) Run(
 	if err != nil {
 		return rt, err
 	}
-	if rt.State.GitHub == nil && !rt.State.GiteaConfigured {
+	if rt.State.GitHub == nil && rt.State.Gitea == nil {
 		return rt, diag.New("No forge has been configured").
 			WithCode("remeris::create_pull_request::forge::not_configured").
 			WithHelp("A forge must be configured in order to use the CreatePullRequest step")
@@ -50,7 +50,7 @@ func (s *CreatePullRequest) Run(
 			return rt, err
 		}
 	}
-	if rt.State.GiteaConfigured {
+	if rt.State.Gitea != nil {
 		return rt, notImplemented(s, "M8")
 	}
 	return rt, nil

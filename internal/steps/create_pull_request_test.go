@@ -288,7 +288,7 @@ func TestCreatePullRequestNoForge(t *testing.T) {
 func TestCreatePullRequestGitHubThenGitea(t *testing.T) {
 	api := newPRAPI(t, prNoPR)
 	state := workflow.State{
-		Git: &branchGit{branch: prBase}, GitHub: api.forge(t, tokenStore(t)), GiteaConfigured: true,
+		Git: &branchGit{branch: prBase}, GitHub: api.forge(t, tokenStore(t)), Gitea: giteaForge(),
 	}
 
 	_, err := runPR(state, false)
@@ -302,7 +302,7 @@ func TestCreatePullRequestGitHubThenGitea(t *testing.T) {
 }
 
 func TestCreatePullRequestGiteaOnly(t *testing.T) {
-	_, err := runPR(workflow.State{GiteaConfigured: true}, true)
+	_, err := runPR(workflow.State{Gitea: giteaForge()}, true)
 	if err == nil || !strings.Contains(err.Error(), "milestone M8") {
 		t.Fatalf("error = %v", err)
 	}

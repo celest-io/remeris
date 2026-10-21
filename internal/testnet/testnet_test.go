@@ -39,6 +39,15 @@ func TestGuard(t *testing.T) {
 	}
 }
 
+// No forge token of the developer's environment reaches a test.
+func TestGuardRemovesTokens(t *testing.T) {
+	for _, name := range []string{"GITHUB_TOKEN", "GH_TOKEN", "GITEA_TOKEN"} {
+		if v := os.Getenv(name); v != "" {
+			t.Errorf("%s is set", name)
+		}
+	}
+}
+
 // The guard gives the tests an empty home, so no test reads the user's stored tokens.
 func TestGuardIsolatesHome(t *testing.T) {
 	for _, name := range []string{"HOME", "XDG_CONFIG_HOME", "APPDATA"} {

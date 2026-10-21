@@ -154,6 +154,17 @@ func TestNewDecodeError(t *testing.T) {
 	}
 }
 
+func TestNewDecodeErrorFor(t *testing.T) {
+	err := NewDecodeErrorFor("Gitea", "the Gitea instance at https://gitea.example.com", "creating a release",
+		errors.New("unexpected EOF"))
+	wantMsg := "Trouble decoding the response from Gitea while creating a release: unexpected EOF"
+	wantHelp := "Failure to decode a response from the Gitea instance at https://gitea.example.com is probably a bug. " +
+		"Please report it at https://github.com/celest-io/remeris"
+	if err.Error() != wantMsg || err.Help() != wantHelp {
+		t.Errorf("message %q, help %q", err.Error(), err.Help())
+	}
+}
+
 func TestRenderedError(t *testing.T) {
 	var sb strings.Builder
 	diag.Render(&sb, NewAPIRequestError("GitHub", "creating a release", "boom"))

@@ -56,7 +56,7 @@ func (s *Release) Run(
 					return rt, err
 				}
 			}
-			if rt.State.GiteaConfigured {
+			if rt.State.Gitea != nil {
 				return rt, notImplemented(s, "M8")
 			}
 			if rt.State.GitHub != nil {

@@ -98,9 +98,15 @@ func NewStatusError(service, activity string, resp *http.Response, body string) 
 // service is "GitHub" or, for Gitea, "the Gitea instance at {host}". Callers may replace the code
 // with WithCode (Knope used github::api_response_error and gitea::api_response_error).
 func NewDecodeError(service, activity string, cause error) *diag.Error {
+	return NewDecodeErrorFor(service, service, activity, cause)
+}
+
+// NewDecodeErrorFor is [NewDecodeError] for a service that Knope names differently in the message and in the help.
+// Gitea's message says "Gitea" and its help says "the Gitea instance at {host}".
+func NewDecodeErrorFor(service, helpService, activity string, cause error) *diag.Error {
 	return diag.New("Trouble decoding the response from " + service + " while " + activity + ": " + cause.Error()).
 		WithCode(codeAPIResponse).
-		WithHelp("Failure to decode a response from " + service +
+		WithHelp("Failure to decode a response from " + helpService +
 			" is probably a bug. Please report it at " + issuesURL).
 		WithCause(cause)
 }

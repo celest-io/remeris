@@ -11,6 +11,7 @@ import (
 	"reflect"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/forge/gitea"
 	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/prompt"
@@ -48,8 +49,10 @@ type State struct {
 	// ReleaseAssets are the `assets` of the packages that have some, for the GitHub release. They are kept beside
 	// the packages, not in them: the versioning core knows nothing about forges. Use [State.AssetsOf].
 	ReleaseAssets []PackageAssets
-	// GiteaConfigured is true when the configuration has a `[gitea]` table. Release needs it to pick the forge.
-	GiteaConfigured bool
+	// Gitea is the Gitea forge, or nil when the configuration has no `[gitea]` table. Like GitHub, it builds its
+	// client on demand and caches it; a step must not ask for the client in a dry run. Release and CreatePullRequest
+	// test it to pick the forge.
+	Gitea *gitea.Forge
 }
 
 // PackageAssets is the `assets` setting of one package.

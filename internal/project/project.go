@@ -18,6 +18,7 @@ import (
 	"github.com/celest-io/remeris/internal/config"
 	"github.com/celest-io/remeris/internal/credentials"
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/forge/gitea"
 	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/workflow"
@@ -37,8 +38,8 @@ type Loader struct {
 	ChangeTemplates []releasenotes.ChangeTemplate
 	// GitHub is the GitHub forge, nil when the configuration has no [github] table.
 	GitHub *github.Forge
-	// GiteaConfigured is true when the configuration has a [gitea] table.
-	GiteaConfigured bool
+	// Gitea is the Gitea forge, nil when the configuration has no [gitea] table.
+	Gitea *gitea.Forge
 	// ReadFile returns the content of the file at the slash-separated relative path. nil reads from disk.
 	ReadFile func(path string) (string, error)
 	// OpenGit opens the repository. nil uses git.Open on the working directory.
@@ -63,12 +64,15 @@ type Options struct {
 // Load builds the State for cfg with the default Loader.
 func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State, error) {
 	ignore := cfg.Changes != nil && cfg.Changes.IgnoreConventionalCommits
-	l := Loader{GiteaConfigured: cfg.Gitea != nil}
+	l := Loader{}
 	if gh := cfg.GitHub; gh != nil {
 		l.GitHub = github.New(github.Config{
 			Owner: gh.Owner, Repo: gh.Repo, APIURL: gh.APIURL, UploadURL: gh.UploadURL,
 			TrustedAPIURL: opts.TrustedGitHubAPIURL, TrustedUploadURL: opts.TrustedGitHubUploadURL,
 		}, opts.GitHubApp, opts.Credentials)
+	}
+	if g := cfg.Gitea; g != nil {
+		l.Gitea = gitea.New(gitea.Config{Owner: g.Owner, Repo: g.Repo, Host: g.Host}, opts.Credentials)
 	}
 	if cfg.ReleaseNotes != nil {
 		for _, t := range cfg.ReleaseNotes.ChangeTemplates {
@@ -86,8 +90,7 @@ func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State
 func (l Loader) State(
 	ctx context.Context, pkgs []config.PackageConfig, ignoreConventionalCommits bool,
 ) (workflow.State, error) {
-	state := workflow.State{IgnoreConventionalCommits: ignoreConventionalCommits, GitHub: l.GitHub,
-		GiteaConfigured: l.GiteaConfigured}
+	state := workflow.State{IgnoreConventionalCommits: ignoreConventionalCommits, GitHub: l.GitHub, Gitea: l.Gitea}
 	if len(pkgs) == 0 {
 		return state, nil
 	}

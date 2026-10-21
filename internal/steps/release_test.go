@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/celest-io/remeris/internal/forge/gitea"
 	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/steps"
 	"github.com/celest-io/remeris/internal/workflow"
@@ -267,7 +268,7 @@ func TestReleaseGiteaIsNotImplemented(t *testing.T) {
 		t.Run(fmt.Sprintf("dry run %v", dry), func(t *testing.T) {
 			g := &recordingGit{forbidTag: t}
 			state := releaseState(t, []string{tagV100}, false, "")
-			state.Git, state.GiteaConfigured = g, true
+			state.Git, state.Gitea = g, giteaForge()
 
 			_, err := runRelease(state, dry)
 
@@ -340,4 +341,9 @@ func TestReleaseOpensGitWhenStateHasNone(t *testing.T) {
 	if _, err := os.Stat(".git"); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// giteaForge is a Gitea forge that is never asked for a client: the M8 stubs only test that it is there.
+func giteaForge() *gitea.Forge {
+	return gitea.New(gitea.Config{Owner: "o", Repo: "r", Host: "https://gitea.example.com"}, nil)
 }

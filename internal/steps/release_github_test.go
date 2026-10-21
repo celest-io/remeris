@@ -412,7 +412,7 @@ func TestReleaseGitHubAPIError(t *testing.T) {
 func TestReleaseGitHubThenGiteaStub(t *testing.T) {
 	api := newFakeAPI(t)
 	state, _ := githubState(t, api, "")
-	state.GiteaConfigured = true
+	state.Gitea = giteaForge()
 	state.PendingActions = []action.Action{release("1.2.0", "x", nil)}
 
 	_, err := runRelease(state, false)

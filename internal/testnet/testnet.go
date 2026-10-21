@@ -1,5 +1,5 @@
 // Package testnet keeps tests off the network. A test binary calls [Main] from its TestMain: afterwards every
-// request that goes through http.DefaultTransport and is not for a loopback address fails, and no GitHub token
+// request that goes through http.DefaultTransport and is not for a loopback address fails, and no GitHub or Gitea token
 // is left in the environment. Tests talk to httptest servers, which listen on loopback.
 //
 // Only tests import this package.
@@ -43,12 +43,13 @@ func Guard() string {
 	return home
 }
 
-// GuardNetwork is Guard without the new home directory: it installs the transport and removes the GitHub tokens.
+// GuardNetwork is Guard without the new home directory: it installs the transport and removes the GitHub and Gitea tokens.
 // It is for the binary that testscript runs, whose scripts set their own HOME. It reports whether it installed the
 // transport (false when it was already there).
 func GuardNetwork() bool {
 	_ = os.Unsetenv("GITHUB_TOKEN")
 	_ = os.Unsetenv("GH_TOKEN")
+	_ = os.Unsetenv("GITEA_TOKEN")
 	if _, ok := http.DefaultTransport.(*guard); ok {
 		return false
 	}
