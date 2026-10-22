@@ -37,4 +37,8 @@
 //   - extract_nv_from_id slices value[1..] in Rust, which panics when the first character is not ASCII; the Go
 //     version searches bytes and never panics.
 //   - JSON syntax errors have the text of Go's JSON reader, not serde_json's.
+//   - Floats in free-form JSON print in the serde_json style shared with jsonedit (1e+16); that has not been checked
+//     against the serde_json version Knope pins.
+//
+// The first, second and fourth items are also recorded in testdata/deviations.md at the root of the repository.
 package denolock
