@@ -13,25 +13,25 @@ import (
 )
 
 const (
-	lockPath      = "pkg/package-lock.json"
-	lockWarning   = "package-lock.json lockfileVersion is not 2 or 3, errors may occur"
-	lockDeserCode = "remeris::package_lock_json::deserialize"
-	lockMissing   = lockPath + " did not have a `version` field"
-	lockMissCode  = "remeris::package_lock_json::missing_version"
-	lockMissHelp  = "Either add a `version` field or specify a `dependency` to update"
-	lockInvalCode = "remeris::package_lock_json::invalid_version"
-	lockInvalHelp = "Only plain version numbers are currently supported, e.g. `1.2.3`"
-	lockDepName   = "dependency-name"
-	lockDepDiff   = "dependency-name = 2.1.0"
-	lockNoMatch   = "{\n  \"version\": \"1.0.0\",\n  \"packages\": {\n    \"\": {\n      \"version\": \"1.0.0\"\n    }\n  }\n}"
+	pkgLockPath      = "pkg/package-lock.json"
+	pkgLockWarning   = "package-lock.json lockfileVersion is not 2 or 3, errors may occur"
+	pkgLockDeserCode = "remeris::package_lock_json::deserialize"
+	pkgLockMissing   = pkgLockPath + " did not have a `version` field"
+	pkgLockMissCode  = "remeris::package_lock_json::missing_version"
+	pkgLockMissHelp  = "Either add a `version` field or specify a `dependency` to update"
+	pkgLockInvalCode = "remeris::package_lock_json::invalid_version"
+	pkgLockInvalHelp = "Only plain version numbers are currently supported, e.g. `1.2.3`"
+	pkgLockDepName   = "dependency-name"
+	pkgLockDepDiff   = "dependency-name = 2.1.0"
+	pkgLockNoMatch   = "{\n  \"version\": \"1.0.0\",\n  \"packages\": {\n    \"\": {\n      \"version\": \"1.0.0\"\n    }\n  }\n}"
 )
 
-const lockVersionContent = `{
+const pkgLockVersionContent = `{
         "name": "tester",
         "version": "0.1.0-rc.0"
         }`
 
-const lockSetContent = `{
+const pkgLockSetContent = `{
         "name": "tester",
         "version": "0.1.0-rc.0",
         "packages": {
@@ -41,7 +41,7 @@ const lockSetContent = `{
         }
         }`
 
-const lockDepsContent = `{
+const pkgLockDepsContent = `{
     "name": "tester",
     "version": "1.0.0",
     "packages": {
@@ -76,8 +76,8 @@ const lockDepsContent = `{
     }
 }`
 
-// lockDepsPretty is lockDepsContent printed like serde_json to_string_pretty.
-const lockDepsPretty = `{
+// pkgLockDepsPretty is pkgLockDepsContent printed like serde_json to_string_pretty.
+const pkgLockDepsPretty = `{
   "name": "tester",
   "version": "1.0.0",
   "packages": {
@@ -151,22 +151,22 @@ const (
 	caseArray            = "array root"
 )
 
-func newLock(content string) (versionedfile.File, error) {
-	return versionedfile.New(versionedfile.Config{Path: lockPath, Format: versionedfile.PackageLockJson}, content, nil)
+func newPkgLock(content string) (versionedfile.File, error) {
+	return versionedfile.New(versionedfile.Config{Path: pkgLockPath, Format: versionedfile.PackageLockJson}, content, nil)
 }
 
-func mustLock(t *testing.T, content string) versionedfile.File {
+func mustPkgLock(t *testing.T, content string) versionedfile.File {
 	t.Helper()
-	f, err := newLock(content)
+	f, err := newPkgLock(content)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return f
 }
 
-// captureWarnings replaces the default logger and returns what it logged. The logger is global, so callers must not
+// capturePkgLockLog replaces the default logger and returns what it logged. The logger is global, so callers must not
 // run in parallel.
-func captureWarnings(t *testing.T) *bytes.Buffer {
+func capturePkgLockLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
 	old := slog.Default()
@@ -188,19 +188,19 @@ func TestPackageLockVersion(t *testing.T) {
 		content string
 		want    string
 	}{
-		"lock plain":          {lockVersionContent, npmRC0},
+		"lock plain":          {pkgLockVersionContent, npmRC0},
 		"lock duplicate wins": {jsonDuplicateVersion, npmV200},
-		"with packages":       {lockSetContent, npmRC0},
+		"with packages":       {pkgLockSetContent, npmRC0},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			f := mustLock(t, tc.content)
+			f := mustPkgLock(t, tc.content)
 			got, err := f.Version()
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.String() != tc.want || f.Path() != lockPath {
+			if got.String() != tc.want || f.Path() != pkgLockPath {
 				t.Errorf("got %s at %s, want %s", got, f.Path(), tc.want)
 			}
 		})
@@ -215,20 +215,20 @@ func TestPackageLockVersionErrors(t *testing.T) {
 		code    string
 		help    string
 	}{
-		"lock missing":  {`{"name": "x"}`, lockMissing, lockMissCode, lockMissHelp},
-		"not a string":  {jsonNumberVersion, lockMissing, lockMissCode, lockMissHelp},
-		"null":          {jsonNullVersion, lockMissing, lockMissCode, lockMissHelp},
-		caseArray:       {`["2.0.0"]`, lockMissing, lockMissCode, lockMissHelp},
-		"not a version": {jsonWordVersion, "Error parsing " + lockPath + ": ", lockInvalCode, lockInvalHelp},
-		"range":         {`{"version": "^1.0.0"}`, "Error parsing " + lockPath + ": ", lockInvalCode, lockInvalHelp},
-		"empty version": {`{"version": ""}`, "Error parsing " + lockPath + ": ", lockInvalCode, lockInvalHelp},
-		"v prefix":      {`{"version": "v1.0.0"}`, "Error parsing " + lockPath + ": ", lockInvalCode, lockInvalHelp},
+		"lock missing":  {`{"name": "x"}`, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
+		"not a string":  {jsonNumberVersion, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
+		"null":          {jsonNullVersion, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
+		caseArray:       {`["2.0.0"]`, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
+		"not a version": {jsonWordVersion, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
+		"range":         {`{"version": "^1.0.0"}`, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
+		"empty version": {`{"version": ""}`, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
+		"v prefix":      {`{"version": "v1.0.0"}`, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			// Parsing the file succeeds; the version is read on demand, so a dependency edit still works.
-			f := mustLock(t, tc.content)
+			f := mustPkgLock(t, tc.content)
 			_, err := f.Version()
 			if err == nil || !strings.HasPrefix(err.Error(), tc.message) {
 				t.Fatalf("got %v, want message starting %q", err, tc.message)
@@ -246,7 +246,7 @@ func TestPackageLockVersionErrors(t *testing.T) {
 
 func TestPackageLockInvalidJSON(t *testing.T) {
 	t.Parallel()
-	prefix := "Error deserializing " + lockPath + ": "
+	prefix := "Error deserializing " + pkgLockPath + ": "
 	tests := map[string]string{
 		"lock empty":         ``,
 		"lock syntax":        jsonTrailingComma,
@@ -256,12 +256,12 @@ func TestPackageLockInvalidJSON(t *testing.T) {
 	for name, content := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			f, err := newLock(content)
+			f, err := newPkgLock(content)
 			if f != nil || err == nil || !strings.HasPrefix(err.Error(), prefix) {
 				t.Fatalf("got %v, %v", f, err)
 			}
 			var d diag.Diagnostic
-			if !errors.As(err, &d) || d.Code() != lockDeserCode || d.Help() != "" {
+			if !errors.As(err, &d) || d.Code() != pkgLockDeserCode || d.Help() != "" {
 				t.Errorf("code or help wrong: %#v", err)
 			}
 		})
@@ -270,7 +270,7 @@ func TestPackageLockInvalidJSON(t *testing.T) {
 
 func TestPackageLockSetVersion(t *testing.T) {
 	t.Parallel()
-	dep := strp(lockDepName)
+	dep := strp(pkgLockDepName)
 	tests := map[string]struct {
 		content string
 		steps   []cargoStep
@@ -278,14 +278,14 @@ func TestPackageLockSetVersion(t *testing.T) {
 		diff    string
 	}{
 		"lock set version": {
-			content: lockSetContent,
+			content: pkgLockSetContent,
 			steps:   []cargoStep{{npmV123rc4, nil}},
 			want: "{\n  \"name\": \"tester\",\n  \"version\": \"1.2.3-rc.4\",\n  \"packages\": {\n    \"\": {\n" +
 				"      \"version\": \"1.2.3-rc.4\"\n    }\n  }\n}",
 			diff: npmDiffV,
 		},
 		"without packages": {
-			content: lockVersionContent,
+			content: pkgLockVersionContent,
 			steps:   []cargoStep{{npmV123rc4, nil}},
 			want:    "{\n  \"name\": \"tester\",\n  \"version\": \"1.2.3-rc.4\"\n}",
 			diff:    npmDiffV,
@@ -334,79 +334,79 @@ func TestPackageLockSetVersion(t *testing.T) {
 			diff:    npmDiffV110,
 		},
 		"dependency regular": {
-			content: lockDepsContent,
+			content: pkgLockDepsContent,
 			steps:   []cargoStep{{npmV210, dep}},
-			want:    strings.ReplaceAll(lockDepsPretty, "2.0.0", npmV210),
-			diff:    lockDepDiff,
+			want:    strings.ReplaceAll(pkgLockDepsPretty, "2.0.0", npmV210),
+			diff:    pkgLockDepDiff,
 		},
 		"dependency dev": {
-			content: lockDepsContent,
+			content: pkgLockDepsContent,
 			steps:   []cargoStep{{"3.1.0", strp(npmDevDep)}},
-			want:    strings.ReplaceAll(lockDepsPretty, "3.0.0", "3.1.0"),
+			want:    strings.ReplaceAll(pkgLockDepsPretty, "3.0.0", "3.1.0"),
 			diff:    "@dev/dependency-name = 3.1.0",
 		},
 		"dependency without a match still writes": {
-			content: lockSetContent,
+			content: pkgLockSetContent,
 			steps:   []cargoStep{{npmV210, dep}},
 			want: "{\n  \"name\": \"tester\",\n  \"version\": \"0.1.0-rc.0\",\n  \"packages\": {\n    \"\": {\n" +
 				"      \"version\": \"0.1.0-rc.0\"\n    }\n  }\n}",
-			diff: lockDepDiff,
+			diff: pkgLockDepDiff,
 		},
 		"dependency without packages still writes": {
 			content: `{"version":"1.0.0","lockfileVersion":3}`,
 			steps:   []cargoStep{{npmV210, dep}},
 			want:    "{\n  \"version\": \"1.0.0\",\n  \"lockfileVersion\": 3\n}",
-			diff:    lockDepDiff,
+			diff:    pkgLockDepDiff,
 		},
 		"dependency with packages that is not an object": {
 			content: `{"packages":[]}`,
 			steps:   []cargoStep{{npmV210, dep}},
 			want:    "{\n  \"packages\": []\n}",
-			diff:    lockDepDiff,
+			diff:    pkgLockDepDiff,
 		},
 		"matching by the name field only": {
 			content: `{"version":"1.0.0","packages":{"node_modules/dependency-name":{"version":"2.0.0"}}}`,
 			steps:   []cargoStep{{npmV210, dep}},
 			want:    "{\n  \"version\": \"1.0.0\",\n  \"packages\": {\n    \"node_modules/dependency-name\": {\n      \"version\": \"2.0.0\"\n    }\n  }\n}",
-			diff:    lockDepDiff,
+			diff:    pkgLockDepDiff,
 		},
 		"the legacy dependencies section is untouched": {
 			content: `{"version":"1.0.0","dependencies":{"dependency-name":{"version":"2.0.0"}}}`,
 			steps:   []cargoStep{{npmV210, dep}},
 			want:    "{\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"dependency-name\": {\n      \"version\": \"2.0.0\"\n    }\n  }\n}",
-			diff:    lockDepDiff,
+			diff:    pkgLockDepDiff,
 		},
 		"name field matches and the caret is lost": {
 			content: `{"packages":{"x":{"name":"dependency-name","version":"^2.0.0","dependencies":{"dependency-name":"^2.0.0"}}}}`,
 			steps:   []cargoStep{{npmV210, dep}},
 			want: "{\n  \"packages\": {\n    \"x\": {\n      \"name\": \"dependency-name\",\n      \"version\": \"2.1.0\",\n" +
 				"      \"dependencies\": {\n        \"dependency-name\": \"2.1.0\"\n      }\n    }\n  }\n}",
-			diff: lockDepDiff,
+			diff: pkgLockDepDiff,
 		},
 		"a matching entry without version gains one at the end": {
 			content: `{"packages":{"x":{"name":"dependency-name","license":"MIT"}}}`,
 			steps:   []cargoStep{{npmV210, dep}},
 			want:    "{\n  \"packages\": {\n    \"x\": {\n      \"name\": \"dependency-name\",\n      \"license\": \"MIT\",\n      \"version\": \"2.1.0\"\n    }\n  }\n}",
-			diff:    lockDepDiff,
+			diff:    pkgLockDepDiff,
 		},
 		"a dependency value of any type is replaced": {
 			content: `{"packages":{"x":{"dependencies":{"dependency-name":{"v":1}},"devDependencies":{"dependency-name":null}}}}`,
 			steps:   []cargoStep{{npmV210, dep}},
 			want: "{\n  \"packages\": {\n    \"x\": {\n      \"dependencies\": {\n        \"dependency-name\": \"2.1.0\"\n      },\n" +
 				"      \"devDependencies\": {\n        \"dependency-name\": \"2.1.0\"\n      }\n    }\n  }\n}",
-			diff: lockDepDiff,
+			diff: pkgLockDepDiff,
 		},
 		"non-object entries and a non-string name are skipped": {
 			content: `{"packages":{"a":1,"b":null,"c":{"name":5,"version":"1.0.0"},"d":{"dependencies":[1]}}}`,
 			steps:   []cargoStep{{npmV210, dep}},
 			want: "{\n  \"packages\": {\n    \"a\": 1,\n    \"b\": null,\n    \"c\": {\n      \"name\": 5,\n      \"version\": \"1.0.0\"\n    },\n" +
 				"    \"d\": {\n      \"dependencies\": [\n        1\n      ]\n    }\n  }\n}",
-			diff: lockDepDiff,
+			diff: pkgLockDepDiff,
 		},
 		"version then dependency": {
-			content: lockNoMatch,
+			content: pkgLockNoMatch,
 			steps:   []cargoStep{{npmV150, nil}, {npmV150, dep}},
-			want:    strings.ReplaceAll(lockNoMatch, "1.0.0", npmV150),
+			want:    strings.ReplaceAll(pkgLockNoMatch, "1.0.0", npmV150),
 			diff:    "version = 1.5.0, dependency-name = 1.5.0",
 		},
 		"two dependencies": {
@@ -426,14 +426,14 @@ func TestPackageLockSetVersion(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := applySteps(t, mustLock(t, tc.content), tc.steps).Write()
+			got := applySteps(t, mustPkgLock(t, tc.content), tc.steps).Write()
 			if tc.want == "" {
 				if got != nil {
 					t.Fatalf("expected no write, got %v", got)
 				}
 				return
 			}
-			want := action.WriteToFile(lockPath, tc.want, tc.diff)
+			want := action.WriteToFile(pkgLockPath, tc.want, tc.diff)
 			if len(got) != 1 || !got[0].Equal(want) {
 				t.Errorf("got %#v\nwant %#v", got, want)
 			}
@@ -443,7 +443,7 @@ func TestPackageLockSetVersion(t *testing.T) {
 
 func TestPackageLockNoEditNoWrite(t *testing.T) {
 	t.Parallel()
-	if got := mustLock(t, lockSetContent).Write(); got != nil {
+	if got := mustPkgLock(t, pkgLockSetContent).Write(); got != nil {
 		t.Errorf("got %v", got)
 	}
 }
@@ -451,12 +451,12 @@ func TestPackageLockNoEditNoWrite(t *testing.T) {
 func TestPackageLockIdempotent(t *testing.T) {
 	t.Parallel()
 	v := mustVersion(t, npmV123rc4)
-	first, err := mustLock(t, lockSetContent).SetVersion(v, nil, versionedfile.Standard)
+	first, err := mustPkgLock(t, pkgLockSetContent).SetVersion(v, nil, versionedfile.Standard)
 	if err != nil {
 		t.Fatal(err)
 	}
 	content := first.Write()[0].Content
-	again := mustLock(t, content)
+	again := mustPkgLock(t, content)
 	second, err := again.SetVersion(v, nil, versionedfile.Standard)
 	if err != nil {
 		t.Fatal(err)
@@ -468,12 +468,12 @@ func TestPackageLockIdempotent(t *testing.T) {
 
 func TestPackageLockImmutable(t *testing.T) {
 	t.Parallel()
-	orig := mustLock(t, lockSetContent)
+	orig := mustPkgLock(t, pkgLockSetContent)
 	edited, err := orig.SetVersion(mustVersion(t, npmV200), nil, versionedfile.Standard)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := edited.SetVersion(mustVersion(t, npmV300), strp(lockDepName), versionedfile.Standard); err != nil {
+	if _, err := edited.SetVersion(mustVersion(t, npmV300), strp(pkgLockDepName), versionedfile.Standard); err != nil {
 		t.Fatal(err)
 	}
 	if orig.Write() != nil {
@@ -487,7 +487,7 @@ func TestPackageLockImmutable(t *testing.T) {
 
 // TestPackageLockWarnings replaces the default logger, so it must not run in parallel.
 func TestPackageLockWarnings(t *testing.T) {
-	warning := "msg=\"" + lockWarning + "\"\n"
+	warning := "msg=\"" + pkgLockWarning + "\"\n"
 	tests := map[string]struct {
 		content string
 		want    string
@@ -506,8 +506,8 @@ func TestPackageLockWarnings(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			buf := captureWarnings(t)
-			f := mustLock(t, tc.content)
+			buf := capturePkgLockLog(t)
+			f := mustPkgLock(t, tc.content)
 			if buf.Len() != 0 {
 				t.Fatalf("parsing warned: %q", buf.String())
 			}
@@ -522,25 +522,25 @@ func TestPackageLockWarnings(t *testing.T) {
 }
 
 func TestPackageLockWarnsOnEveryCall(t *testing.T) {
-	buf := captureWarnings(t)
-	f := mustLock(t, jsonCompactOne)
+	buf := capturePkgLockLog(t)
+	f := mustPkgLock(t, jsonCompactOne)
 	for _, dep := range []*string{nil, strp("a"), strp("b")} {
 		var err error
 		if f, err = f.SetVersion(mustVersion(t, v110), dep, versionedfile.Standard); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if got, want := strings.Count(buf.String(), lockWarning), 3; got != want {
+	if got, want := strings.Count(buf.String(), pkgLockWarning), 3; got != want {
 		t.Errorf("warned %d times, want %d: %q", got, want, buf.String())
 	}
-	if _, err := f.Version(); err != nil || strings.Count(buf.String(), lockWarning) != 3 {
+	if _, err := f.Version(); err != nil || strings.Count(buf.String(), pkgLockWarning) != 3 {
 		t.Errorf("Version warned or failed: %v", err)
 	}
 }
 
 func FuzzPackageLockSetVersion(f *testing.F) {
 	for _, seed := range []string{
-		lockSetContent, lockDepsContent, lockNoMatch, `{}`, `[]`, `{"packages":{"":{"name":"a","dependencies":{"a":1}}}}`,
+		pkgLockSetContent, pkgLockDepsContent, pkgLockNoMatch, `{}`, `[]`, `{"packages":{"":{"name":"a","dependencies":{"a":1}}}}`,
 		`{"version":"1.0.0","lockfileVersion":3.0}`, "\ufeff{}", `{"version":"1.0.0","version":"2.0.0"}`,
 	} {
 		f.Add(seed, true)
@@ -551,7 +551,7 @@ func FuzzPackageLockSetVersion(f *testing.F) {
 		old := slog.Default()
 		slog.SetDefault(quiet)
 		defer slog.SetDefault(old)
-		file, err := newLock(content)
+		file, err := newPkgLock(content)
 		if err != nil {
 			return
 		}
@@ -569,7 +569,7 @@ func FuzzPackageLockSetVersion(f *testing.F) {
 		}
 		// Not idempotence: like serde_json without float_roundtrip, a number with a large exponent can print as
 		// another float than it was read as, and printing it again then changes it.
-		if _, err := newLock(written[0].Content); err != nil {
+		if _, err := newPkgLock(written[0].Content); err != nil {
 			t.Fatalf("output does not parse: %v\n%s", err, written[0].Content)
 		}
 	})

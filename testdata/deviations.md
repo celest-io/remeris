@@ -108,7 +108,7 @@ the `lockfileVersion` warning appears on every edit and also for a missing or fl
 | --- | --- | --- |
 | `prepare_release/tauri_conf_json` | The real run checks the Tauri files and `package.json` against `printf %s "$(cat out/X)"` instead of `cmp` against `out/X`. | Q10: the output has no final newline and a txtar file always ends with one. |
 | An invalid JSON document | The message after `Error deserializing {path}: ` is the text of the Go JSON error, not serde_json's. | Different JSON library. |
-| `tauri.conf.json` with a duplicated key | The last value wins, in the position of the first. | The JSON tree behaves like serde_json's map. |
+| `tauri.conf.json` with a duplicated top level `version` key | The last value wins, in the position of the first. Knope rejects the file at load time (`duplicate field \`version\``). Other duplicated keys keep the last value in both. | Knope reads the version through a derived struct, which refuses a repeated field; the JSON tree keeps the last value like serde_json's map. |
 
 The rest is Knope's behaviour on purpose: Tauri v2's `"version": "../package.json"` is rejected as not a version, the help
 text names `tauri.conf.json` for the platform variants too, the diff is the bare version, and `.json5` and `Tauri.toml`
