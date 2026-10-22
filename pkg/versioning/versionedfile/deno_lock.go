@@ -132,8 +132,8 @@ func (f denoLockFile) SetVersion(v semver.Version, dependency *string, _ GoVersi
 	return f, nil
 }
 
-// updateRegistry renames the "name@old" keys of the jsr or npm section. A renamed entry moves to the end, as a
-// removed and inserted member of a serde_json map does.
+// updateRegistry renames the "name@old" keys of the jsr or npm section. A renamed entry is removed (the
+// last member fills the hole) and inserted at the end, as in a serde_json map with preserve_order.
 func (rw denoRewrite) updateRegistry(section *denolock.Value, newVersion denosemver.Version) {
 	if section == nil || section.Kind != denolock.KindObject {
 		return
@@ -283,13 +283,18 @@ func memberKeys(v *denolock.Value) []string {
 	return keys
 }
 
+// removeMember removes a member like serde_json (swap remove: the order of the others changes).
 func removeMember(v *denolock.Value, key string) (denolock.Value, bool) {
 	i := slices.IndexFunc(v.Obj, func(m denolock.Member) bool { return m.Key == key })
 	if i < 0 {
 		return denolock.Value{}, false
 	}
 	value := v.Obj[i].Value
-	v.Obj = slices.Delete(v.Obj, i, i+1)
+	// serde_json's Map::remove is IndexMap::swap_remove with preserve_order: the last member takes the place.
+	last := len(v.Obj) - 1
+	v.Obj[i] = v.Obj[last]
+	v.Obj[last] = denolock.Member{}
+	v.Obj = v.Obj[:last]
 	return value, true
 }
 
