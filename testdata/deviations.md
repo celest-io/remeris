@@ -90,11 +90,29 @@ Each format's pull request edits only its own section. Rows follow the table abo
 
 ### package-lock.json
 
-None yet.
+| Case | Deviation | Why |
+| --- | --- | --- |
+| `prepare_release/npm_{package,dependencies}` | The real run checks the lock file and `package.json` against `printf %s "$(cat out/X)"` instead of `cmp` against `out/X`. | Q10: the output has no final newline and a txtar file always ends with one. |
+| An invalid JSON document | The message after `Error deserializing {path}: ` is the text of the Go JSON error, not serde_json's. | Different JSON library. |
+| `package-lock.json` with a duplicated key | The last value wins, in the position of the first. | The JSON tree behaves like serde_json's map. |
+
+The rest is Knope's behaviour on purpose, quirks included: a dependency edit always rewrites the file and adds its diff,
+even when nothing matches or `packages` is missing; only entries of `packages` with a `name` field are matched (npm v7
+entries such as `node_modules/x` have none, and the legacy `dependencies` section is not touched); a matching
+`dependencies` or `devDependencies` member is replaced by the bare version whatever it held, so a leading `^` is lost;
+the `lockfileVersion` warning appears on every edit and also for a missing or float (`3.0`) value.
 
 ### tauri.conf.json
 
-None yet.
+| Case | Deviation | Why |
+| --- | --- | --- |
+| `prepare_release/tauri_conf_json` | The real run checks the Tauri files and `package.json` against `printf %s "$(cat out/X)"` instead of `cmp` against `out/X`. | Q10: the output has no final newline and a txtar file always ends with one. |
+| An invalid JSON document | The message after `Error deserializing {path}: ` is the text of the Go JSON error, not serde_json's. | Different JSON library. |
+| `tauri.conf.json` with a duplicated key | The last value wins, in the position of the first. | The JSON tree behaves like serde_json's map. |
+
+The rest is Knope's behaviour on purpose: Tauri v2's `"version": "../package.json"` is rejected as not a version, the help
+text names `tauri.conf.json` for the platform variants too, the diff is the bare version, and `.json5` and `Tauri.toml`
+are not supported.
 
 ### pubspec.yaml
 

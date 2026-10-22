@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/tauri_conf_json (MIT, see testdata/README.md).
-skip 'needs tauri.conf.json support (milestone M9)'
 
 exec git init --initial-branch=main
 exec git config user.email fake@remeris.dev

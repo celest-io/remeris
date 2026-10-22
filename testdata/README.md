@@ -134,7 +134,7 @@ Every case that Knope's `mod.rs` files declare is ported. These scripts are skip
 | `go_modules/major_version_directories` | Ported but skipped: it checks `--verbose` output (as `verbose`). `go_modules_major_version_directories_quiet.txtar` (ours) checks the same files and module tags without `--verbose`. |
 | `allow_empty` | Ported: `script/prepare_release/allow_empty.txtar`. Knope's `[..]` wildcard for the commit hash is a regular expression. |
 | `cargo/workspace/{full,no_lock}`, `deno/*`, `npm/workspaces` | Skipped: need workspace discovery (M10), and for `full`, `deno` and `npm` also `Cargo.lock`, `deno.json` or `package-lock.json` (M9). |
-| `npm/{dependencies,package}`, `pubspec_yaml`, `tauri_conf_json` | Skipped: need M9 formats. |
+| `pubspec_yaml` | Skipped: needs the M9 `pubspec.yaml` format. |
 | `verbose` | Skipped: remeris does not print five of Knope's `--verbose` debug lines yet (see `deviations.md`). |
 | `custom_change_entries/with_fallback`, `go_modules/major_versions/failed_v2` | Not ported: Knope's `mod.rs` does not declare them. |
 
