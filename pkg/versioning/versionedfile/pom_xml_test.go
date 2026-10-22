@@ -151,6 +151,41 @@ var pomSplices = map[string]pomSplice{
 		old:  pomOld,
 		post: "</version>\n" + pomClose,
 	},
+	"cdata in project holding a version": {
+		pre:  pomOpen + "  <![CDATA[<version>9</version>]]>\n  <version>",
+		old:  pomOld,
+		post: "</version>\n" + pomClose,
+	},
+	"processing instruction holding a version": {
+		pre:  pomOpen + "  <?pi <version>9</version>?>\n  <version>",
+		old:  pomOld,
+		post: "</version>\n" + pomClose,
+	},
+	"doctype with an internal subset": {
+		pre: "<!DOCTYPE project [\n  <!ENTITY e \"<version>9</version> > x\">\n  <!ENTITY f '>'>\n]>\n" + pomOpen +
+			"  <version>",
+		old:  pomOld,
+		post: "</version>\n" + pomClose,
+	},
+	"escaped version tag in an attribute": {
+		pre:  pomOpen + `  <x a="&lt;version&gt;9&lt;/version&gt;"/>` + "\n  <version>",
+		old:  pomOld,
+		post: "</version>\n" + pomClose,
+	},
+	"crlf inside the version text": {
+		pre: pomOpen + "  <version>", old: "\r\n    1.2.3\r\n  ", post: "</version>\n" + pomClose,
+	},
+	"multi-byte element name before the version": {
+		pre:  pomOpen + "  <versi\u00f3n>9.9.9</versi\u00f3n>\n  <version>",
+		old:  pomOld,
+		post: "</version>\n" + pomClose,
+	},
+	"bom and latin-1 together": {
+		pre: "\xEF\xBB\xBF<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n" + pomOpen +
+			"  <name>Caf\xe9</name>\n  <version>",
+		old:  pomOld,
+		post: "</version>\n" + pomClose,
+	},
 	"version element on the project line": {
 		pre: "<project><version>", old: pomOld, post: "</version></project>",
 	},
@@ -190,7 +225,16 @@ func pomContent(t testing.TB, f versionedfile.File) string {
 // pomTokens lists the tokens of s, leaving out everything inside project/version.
 func pomTokens(t testing.TB, s string) []string {
 	t.Helper()
-	if strings.Contains(s, "ISO-8859-1") { // the decoder needs UTF-8: only the shape of the tokens matters here
+	out, err := pomTokenList(s)
+	if err != nil {
+		t.Fatalf("tokens of %q: %v", s, err)
+	}
+	return out
+}
+
+func pomTokenList(s string) ([]string, error) {
+	s = strings.TrimPrefix(s, "\xEF\xBB\xBF")
+	if !utf8.ValidString(s) { // only a single-byte encoding gets here: keep the shape of the tokens
 		s = strings.Map(func(r rune) rune {
 			if r == utf8.RuneError {
 				return 'x'
@@ -205,10 +249,10 @@ func pomTokens(t testing.TB, s string) []string {
 	for {
 		tok, err := dec.Token()
 		if errors.Is(err, io.EOF) {
-			return out
+			return out, nil
 		}
 		if err != nil {
-			t.Fatalf("tokens of %q: %v", s, err)
+			return nil, err
 		}
 		switch tk := tok.(type) {
 		case xml.StartElement:
@@ -388,6 +432,25 @@ func TestMavenPomVersionErrors(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestMavenPomHighBytesAreNotAVersion(t *testing.T) {
+	t.Parallel()
+	tests := map[string]string{
+		"latin-1 pre-release": "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><project><version>1.0.0-\xe9</version></project>",
+		"us-ascii build":      "<?xml version=\"1.0\" encoding=\"us-ascii\"?><project><version>1.0.0+\xff</version></project>",
+		"latin-1 only":        "<?xml version=\"1.0\" encoding=\"latin1\"?><project><version>\xe9</version></project>",
+		"bom and latin-1":     "\xEF\xBB\xBF<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><project><version>1.0.0-\xe9</version></project>",
+	}
+	for name, content := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			v, err := mustPom(t, content).Version()
+			if err == nil {
+				t.Fatalf("Version() = %v, want an error", v)
+			}
+		})
+	}
 }
 
 func TestMavenPomNewErrors(t *testing.T) {
@@ -674,8 +737,16 @@ func FuzzMavenPom(f *testing.F) {
 		if v, err := again.Version(); err != nil || v.String() != pomNew {
 			t.Fatalf("re-parse reads %v, %v\n in %q\nout %q", v, err, in, got)
 		}
-		if _, err := file.Version(); err == nil && !isSplice(in, got, pomNew) {
-			t.Fatalf("the output is not the input with one range replaced:\n in %q\nout %q", in, got)
+		if _, err := file.Version(); err == nil {
+			if !isSplice(in, got, pomNew) {
+				t.Fatalf("the output is not the input with one range replaced:\n in %q\nout %q", in, got)
+			}
+			checkReplacedRange(t, in, got)
+			a, errA := pomTokenList(in)
+			b, errB := pomTokenList(got)
+			if errA == nil && errB == nil && strings.Join(a, "\x00") != strings.Join(b, "\x00") {
+				t.Fatalf("token streams differ:\n in %q\nout %q", a, b)
+			}
 		}
 		twice, err := out.SetVersion(next, nil, versionedfile.Standard)
 		if err != nil || pomContent(t, twice) != got {
@@ -696,4 +767,48 @@ func isSplice(in, got, v string) bool {
 		}
 	}
 	return false
+}
+
+// checkReplacedRange finds the first depth-1 version start tag of the root with a RawToken walk, which shares no
+// code with the scanner, and checks that the output keeps every byte up to the end of that tag and then holds v.
+func checkReplacedRange(t *testing.T, in, got string) {
+	t.Helper()
+	base := 0
+	if strings.HasPrefix(in, "\xEF\xBB\xBF") {
+		base = 3
+	}
+	text := in[base:]
+	if !utf8.ValidString(text) {
+		text = strings.Map(func(r rune) rune {
+			if r == utf8.RuneError {
+				return 'x'
+			}
+			return r
+		}, text)
+	}
+	dec := xml.NewDecoder(strings.NewReader(text))
+	dec.CharsetReader = func(_ string, r io.Reader) (io.Reader, error) { return r, nil }
+	depth := 0
+	for {
+		tok, err := dec.RawToken()
+		if err != nil {
+			t.Fatalf("RawToken on an input that parsed: %v\n%q", err, in)
+		}
+		switch tk := tok.(type) {
+		case xml.StartElement:
+			if depth == 1 && tk.Name.Local == "version" {
+				off := base + int(dec.InputOffset())
+				if in[off-2:off] == "/>" {
+					t.Fatalf("a self-closing version was readable: %q", in)
+				}
+				if got[:off] != in[:off] || !strings.HasPrefix(got[off:], pomNew) {
+					t.Fatalf("the replaced range does not start at %d:\n in %q\nout %q", off, in, got)
+				}
+				return
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		}
+	}
 }

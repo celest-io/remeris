@@ -103,7 +103,7 @@ func mavenMissing(path, property string) error {
 
 // scanPom reads content with encoding/xml and records the offsets that SetVersion needs.
 func scanPom(path, content string) (pomLayout, error) {
-	data, base, err := pomInput(path, content)
+	data, base, singleByte, err := pomInput(path, content)
 	if err != nil {
 		return pomLayout{}, err
 	}
@@ -115,6 +115,10 @@ func scanPom(path, content string) (pomLayout, error) {
 		return pomLayout{}, mavenMissing(path, mavenRoot)
 	}
 	layout.shift(base)
+	if singleByte && layout.hasText && hasHighByte(content[layout.inner.start:layout.inner.end]) {
+		// The text was read from placeholders. Use the original bytes, which are not a version.
+		layout.versionText = []byte(content[layout.inner.start:layout.inner.end])
+	}
 	return layout, nil
 }
 
@@ -133,10 +137,10 @@ func (l *pomLayout) shift(n int) {
 // left out. Byte offsets must refer to the original bytes, so a file that declares ISO-8859-1 or US-ASCII is
 // tokenized with each byte of 0x80 and above replaced by a placeholder of one byte: encoding/xml then sees valid
 // UTF-8 and every offset stays the same. Any other declared encoding is an error.
-func pomInput(path, content string) (data []byte, base int, err error) {
+func pomInput(path, content string) (data []byte, base int, singleByte bool, err error) {
 	data = []byte(content)
 	if bytes.HasPrefix(data, utf16BEBOM) || bytes.HasPrefix(data, utf16LEBOM) {
-		return nil, 0, unsupportedEncoding(path, "UTF-16")
+		return nil, 0, false, unsupportedEncoding(path, "UTF-16")
 	}
 	if bytes.HasPrefix(data, utf8BOM) {
 		data, base = data[bomLen:], bomLen
@@ -144,7 +148,7 @@ func pomInput(path, content string) (data []byte, base int, err error) {
 	label := declaredEncoding(data)
 	switch lower := strings.ToLower(label); {
 	case label == "" || lower == utf8Label || lower == "utf8":
-		return data, base, nil
+		return data, base, false, nil
 	case singleByteLabels[lower]:
 		clean := make([]byte, len(data))
 		for i, b := range data {
@@ -153,9 +157,9 @@ func pomInput(path, content string) (data []byte, base int, err error) {
 			}
 			clean[i] = b
 		}
-		return clean, base, nil
+		return clean, base, true, nil
 	default:
-		return nil, 0, unsupportedEncoding(path, label)
+		return nil, 0, false, unsupportedEncoding(path, label)
 	}
 }
 
@@ -193,6 +197,15 @@ func declaredEncoding(data []byte) string {
 		return ""
 	}
 	return string(value)
+}
+
+func hasHighByte(s string) bool {
+	for i := range len(s) {
+		if s[i] >= asciiLimit {
+			return true
+		}
+	}
+	return false
 }
 
 func isXMLSpace(b byte) bool { return b == ' ' || b == '\t' || b == '\r' || b == '\n' }
