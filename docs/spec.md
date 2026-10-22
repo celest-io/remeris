@@ -777,7 +777,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
 - Diffs are joined with `", "`.
 
 #### `package-lock.json`
-- Read top-level `version` (`{path} did not have a 'version' field`).
+- Read top-level `version` (``{path} did not have a `version` field``, help ``Either add a `version` field or specify a `dependency` to update``).
 - Warn if `lockfileVersion` is not 2 or 3.
 - Write (no dependency): set top-level `version` and `packages[""].version`. Diff `version = {v}`.
 - Write (dependency `d`): for every value in `packages`: if `name == d`, set `version`. If `dependencies[d]` or
