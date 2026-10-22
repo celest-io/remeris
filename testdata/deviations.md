@@ -116,7 +116,21 @@ are not supported.
 
 ### pubspec.yaml
 
-None yet.
+| Case | Deviation | Why |
+| --- | --- | --- |
+| Any edit | Only the bytes of the top-level `version` scalar are replaced, found from the position yaml.v3 reports for the key's value. A trailing `# comment`, the quote style (`'1.0.0'`, `"1.0.0"`) and every other byte stay. Knope replaces the whole line and drops the comment and the quotes. | Knope's `raw.replace(line, ...)` is a text edit that loses formatting. |
+| A nested `  version: 1.0.0` (or the same text under another key) | Left alone, also when it comes before the top-level key. Knope's `replace` rewrites every occurrence of the line text in the file. | Knope's edit hits unrelated keys. |
+| A BOM at the start of the file, or CRLF, tabs and multi-byte characters before the version | Handled: the BOM is skipped and line endings are kept. Knope's `starts_with("version: ")` finds no line behind a BOM and then re-serialises the whole file. | Knope's search is a byte-prefix test on the line. |
+| `version: >-` / `\|` block scalars, anchors (`&v`), tags (`!!str`), a double-quoted value with escapes, a quoted value over several lines | `remeris` fails with `Could not update {path}: ...` (`remeris::pubspec_yaml::serialize`) and does not write. Knope rewrites the line (breaking the block scalar). | The scalar's source is not the simple text the splice replaces. |
+| `version: *alias` | The load fails with ``YAML `version` field was not a string``. | An alias node is not a string scalar; the YAML is never expanded. |
+| A flow mapping at the top level (`{version: 1.0.0}`) | Spliced like a block mapping. Knope finds no `version: ` line and re-serialises it in block style. | Same splice. |
+| Flutter versions such as `1.0.0+1` | The build metadata is part of the version (D8), so `1.0.0+1` loads. A bump writes the new version as semver prints it: the old `+1` is not carried over, and build metadata on the new version is kept. Nothing is special-cased. | No Flutter rule in the spec. |
+| Two top-level `version` keys | The load fails with ``YAML contained more than one top-level `version` field``. | Knope's choice between them is the YAML library's. |
+| An invalid YAML document | The message after `Error deserializing {path}: ` is the text of the go-yaml error, not saphyr's. | Different YAML library. |
+| A file without a top-level `version` | Never reached: the load fails first (as in Knope). The insert branch appends `version: {v}` on a new line at the end of a block mapping, with the file's line ending, instead of re-serialising the document. | The spec's re-serialise branch is unreachable after F7.2 validation. |
+
+The rest is Knope's behaviour: exactly one YAML document that is a mapping, a top-level `version` that is a string (`version: 1.0`
+is a float and fails), the diff is the bare version, and a dependency is ignored.
 
 ### pom.xml
 
