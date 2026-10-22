@@ -123,7 +123,7 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | `multiple_packages/{major,minor,patch,release}`, `multiple_packages/pre/{from_full,from_pre}` | Ported: `script/bump_version/multiple_packages_*.txtar`. |
 | `text_file/minor` | Ported: `script/bump_version/text_file_minor.txtar`. |
 | `single_package/override`, `multiple_packages/override` | Ported: `script/bump_version/{single,multiple}_package*_override.txtar`. |
-| `maven` | Ported but skipped: needs `pom.xml` (M9). |
+| `maven` | Ported: `script/bump_version/maven.txtar`. The output is the same as Knope's because the input is already in Knope's emitted form (see `deviations.md`, pom.xml). |
 
 ### Status of `crates/knope/tests/prepare_release/*` (skipped scripts)
 

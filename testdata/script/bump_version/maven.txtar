@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/bump_version/maven (MIT, see testdata/README.md).
-skip 'needs pom.xml versioned files (M9)'
 
 exec git init
 exec git config user.email fake@remeris.dev
