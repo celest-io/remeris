@@ -813,8 +813,11 @@ For each format: **read** (where the version comes from), **write** (what is edi
      `PackageNv` order (name, then version precedence), `npm`, `members` and `links` by key text. Two more printer rules (`printer.rs` 183-271): a `jsr` package's dependency
      prints as bare `scheme:name` when that name has a single specifier in `specifiers`, otherwise as the normalised
      requirement; an `npm` dependency prints as `name@npm:pkg@ver` for an alias and as the bare name when the package
-     has a single version. `JsrDepPackageReq::cmp` is not the print order. The Go port of the
-     requirement and version types is `pkg/versioning/internal/denosemver`. Check against fixtures
+     has a single version (the `npm` dependency arrays are in the order of the dependency names, not of the printed
+     text; a name used in both registries counts as having several specifiers); an `npm` package's `os` and `cpu` arrays
+     print on one line. `JsrDepPackageReq::cmp` is not the print order. The Go port of the
+     requirement and version types is `pkg/versioning/internal/denosemver`, and the lockfile model, reader and printer
+     are `pkg/versioning/internal/denolock`. Check against fixtures
      `tests/prepare_release/deno`.
 
 #### `pubspec.yaml`
