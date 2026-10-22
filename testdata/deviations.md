@@ -120,7 +120,15 @@ None yet.
 
 ### pom.xml
 
-None yet.
+| Case | Change | Reason |
+| --- | --- | --- |
+| Any `pom.xml` edit (Quirk Q7) | Only the content of the first direct-child `<version>` of `<project>` is replaced, as plain text. The XML declaration, comments, indentation, line endings, byte order mark, attribute quoting, entities and everything else stay byte for byte. Knope parses the file and writes the tree again: it drops the declaration and the comments, re-indents with two spaces and writes LF. Knope's `bump_version/maven` fixture is unchanged because its input already has Knope's layout. | Spec F6.2, Quirk Q7: better behaviour, a smaller diff in the user's repository. |
+| `<version>` that holds entities, a CDATA section or comments | The whole inner range is replaced by the new version. | The element text is replaced, not its parts. |
+| Self-closing `<version/>` | `Version()` fails (no text), so a bump stops with the missing-property error before any edit. `SetVersion` itself turns it into `<version>v</version>`. | The element has no content to replace. |
+| `<version>` missing | `Version()` fails, as in Knope. `SetVersion` inserts `<version>` after the `</artifactId>` that is a direct child of `<project>`, with that line's indentation and line ending, or else before `</project>`. Knope inserts into the tree and re-emits it. | Same placement rule as Knope, byte-exact edit. |
+| Encodings | UTF-8 (with or without a byte order mark), ISO-8859-1 and US-ASCII declarations are read. Any other declared encoding, and UTF-16, is the error `Unsupported XML encoding {name} in {path}` (`remeris::maven_pom::encoding`). In an ISO-8859-1 or US-ASCII file, bytes of 0x80 and above are read as placeholders so that byte offsets stay exact; only the text of `<version>` is affected, and it is not a valid version anyway. | A surgical edit needs byte offsets into the original bytes; converting other encodings would change them and the written file. |
+| Invalid XML | The message keeps Knope's form `Invalid XML in {path}: {err}`, but `{err}` is the text of Go's `encoding/xml`, not xml-rs. Files that xml-rs rejects and Go accepts (or the reverse) differ in edge cases; Go also rejects an XML declaration whose version is not `1.0`. Text or a second root element after the root is rejected, as in Knope. | Different XML library (spec 0.3). |
+| Whitespace in `<version>` | The text is not trimmed, as in Knope: ` 1.2.3` is not a version. Text that is only white space counts as missing, as in Knope (xml-rs drops white-space-only runs). | Parity. |
 
 ### deno.json and deno.jsonc
 

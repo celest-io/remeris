@@ -1,0 +1,61 @@
+# Ours (no Knope fixture): a pom.xml keeps its declaration, comments and indentation (Quirk Q7).
+
+exec git init
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add knope.toml pom.xml
+exec git commit -m 'Initial commit'
+exec git tag v1.2.3
+
+exec remeris bump
+! stdout .
+cmp pom.xml out/pom.xml
+
+-- knope.toml --
+[packages.maven]
+versioned_files = ["pom.xml"]
+
+[[workflows]]
+name = "bump"
+
+[[workflows.steps]]
+type = "BumpVersion"
+rule = "Minor"
+-- pom.xml --
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- keep me -->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.example</groupId>
+        <artifactId>parent</artifactId>
+        <version>9.9.9</version>
+    </parent>
+    <artifactId>my-app</artifactId>
+    <version>1.2.3</version> <!-- the release version -->
+    <dependencies>
+        <dependency>
+            <artifactId>lib</artifactId>
+            <version>1.2.3</version>
+        </dependency>
+    </dependencies>
+</project>
+-- out/pom.xml --
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- keep me -->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.example</groupId>
+        <artifactId>parent</artifactId>
+        <version>9.9.9</version>
+    </parent>
+    <artifactId>my-app</artifactId>
+    <version>1.3.0</version> <!-- the release version -->
+    <dependencies>
+        <dependency>
+            <artifactId>lib</artifactId>
+            <version>1.2.3</version>
+        </dependency>
+    </dependencies>
+</project>
