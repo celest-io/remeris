@@ -155,7 +155,21 @@ is a float and fails), the diff is the bare version, and a dependency is ignored
 
 ### deno.json and deno.jsonc
 
-None yet.
+| Case | Deviation | Why |
+| --- | --- | --- |
+| Any edit (Quirk Q6) | Only the bytes of the top level `version` value are replaced. Comments, trailing commas, key order, indentation, line endings, a byte order mark and everything else stay. Knope sets the value in the parsed tree and prints it again as plain pretty JSON, which drops the comments. | Spec F6.2, Q6: what the Deno documentation promises. |
+| Final newline | The output keeps the final newline of the input (or its absence). Knope never writes one (Q10). The `out` files of the fixtures copied to `pkg/versioning/versionedfile/testdata/deno_json/` have a final newline added; `prepare_release/deno_*` stay skipped (M10 discovery and `deno.lock`). | Byte-level splice; a txtar file always ends with a newline. |
+| Duplicate top level `version` | The last member is read and patched, like jsonc-parser's last-wins. Earlier ones are left as they are. | Same value as Knope reads. |
+| Setting the version the file already has | The file is not changed, even if the value is written with escapes (`"1\u002e0.0"`). | Identity. |
+| `version` missing | `Version()` fails with `This file can't contain a version`, as in Knope. `SetVersion` adds `"version": "{v}"` as the last member, with the indentation and line ending of the previous member and a trailing comma if the object had one; a line comment ending the previous member's line stays there. Knope inserts into the tree and prints it again. | Unreachable after the F7.2 validation. |
+| Root that is not an object | `Version()` fails (no version). `SetVersion` fails with `Could not update {path}: the top level value is not a JSON object`. Knope writes the file again unchanged apart from the formatting, and records the diff. | Nothing to patch; unreachable after validation. |
+| Syntax accepted by jsonc-parser only | Single-quoted strings, unquoted keys, hexadecimal numbers and a leading `+` are rejected (`Could not parse {path}: hujson: line L, column C: ...`). Knope accepts them. | hujson implements JWCC (JSON with comments and trailing commas), which is stricter. |
+| Empty file, or only comments | `Could not parse {path}: ...`. Knope reads it as `null` (no version). | hujson requires a value. |
+| Parse error text | `Could not parse {path}: {err}` with the text of hujson's error, not jsonc-parser's. | Different library. |
+| Content after the root value | Rejected (`invalid character ... after top-level value`). | hujson. |
+| `dependency` | Ignored, with no diff and no write, as in Knope. | `deno.lock` owns dependency versions. |
+
+A line comment cannot contain U+2028 or U+2029 (hujson rejects them).
 
 ### deno.lock
 

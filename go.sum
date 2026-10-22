@@ -152,6 +152,8 @@ github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXf
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
+github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f h1:9hiVElpCmKzsBKQHkBqZ8LGzt82iLfM8egxr4sew+Ys=
+github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f/go.mod h1:8/zr1Tv0+cKpVtGCEB/7YfRXr2TszsMxMXLaT8YuBgU=
 github.com/urfave/cli/v3 v3.14.0 h1:a8414NQlHJs0c/iBsulKLzlES0n/lEAskbL2LKpU4/s=
 github.com/urfave/cli/v3 v3.14.0/go.mod h1:vXn6HxPNccJSzQr2QvwVncOKrgYGIHU0HY5h8B2nQj4=
 github.com/xanzy/ssh-agent v0.3.3 h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM=

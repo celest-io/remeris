@@ -55,7 +55,8 @@ are © Triax Technologies and Dylan Anthony, used under the MIT License:
 
 A ported script starts with a comment naming its Knope source directory. Unit tests under `pkg/` also reuse a few
 Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/testdata/` (from
-`prepare_release/{npm,multiple_packages,tauri_conf_json}`); they carry the same credit.
+`prepare_release/{npm,multiple_packages,tauri_conf_json}`) and `pkg/versioning/versionedfile/testdata/deno_json/` (from
+`prepare_release/deno`); they carry the same credit.
 
 ### Conversion rules
 
@@ -133,7 +134,7 @@ Every case that Knope's `mod.rs` files declare is ported. These scripts are skip
 | --- | --- |
 | `go_modules/major_version_directories` | Ported but skipped: it checks `--verbose` output (as `verbose`). `go_modules_major_version_directories_quiet.txtar` (ours) checks the same files and module tags without `--verbose`. |
 | `allow_empty` | Ported: `script/prepare_release/allow_empty.txtar`. Knope's `[..]` wildcard for the commit hash is a regular expression. |
-| `cargo/workspace/{full,no_lock}`, `deno/*`, `npm/workspaces` | Skipped: need workspace discovery (M10), and for `full`, `deno` and `npm` also `Cargo.lock`, `deno.json` or `package-lock.json` (M9). |
+| `cargo/workspace/{full,no_lock}`, `deno/*`, `npm/workspaces` | Skipped: need workspace discovery (M10), and for `full`, `deno` and `npm` also `Cargo.lock`, `deno.lock` or `package-lock.json` (M9). |
 | `pubspec_yaml` | Ported: `script/prepare_release/pubspec_yaml.txtar`. |
 | `verbose` | Skipped: remeris does not print five of Knope's `--verbose` debug lines yet (see `deviations.md`). |
 | `custom_change_entries/with_fallback`, `go_modules/major_versions/failed_v2` | Not ported: Knope's `mod.rs` does not declare them. |
