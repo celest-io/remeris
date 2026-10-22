@@ -1,0 +1,44 @@
+# Seeds of the fuzz targets, one per line ("\t" and "\n" stand for the characters): requirements from the table tests,
+# ranges, wildcards, tags, hyphen ranges, pre-releases and malformed input. The package fuzz target prefixes them with
+# package names and schemes too.
+*
+x
+1
+1.x
+1.2.x
+^1.0.0
+^0.1.0
+^0.0.1
+~1.2.3
+>=1 <2
+>=1.2.3 <=2
+1.0.0 - 2.0.0
+1 - 2
+1 || 2 || 3
+||
+latest
+v1.0
+beta-1
+^1.0.0-beta.1+build123
+>=2.0.0-rc.3.0.5 <2.1.0
+<=0.5.0
+>X
+<x <* || >* 2.x
+>=1.0.0 && <2.0.0
+>=1.0.0, <2.0.0
+>= ^1.2.3
+~>==1
+01.02.03
+99999999999999999999
+1.2.3-
+1.2.3+
+$#$%^
+
+\t1\n
+1.2.3 ignored-invalid || 2
+@std/path
+jsr:@std/path@^1.0.0
+npm:left-pad@^1
+a@1/b
+/a@1
+@a

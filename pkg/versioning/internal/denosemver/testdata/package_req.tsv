@@ -1,0 +1,24 @@
+# grammar <TAB> input <TAB> name <TAB> String() <TAB> Normalized(). The grammar is "strict" (ParsePackageReq) or "loose"
+# (ParsePackageReqLoose). The normalised form parses back to an equal requirement with ParsePackageReqNormalized.
+# Ported from deno_semver 0.9.1 src/package.rs (serialize_deserialize_package_req,
+# serialize_deserialize_tag_package_req_with_v), MIT licence, Copyright 2018-2025 the Deno authors, plus the cases
+# of the lockfile: scoped names, a missing requirement, "^0.1.0" and "latest".
+strict	test@^1.0	test	test@^1.0	test@1
+strict	test@v1.0	test	test@v1.0	test@v1.0
+strict	@std/path	@std/path	@std/path	@std/path@*
+strict	@std/path@*	@std/path	@std/path	@std/path@*
+strict	@std/path@^1.0.0	@std/path	@std/path@^1.0.0	@std/path@1
+strict	left-pad	left-pad	left-pad	left-pad@*
+strict	left-pad@1.x	left-pad	left-pad@1.x	left-pad@1
+strict	@scope/name@^1.0.0	@scope/name	@scope/name@^1.0.0	@scope/name@1
+strict	@scope/name@^0.1.0	@scope/name	@scope/name@^0.1.0	@scope/name@0.1
+strict	@scope/name@~1.2.3	@scope/name	@scope/name@~1.2.3	@scope/name@~1.2.3
+strict	a@~1.2.3	a	a@~1.2.3	a@~1.2.3
+strict	a@latest	a	a@latest	a@latest
+strict	/a@1	a	a@1	a@1
+strict	a@*	a	a	a@*
+strict	b@1	b	b@1	b@1
+loose	a@1.2.3 - 2.0.0	a	a@1.2.3 - 2.0.0	a@>=1.2.3 <=2.0.0
+loose	a@^1.0.0 || ^2.0.0	a	a@^1.0.0 || ^2.0.0	a@1 || 2
+loose	@scope/a@^0.2.3	@scope/a	@scope/a@^0.2.3	@scope/a@~0.2.3
+loose	a@ ^1 	a	a@^1	a@1

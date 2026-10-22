@@ -1,0 +1,291 @@
+# grammar <TAB> requirement <TAB> version <TAB> whether the requirement matches the version. The grammar is
+# "loose" (the npm grammar, VersionReq parse_from_npm) or "specifier" (the strict one). The version is parsed with
+# the npm grammar. "\t" stands for a tab.
+# Ported from deno_semver 0.9.1 (MIT licence, Copyright 2018-2025 the Deno authors): src/npm.rs (range_satisfies,
+# range_not_satisfies, range_primitive_kind_beside_caret_or_tilde_with_whitespace, zero_version_with_pre_release_matches)
+# and src/specifier.rs (version_req_exact, _minor, _caret, _tilde, _pre_release). The range-include.js fixtures come from
+# node-semver (ISC licence, Copyright Isaac Z. Schlueter and Contributors) through that crate.
+
+# range_satisfies
+loose	1.0.0 - 2.0.0	1.2.3	true
+loose	^1.2.3+build	1.2.3	true
+loose	^1.2.3+build	1.3.0	true
+loose	1.2.3-pre+asdf - 2.4.3-pre+asdf	1.2.3	true
+loose	1.2.3pre+asdf - 2.4.3-pre+asdf	1.2.3	true
+loose	1.2.3-pre+asdf - 2.4.3pre+asdf	1.2.3	true
+loose	1.2.3pre+asdf - 2.4.3pre+asdf	1.2.3	true
+loose	1.2.3-pre+asdf - 2.4.3-pre+asdf	1.2.3-pre.2	true
+loose	1.2.3-pre+asdf - 2.4.3-pre+asdf	2.4.3-alpha	true
+loose	1.2.3+asdf - 2.4.3+asdf	1.2.3	true
+loose	1.0.0	1.0.0	true
+loose	>=*	0.2.4	true
+loose		1.0.0	true
+loose	*	1.2.3	true
+loose	*	v1.2.3	true
+loose	>=1.0.0	1.0.0	true
+loose	>=1.0.0	1.0.1	true
+loose	>=1.0.0	1.1.0	true
+loose	>1.0.0	1.0.1	true
+loose	>1.0.0	1.1.0	true
+loose	<=2.0.0	2.0.0	true
+loose	<=2.0.0	1.9999.9999	true
+loose	<=2.0.0	0.2.9	true
+loose	<2.0.0	1.9999.9999	true
+loose	<2.0.0	0.2.9	true
+loose	>= 1.0.0	1.0.0	true
+loose	>=  1.0.0	1.0.1	true
+loose	>=   1.0.0	1.1.0	true
+loose	> 1.0.0	1.0.1	true
+loose	>  1.0.0	1.1.0	true
+loose	<=   2.0.0	2.0.0	true
+loose	<= 2.0.0	1.9999.9999	true
+loose	<=  2.0.0	0.2.9	true
+loose	<    2.0.0	1.9999.9999	true
+loose	<\t2.0.0	0.2.9	true
+loose	>=0.1.97	v0.1.97	true
+loose	>=0.1.97	0.1.97	true
+loose	0.1.20 || 1.2.4	1.2.4	true
+loose	>=0.2.3 || <0.0.1	0.0.0	true
+loose	>=0.2.3 || <0.0.1	0.2.3	true
+loose	>=0.2.3 || <0.0.1	0.2.4	true
+loose	||	1.3.4	true
+loose	2.x.x	2.1.3	true
+loose	1.2.x	1.2.3	true
+loose	1.2.x || 2.x	2.1.3	true
+loose	1.2.x || 2.x	1.2.3	true
+loose	x	1.2.3	true
+loose	2.*.*	2.1.3	true
+loose	1.2.*	1.2.3	true
+loose	1.2.* || 2.*	2.1.3	true
+loose	1.2.* || 2.*	1.2.3	true
+loose	2	2.1.2	true
+loose	2.3	2.3.1	true
+loose	~0.0.1	0.0.1	true
+loose	~0.0.1	0.0.2	true
+loose	~x	0.0.9	true
+loose	~2	2.0.9	true
+loose	~2.4	2.4.0	true
+loose	~2.4	2.4.5	true
+loose	~>3.2.1	3.2.2	true
+loose	~1	1.2.3	true
+loose	~>1	1.2.3	true
+loose	~> 1	1.2.3	true
+loose	~1.0	1.0.2	true
+loose	~ 1.0	1.0.2	true
+loose	~ 1.0.3	1.0.12	true
+loose	~ 1.0.3alpha	1.0.12	true
+loose	>=1	1.0.0	true
+loose	>= 1	1.0.0	true
+loose	<1.2	1.1.1	true
+loose	< 1.2	1.1.1	true
+loose	~v0.5.4-pre	0.5.5	true
+loose	~v0.5.4-pre	0.5.4	true
+loose	=0.7.x	0.7.2	true
+loose	<=0.7.x	0.7.2	true
+loose	>=0.7.x	0.7.2	true
+loose	<=0.7.x	0.6.2	true
+loose	~1.2.1 >=1.2.3	1.2.3	true
+loose	~1.2.1 =1.2.3	1.2.3	true
+loose	~1.2.1 1.2.3	1.2.3	true
+loose	~1.2.1 >=1.2.3 1.2.3	1.2.3	true
+loose	~1.2.1 1.2.3 >=1.2.3	1.2.3	true
+loose	>=1.2.1 1.2.3	1.2.3	true
+loose	1.2.3 >=1.2.1	1.2.3	true
+loose	>=1.2.3 >=1.2.1	1.2.3	true
+loose	>=1.2.1 >=1.2.3	1.2.3	true
+loose	>=1.2	1.2.8	true
+loose	^1.2.3	1.8.1	true
+loose	^0.1.2	0.1.2	true
+loose	^0.1	0.1.2	true
+loose	^0.0.1	0.0.1	true
+loose	^1.2	1.4.2	true
+loose	^1.2 ^1	1.4.2	true
+loose	^1.2.3-alpha	1.2.3-pre	true
+loose	^1.2.0-alpha	1.2.0-pre	true
+loose	^0.0.1-alpha	0.0.1-beta	true
+loose	^0.0.1-alpha	0.0.1	true
+loose	^0.1.1-alpha	0.1.1-beta	true
+loose	^x	1.2.3	true
+loose	x - 1.0.0	0.9.7	true
+loose	x - 1.x	0.9.7	true
+loose	1.0.0 - x	1.9.7	true
+loose	1.x - x	1.9.7	true
+loose	<=7.x	7.9.9	true
+loose	1.0.0-alpha.13	1.0.0-alpha.13	true
+loose	>1.0.0-beta.1 <=1.1.0	1.0.0	true
+loose	>1.0.0-beta.1 <=1.1.0	1.0.0-beta.2	true
+loose	>1.0.0-beta.1 <=1.1.0	1.1.0	true
+loose	1 - 2.0.0-beta.2	2.0.0-beta.1	true
+
+# range_not_satisfies
+loose	1.0.0 - 2.0.0	2.2.3	false
+loose	1.2.3+asdf - 2.4.3+asdf	1.2.3-pre.2	false
+loose	1.2.3+asdf - 2.4.3+asdf	2.4.3-alpha	false
+loose	^1.2.3+build	2.0.0	false
+loose	^1.2.3+build	1.2.0	false
+loose	^1.2.3	1.2.3-pre	false
+loose	^1.2	1.2.0-pre	false
+loose	>1.2	1.3.0-beta	false
+loose	<=1.2.3	1.2.3-beta	false
+loose	^1.2.3	1.2.3-beta	false
+loose	=0.7.x	0.7.0-asdf	false
+loose	>=0.7.x	0.7.0-asdf	false
+loose	<=0.7.x	0.7.0-asdf	false
+loose	1	1.0.0beta	false
+loose	<1	1.0.0beta	false
+loose	< 1	1.0.0beta	false
+loose	1.0.0	1.0.1	false
+loose	>=1.0.0	0.0.0	false
+loose	>=1.0.0	0.0.1	false
+loose	>=1.0.0	0.1.0	false
+loose	>1.0.0	0.0.1	false
+loose	>1.0.0	0.1.0	false
+loose	<=2.0.0	3.0.0	false
+loose	<=2.0.0	2.9999.9999	false
+loose	<=2.0.0	2.2.9	false
+loose	<2.0.0	2.9999.9999	false
+loose	<2.0.0	2.2.9	false
+loose	>=0.1.97	v0.1.93	false
+loose	>=0.1.97	0.1.93	false
+loose	0.1.20 || 1.2.4	1.2.3	false
+loose	>=0.2.3 || <0.0.1	0.0.3	false
+loose	>=0.2.3 || <0.0.1	0.2.2	false
+loose	2.x.x	1.1.3	false
+loose	2.x.x	3.1.3	false
+loose	1.2.x	1.3.3	false
+loose	1.2.x || 2.x	3.1.3	false
+loose	1.2.x || 2.x	1.1.3	false
+loose	2.*.*	1.1.3	false
+loose	2.*.*	3.1.3	false
+loose	1.2.*	1.3.3	false
+loose	1.2.* || 2.*	3.1.3	false
+loose	1.2.* || 2.*	1.1.3	false
+loose	2	1.1.2	false
+loose	2.3	2.4.1	false
+loose	~0.0.1	0.1.0-alpha	false
+loose	~0.0.1	0.1.0	false
+loose	~2.4	2.5.0	false
+loose	~2.4	2.3.9	false
+loose	~>3.2.1	3.3.2	false
+loose	~>3.2.1	3.2.0	false
+loose	~1	0.2.3	false
+loose	~>1	2.2.3	false
+loose	~1.0	1.1.0	false
+loose	<1	1.0.0	false
+loose	>=1.2	1.1.1	false
+loose	1	2.0.0beta	false
+loose	~v0.5.4-beta	0.5.4-alpha	false
+loose	=0.7.x	0.8.2	false
+loose	>=0.7.x	0.6.2	false
+loose	<0.7.x	0.7.2	false
+loose	<1.2.3	1.2.3-beta	false
+loose	=1.2.3	1.2.3-beta	false
+loose	>1.2	1.2.8	false
+loose	^0.0.1	0.0.2-alpha	false
+loose	^0.0.1	0.0.2	false
+loose	^1.2.3	2.0.0-alpha	false
+loose	^1.2.3	1.2.2	false
+loose	^1.2	1.1.9	false
+loose	*	v1.2.3-foo	false
+loose	^1.0.0	2.0.0-rc1	false
+loose	1 - 2	2.0.0-pre	false
+loose	1 - 2	1.0.0-pre	false
+loose	1.0 - 2	1.0.0-pre	false
+loose	1.1.x	1.0.0-a	false
+loose	1.1.x	1.1.0-a	false
+loose	1.1.x	1.2.0-a	false
+loose	1.x	1.0.0-a	false
+loose	1.x	1.1.0-a	false
+loose	1.x	1.2.0-a	false
+loose	>=1.0.0 <1.1.0	1.1.0	false
+loose	>=1.0.0 <1.1.0	1.1.0-pre	false
+loose	>=1.0.0 <1.1.0-pre	1.1.0-pre	false
+loose	>1.0.0-beta.1 <=1.1.0	1.0.0-beta.1	false
+loose	>1.0.0-beta.1 <=1.1.0	1.1.0-beta.1	false
+
+# a primitive kind before a caret or a tilde, separated by white space (node-semver accepted it)
+loose	>= ^1.2.3	1.2.3	true
+loose	>= ^1.2.3	1.2.4	true
+loose	>= ^1.2.3	1.9.3	true
+loose	>= ^1.2.3	2.0.0	false
+loose	>= ^1.2.3	1.2.2	false
+loose	> ^1.2.3	1.2.3	true
+loose	> ^1.2.3	1.2.4	true
+loose	> ^1.2.3	1.9.3	true
+loose	> ^1.2.3	2.0.0	false
+loose	> ^1.2.3	1.2.2	false
+loose	< ^1.2.3	1.2.3	true
+loose	< ^1.2.3	1.2.4	true
+loose	< ^1.2.3	1.9.3	true
+loose	< ^1.2.3	2.0.0	false
+loose	< ^1.2.3	1.2.2	false
+loose	<= ^1.2.3	1.2.3	true
+loose	<= ^1.2.3	1.2.4	true
+loose	<= ^1.2.3	1.9.3	true
+loose	<= ^1.2.3	2.0.0	false
+loose	<= ^1.2.3	1.2.2	false
+loose	<= ~1.2.3	1.2.3	true
+loose	<= ~1.2.3	1.2.4	true
+loose	<= ~1.2.3	1.9.3	false
+loose	<= ~1.2.3	2.0.0	false
+loose	<= ~1.2.3	1.2.2	false
+
+# zero_version_with_pre_release_matches
+loose	<1.0.0-0	0.0.0	true
+loose	<1.0.0-0	0.0.0-pre	false
+loose	<1.0.0	0.0.0	true
+loose	<1.0.0	0.0.0-pre	false
+loose	^0	0.0.0	true
+loose	^0	0.0.0-pre	false
+loose	*	0.0.0	true
+loose	*	0.0.0-pre	false
+
+# specifier.rs
+specifier	1.0.1	1.0.0	false
+specifier	1.0.1	1.0.1	true
+specifier	1.0.1	1.0.2	false
+specifier	1.0.1	1.1.1	false
+specifier	1.0.0-alpha.13	1.0.0-alpha.13	true
+specifier	1.1	1.0.0	false
+specifier	1.1	1.1.0	true
+specifier	1.1	1.1.1	true
+specifier	1.1	1.2.0	false
+specifier	1.1	1.2.1	false
+specifier	^1.1.1	1.1.0	false
+specifier	^1.1.1	1.1.1	true
+specifier	^1.1.1	1.1.2	true
+specifier	^1.1.1	1.2.0	true
+specifier	^1.1.1	2.0.0	false
+specifier	^0.1.1	0.0.0	false
+specifier	^0.1.1	0.1.0	false
+specifier	^0.1.1	0.1.1	true
+specifier	^0.1.1	0.1.2	true
+specifier	^0.1.1	0.2.0	false
+specifier	^0.1.1	1.0.0	false
+specifier	^0.0.1	0.0.0	false
+specifier	^0.0.1	0.0.1	true
+specifier	^0.0.1	0.0.2	false
+specifier	^0.0.1	0.1.0	false
+specifier	^0.0.1	1.0.0	false
+specifier	~1.1.1	1.1.0	false
+specifier	~1.1.1	1.1.1	true
+specifier	~1.1.1	1.1.2	true
+specifier	~1.1.1	1.2.0	false
+specifier	~1.1.1	2.0.0	false
+specifier	~0.1.1	0.0.0	false
+specifier	~0.1.1	0.1.0	false
+specifier	~0.1.1	0.1.1	true
+specifier	~0.1.1	0.1.2	true
+specifier	~0.1.1	0.2.0	false
+specifier	~0.1.1	1.0.0	false
+specifier	~0.0.1	0.0.0	false
+specifier	~0.0.1	0.0.1	true
+specifier	~0.0.1	0.0.2	true
+specifier	~0.0.1	0.1.0	false
+specifier	~0.0.1	1.0.0	false
+specifier	^1.0.1-pre-release	1.0.0	false
+specifier	^1.0.1-pre-release	1.0.1	true
+specifier	^1.0.1-pre-release	1.0.1-pre-release	true
+specifier	^0.0.0-pre-release	0.0.0	true
+specifier	^0.0.0-pre-release	0.0.1	false
+specifier	^0.0.0-pre-release	0.0.0-pre-release	true

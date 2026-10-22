@@ -1,0 +1,73 @@
+# One package requirement per line. Each is parsed with ParsePackageReqLoose, printed in the normalised form, and
+# parsed back with ParsePackageReqNormalized to an equal requirement.
+# Ported from deno_semver 0.9.1 src/package.rs (serialize_deserialize_loose_package_req and test_package_req_deserializable),
+# MIT licence, Copyright 2018-2025 the Deno authors.
+pkg@1.2.3
+pkg@1.2
+pkg@1
+pkg@0.0.1
+pkg@^1.2.3
+pkg@^0.2.3
+pkg@^0.0.3
+pkg@^1.2
+pkg@^1
+pkg@~1.2.3
+pkg@~1.2
+pkg@~1
+pkg@>1.2.3
+pkg@>=1.2.3
+pkg@<2.0.0
+pkg@<=2.0.0
+pkg@=1.2.3
+pkg@*
+pkg@1.x
+pkg@1.2.x
+pkg@1.X
+pkg@1.2.X
+pkg@1.2.3 - 2.3.4
+pkg@1.0 - 2.0
+pkg@1 - 2
+pkg@>=1.2.3 <2.0.0
+pkg@>=1.0.0 <=2.0.0
+pkg@1.2.3 || 2.0.0
+pkg@^1.0.0 || ^2.0.0
+pkg@1 || 2 || 3
+pkg@>=1.0.0 <2.0.0 || >=3.0.0
+@scope/pkg@1.2.3
+@scope/pkg@^1.0.0
+@scope/pkg@~1.2.3
+@scope/pkg@>=1.0.0
+@scope/pkg@*
+@scope/pkg@1.x
+@scope/pkg@1.2.3 - 2.0.0
+@scope/pkg@1 || 2
+pkg@>=1.2.3 <2.0.0 || >=3.0.0 <4.0.0
+pkg@^1.2.3 || ~2.3.4 || >=3.0.0
+@scope/pkg@>=1.0.0 <1.5.0 || >=2.0.0 <3.0.0
+pkg@1.2.3-alpha
+pkg@1.2.3-beta.1
+pkg@1.2.3-rc.1
+pkg@^1.2.3-alpha
+@scope/pkg@1.0.0-beta.2
+pkg@1.2.3+build.123
+pkg@1.2.3-alpha+build
+@scope/pkg@1.0.0+20130313144700
+pkg@0.0.0
+pkg@02.003.02
+pkg@999.999.999
+@my-scope/my-package@1.2.3
+@a/b@1.0.0
+pkg@>=1.2.3 <=2.0.0
+pkg@>1.0.0 <2.0.0
+pkg@>=0.1.0 <0.2.0
+pkg@1.2.*
+pkg@1.*
+pkg@*.x
+pkg@1.0.0 || 1.1.0 || 1.2.0
+pkg@^1.0.0 || ^2.0.0 || ^3.0.0
+@scope/pkg@>=1.0.0 || >=2.0.0 || >=3.0.0
+pkg@1.2.3 - 1.2.5
+pkg@1.0.0 - 1.9.9
+pkg@0.1.0 - 0.9.0
+a@1 - 1.5
+a@1 || 2 || 3

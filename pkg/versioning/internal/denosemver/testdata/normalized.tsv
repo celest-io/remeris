@@ -1,0 +1,72 @@
+# requirement (npm grammar) <TAB> its normalised form [<TAB> "lossy"]. The normalised form parses back (with the npm
+# and the normalised grammar) to the same requirement and prints the same text, unless the line is marked lossy: a
+# set of ranges that match nothing becomes the wildcard.
+# Ported from deno_semver 0.9.1 src/range.rs (range_set_or_tag_display), MIT licence, Copyright 2018-2025 the Deno
+# authors, plus the cases below the marker line, which are not in the Rust tests.
+^0.0.1	^0.0.1
+^0.1.0	0.1
+1.0.0	1.0.0
+1	1
+1.0	1.0
+1.2	1.2
+1.2.0	1.2.0
+^1.0.0	1
+~1.0.0	1.0
+1.1.0 - 3.1.0	>=1.1.0 <=3.1.0
+1.2.3	1.2.3
+^0.2.3	~0.2.3
+^2.3.4	^2.3.4
+~0.2.3	~0.2.3
+~2.3.4	~2.3.4
+2.3.4	2.3.4
+>2.3.4	>2.3.4
+>=2.3.4	>=2.3.4
+<2.3.4	<2.3.4
+<=2.3.4	<=2.3.4
+^1.0.0-beta.1	^1.0.0-beta.1
+~1.0.0-beta.1	~1.0.0-beta.1
+1.0.0-beta.1	1.0.0-beta.1
+1.0.0+build123	1.0.0+build123
+^1.0.0+build123	^1.0.0+build123
+~1.0.0+build123	~1.0.0+build123
+^0.0.2	^0.0.2
+^0.0.0	^0.0.0
+^0.0.0-pre	^0.0.0-pre
+0.0.1	0.0.1
+*	*
+>=1.0.0 <2.0.0	1
+0.0.0-alpha	0.0.0-alpha
+^0.0.0-alpha	^0.0.0-alpha
+^1.0.0-beta.1+build123	^1.0.0-beta.1+build123
+~1.0.0-beta.1+build123	~1.0.0-beta.1+build123
+1.0.0-beta.1+build123	1.0.0-beta.1+build123
+>1.0.0-beta.1 <=1.1.0	>1.0.0-beta.1 <=1.1.0
+>1.0.0 <1.1.0	>1.0.0 <1.1.0
+>=2.0.0-rc.3.0.5 <2.0.0-rc.3.1.0	>=2.0.0-rc.3.0.5 <2.0.0-rc.3.1.0
+>2.0.0-rc.3.0.5 <2.0.0-rc.3.1.0	>2.0.0-rc.3.0.5 <2.0.0-rc.3.1.0
+>=2.0.0-rc.3.0.5 <2.1.0	~2.0.0-rc.3.0.5
+^0.2.3-beta.1	~0.2.3-beta.1
+^0.0.2-alpha	^0.0.2-alpha
+~0.0.2-alpha	~0.0.2-alpha
+>1.0.0-beta.1	>1.0.0-beta.1
+<1.0.0-beta.1	<1.0.0-beta.1
+1 || 2 || 3	1 || 2 || 3
+
+# not in the Rust tests: the lockfile cases, tags and the shapes of the printer
+^1	1
+~1	1
+>=1 <2	1
+1.x	1
+1.2.x	1.2
+^0.0.3	^0.0.3
+^1.2.3	^1.2.3
+<=0.5.0	<=0.5.0
+^1 || ^2	1 || 2
+	*
+latest	latest
+beta-1	beta-1
+# a range that matches nothing is dropped, and a set without ranges prints as the wildcard (a quirk of the printer)
+>X	*	lossy
+<0.0.0	*	lossy
+<x <*	*	lossy
+<0.0.0 || 1	1

@@ -1,0 +1,22 @@
+# grammar <TAB> input <TAB> kind <TAB> name <TAB> VersionText() <TAB> Normalized(). The grammar is "strict", "loose" or
+# "normalized". String() gives the input back (the loose grammar trims the requirement, so no input here has spaces
+# around it). The normalised form parses back to an equal requirement. VersionText is the raw requirement text that
+# Knope matches against the resolved versions of a lockfile.
+# Ported from deno_semver 0.9.1 src/jsr.rs (jsr_dep_package_req_display, test_jsr_dep_pkg_req_from_str,
+# test_jsr_dep_pkg_req_normalized, test_jsr_dep_pkg_req_serializable), MIT licence, Copyright 2018-2025 the Deno
+# authors, plus the keys that Knope's sample lockfile has.
+strict	jsr:@scope/first@^1.0.0	jsr	@scope/first	^1.0.0	jsr:@scope/first@1
+strict	jsr:@scope/first@1.0.0	jsr	@scope/first	1.0.0	jsr:@scope/first@1.0.0
+strict	jsr:@std/path	jsr	@std/path	*	jsr:@std/path@*
+strict	npm:left-pad@^1	npm	left-pad	^1	npm:left-pad@1
+strict	npm:nanoid	npm	nanoid	*	npm:nanoid@*
+strict	npm:test@v1.0	npm	test	v1.0	npm:test@v1.0
+strict	npm:a@latest	npm	a	latest	npm:a@latest
+strict	jsr:a@^1.0	jsr	a	^1.0	jsr:a@1
+strict	jsr:b@1	jsr	b	1	jsr:b@1
+loose	npm:a@1.2.3 || 1.4.5	npm	a	1.2.3 || 1.4.5	npm:a@1.2.3 || 1.4.5
+loose	jsr:a@^1.0	jsr	a	^1.0	jsr:a@1
+loose	npm:a@1 - 1.5	npm	a	1 - 1.5	npm:a@>=1.0.0 <1.6.0
+loose	npm:a@1 || 2 || 3	npm	a	1 || 2 || 3	npm:a@1 || 2 || 3
+normalized	jsr:b@1 || 2	jsr	b	1 || 2	jsr:b@1 || 2
+normalized	jsr:a@^1.2.3	jsr	a	^1.2.3	jsr:a@^1.2.3

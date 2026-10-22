@@ -805,8 +805,14 @@ For each format: **read** (where the version comes from), **write** (what is edi
   4. In `workspace` (and each `workspace.members.*`, and each key of `workspace.links`, including renaming the link
      key): rewrite entries in `dependencies`, `packageJson.dependencies`, `optionalDependencies` and
      `peerDependencies` that match `d` with a recorded version, to `{scheme:}{d}@{v}`.
-  5. Diff `{d} = {v}`. Serialise in Deno's canonical lockfile format (2-space pretty with a trailing newline, keys in
-     Deno's canonical order). Check against fixtures `tests/prepare_release/deno`.
+  5. Diff `{d} = {v}`. Serialise like deno_lockfile 0.49.0 `print_v5_content` (`printer.rs`, called from
+     `Lockfile::as_json_string` in `lib.rs`): 2-space pretty with a trailing newline, the top-level keys in the fixed
+     order `version`, `specifiers`, `jsr`, `npm`, `redirects`, `remote`, `workspace`, empty sections left out, and the
+     maps sorted: `specifiers` and the dependency arrays by the normalised requirement text
+     (`JsrDepPackageReq::to_string_normalized`: `^1.0.0` prints as `1`, see deno_semver 0.9.1 `range.rs`), `jsr` by
+     `PackageNv` order (name, then version precedence), `npm`, `members` and `links` by key text. The Go port of the
+     requirement and version types is `pkg/versioning/internal/denosemver`. Check against fixtures
+     `tests/prepare_release/deno`.
 
 #### `pubspec.yaml`
 - Read top-level `version` (YAML).
