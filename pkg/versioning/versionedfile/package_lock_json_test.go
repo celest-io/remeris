@@ -215,14 +215,14 @@ func TestPackageLockVersionErrors(t *testing.T) {
 		code    string
 		help    string
 	}{
-		"lock missing":  {`{"name": "x"}`, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
-		"not a string":  {jsonNumberVersion, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
-		"null":          {jsonNullVersion, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
-		caseArray:       {`["2.0.0"]`, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
-		"not a version": {jsonWordVersion, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
-		"range":         {`{"version": "^1.0.0"}`, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
-		"empty version": {`{"version": ""}`, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
-		"v prefix":      {`{"version": "v1.0.0"}`, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
+		"lock missing":   {`{"name": "x"}`, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
+		"number version": {jsonNumberVersion, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
+		"null":           {jsonNullVersion, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
+		caseArray:        {`["2.0.0"]`, pkgLockMissing, pkgLockMissCode, pkgLockMissHelp},
+		"not a version":  {jsonWordVersion, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
+		"range":          {`{"version": "^1.0.0"}`, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
+		"empty version":  {`{"version": ""}`, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
+		"v prefix":       {`{"version": "v1.0.0"}`, "Error parsing " + pkgLockPath + ": ", pkgLockInvalCode, pkgLockInvalHelp},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -492,17 +492,17 @@ func TestPackageLockWarnings(t *testing.T) {
 		content string
 		want    string
 	}{
-		"2":              {`{"version":"1.0.0","lockfileVersion":2}`, ""},
-		"3":              {`{"version":"1.0.0","lockfileVersion":3}`, ""},
-		"1":              {`{"version":"1.0.0","lockfileVersion":1}`, warning},
-		"4":              {`{"version":"1.0.0","lockfileVersion":4}`, warning},
-		"lock missing":   {jsonCompactOne, warning},
-		"3.0":            {`{"version":"1.0.0","lockfileVersion":3.0}`, warning},
-		"2.5":            {`{"version":"1.0.0","lockfileVersion":2.5}`, warning},
-		"string":         {`{"version":"1.0.0","lockfileVersion":"3"}`, warning},
-		"null":           {`{"version":"1.0.0","lockfileVersion":null}`, warning},
-		"huge":           {`{"version":"1.0.0","lockfileVersion":18446744073709551615}`, warning},
-		"3e0 is a float": {`{"version":"1.0.0","lockfileVersion":3e0}`, warning},
+		"2":                       {`{"version":"1.0.0","lockfileVersion":2}`, ""},
+		"3":                       {`{"version":"1.0.0","lockfileVersion":3}`, ""},
+		"1":                       {`{"version":"1.0.0","lockfileVersion":1}`, warning},
+		"4":                       {`{"version":"1.0.0","lockfileVersion":4}`, warning},
+		"lock missing":            {jsonCompactOne, warning},
+		"3.0":                     {`{"version":"1.0.0","lockfileVersion":3.0}`, warning},
+		"2.5":                     {`{"version":"1.0.0","lockfileVersion":2.5}`, warning},
+		"lockfileVersion as text": {`{"version":"1.0.0","lockfileVersion":"3"}`, warning},
+		"null":                    {`{"version":"1.0.0","lockfileVersion":null}`, warning},
+		"huge":                    {`{"version":"1.0.0","lockfileVersion":18446744073709551615}`, warning},
+		"3e0 is a float":          {`{"version":"1.0.0","lockfileVersion":3e0}`, warning},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
