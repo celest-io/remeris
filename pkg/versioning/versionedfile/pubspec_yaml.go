@@ -19,8 +19,8 @@ const (
 	codePubSpecDeserialize = "remeris::pubspec_yaml::deserialize"
 	codePubSpecSerialize   = "remeris::pubspec_yaml::serialize"
 
-	utf8BOM = "\xef\xbb\xbf"
-	crlf    = "\r\n"
+	pubspecBOM = "\xef\xbb\xbf"
+	crlf       = "\r\n"
 )
 
 // pubSpecFile is a pubspec.yaml (F6.2). It is an immutable value. The file is read with the yaml.Node API only (no
@@ -244,8 +244,8 @@ func quotedSpan(src string, off int, quote byte, want string) (start, end int, e
 // breaks lines at \r, U+0085, U+2028 and U+2029, and does not count a leading byte order mark.
 func yamlOffset(src string, line, col int) (int, bool) {
 	i := 0
-	if strings.HasPrefix(src, utf8BOM) {
-		i = len(utf8BOM)
+	if strings.HasPrefix(src, pubspecBOM) {
+		i = len(pubspecBOM)
 	}
 	for l := 1; l < line; l++ {
 		next, ok := afterLineBreak(src, i)
