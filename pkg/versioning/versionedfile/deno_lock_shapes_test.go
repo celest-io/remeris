@@ -93,7 +93,7 @@ func TestDenoLockUnmatchedLinkStaysUnchanged(t *testing.T) {
 
 func TestDenoLockTwoCallsAreTheCombinedEdit(t *testing.T) {
 	t.Parallel()
-	steps := [][2]string{{denoFirst, denoV120}, {denoLeftPad, denoV140}}
+	steps := [][2]string{{denoFirst, denoLockV120}, {denoLeftPad, denoV140}}
 	both, diff := lockWrite(t, setDeno(t, denoSample, steps...))
 	reversed, _ := lockWrite(t, setDeno(t, denoSample, steps[1], steps[0]))
 	if both != reversed {

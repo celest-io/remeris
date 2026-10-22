@@ -15,28 +15,33 @@ import (
 )
 
 const (
-	denoPath      = "deno.lock"
+	denoLockMemberFirst = "first"
+	denoLockV011        = "0.1.1"
+)
+
+const (
+	denoLockPath  = "deno.lock"
 	denoFirst     = "@scope/first"
 	denoLeftPad   = "left-pad"
 	denoVersion5  = `"version": "5"`
 	denoJSRFirst  = "jsr:@scope/first@1.2.0"
 	denoNPMLeft14 = "npm:left-pad@1.4.0"
-	denoV120      = "1.2.0"
+	denoLockV120  = "1.2.0"
 	denoRedirects = `"redirects": 5`
 
-	denoWorkspace   = "workspace"
-	denoSA1         = "@s/a@1.0.0"
-	denoSA          = "@s/a"
-	denoJSRA2       = "jsr:@s/a@2.0.0"
-	denoJSRA1       = "jsr:@s/a@1"
-	denoV140        = "1.4.0"
-	denoDeps        = "dependencies"
-	denoRC1         = "1.0.0-rc.1"
-	denoStarKey     = "jsr:@s/a@*"
-	denoEmptyObj    = "{}"
-	denoEmptyArr    = "[]"
-	denoDeserPrefix = "Error deserializing deno.lock: "
-	denoLegacy1     = "Lockfile version 1 in deno.lock requires npm package metadata which is not supported yet"
+	denoWorkspace    = "workspace"
+	denoSA1          = "@s/a@1.0.0"
+	denoSA           = "@s/a"
+	denoJSRA2        = "jsr:@s/a@2.0.0"
+	denoJSRA1        = "jsr:@s/a@1"
+	denoV140         = "1.4.0"
+	denoDeps         = "dependencies"
+	denoRC1          = "1.0.0-rc.1"
+	denoStarKey      = "jsr:@s/a@*"
+	denoLockEmptyObj = "{}"
+	denoLockEmptyArr = "[]"
+	denoDeserPrefix  = "Error deserializing deno.lock: "
+	denoLegacy1      = "Lockfile version 1 in deno.lock requires npm package metadata which is not supported yet"
 )
 
 // denoSample is the lockfile of the unit tests of Knope's deno_lock.rs.
@@ -107,7 +112,7 @@ const denoSample = `{
 }`
 
 func newDenoLock(content string) (versionedfile.File, error) {
-	return versionedfile.New(versionedfile.Config{Path: denoPath, Format: versionedfile.DenoLock}, content, nil)
+	return versionedfile.New(versionedfile.Config{Path: denoLockPath, Format: versionedfile.DenoLock}, content, nil)
 }
 
 // setDeno applies one SetVersion per step and returns the file.
@@ -156,19 +161,19 @@ func TestDenoLockRustUnitTests(t *testing.T) {
 	t.Parallel()
 	t.Run("updates specifiers and workspace", func(t *testing.T) {
 		t.Parallel()
-		content, diff := lockWrite(t, setDeno(t, denoSample, [2]string{denoFirst, denoV120}))
+		content, diff := lockWrite(t, setDeno(t, denoSample, [2]string{denoFirst, denoLockV120}))
 		for _, want := range []string{`"jsr:@scope/first@1": "1.2.0"`, `"@scope/first@1.2.0"`, `"` + denoJSRFirst + `"`} {
 			if !strings.Contains(content, want) {
 				t.Errorf("output lacks %s:\n%s", want, content)
 			}
 		}
-		if diff != denoFirst+" = "+denoV120 {
+		if diff != denoFirst+" = "+denoLockV120 {
 			t.Errorf("diff %q", diff)
 		}
 	})
 	t.Run("ignores a missing dependency", func(t *testing.T) {
 		t.Parallel()
-		if acts := setDeno(t, denoSample, [2]string{"@scope/second", denoV120}).Write(); acts != nil {
+		if acts := setDeno(t, denoSample, [2]string{"@scope/second", denoLockV120}).Write(); acts != nil {
 			t.Errorf("got %v, want no action", acts)
 		}
 	})
@@ -182,7 +187,7 @@ func TestDenoLockRustUnitTests(t *testing.T) {
 			{[]string{"specifiers", "npm:left-pad@1"}, denoV140},
 			{[]string{denoWorkspace, denoDeps}, strs("jsr:@scope/first@1.0.0", denoNPMLeft14)},
 			{[]string{denoWorkspace, "packageJson", denoDeps}, strs("jsr:@scope/first@1", "npm:left-pad@1.4.0")},
-			{[]string{denoWorkspace, "members", "first", denoDeps}, strs("jsr:@scope/first@1.0.0", denoNPMLeft14)},
+			{[]string{denoWorkspace, "members", denoLockMemberFirst, denoDeps}, strs("jsr:@scope/first@1.0.0", denoNPMLeft14)},
 			{
 				[]string{denoWorkspace, "members", "first", "packageJson", denoDeps},
 				strs("jsr:@scope/first@1", denoNPMLeft14),
@@ -243,7 +248,7 @@ func TestDenoLockLoad(t *testing.T) {
 			legacyCode,
 		},
 		"load missing": {
-			denoEmptyObj, denoLegacy1, legacyCode,
+			denoLockEmptyObj, denoLegacy1, legacyCode,
 		},
 		"load numeric 5": {
 			`{"version":5}`,
@@ -259,7 +264,7 @@ func TestDenoLockLoad(t *testing.T) {
 		"load empty": {`{"version":""}`, "Unsupported lockfile version  in deno.lock", unsupCode},
 		"load word":  {`{"version":"five"}`, "Unsupported lockfile version five in deno.lock", unsupCode},
 		"load not object": {
-			denoEmptyArr,
+			denoLockEmptyArr,
 			denoLegacy1,
 			legacyCode,
 		},
@@ -291,18 +296,18 @@ func TestDenoLockBasics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Path() != denoPath {
+	if f.Path() != denoLockPath {
 		t.Errorf("path %q", f.Path())
 	}
 	if _, err := f.Version(); !errors.Is(err, versionedfile.ErrNoVersion) {
 		t.Errorf("Version error %v, want ErrNoVersion", err)
 	}
 	// Without a dependency, and without specifiers, SetVersion is a no-op.
-	g, err := f.SetVersion(mustVersion(t, denoV120), nil, versionedfile.Standard)
+	g, err := f.SetVersion(mustVersion(t, denoLockV120), nil, versionedfile.Standard)
 	if err != nil || g.Write() != nil {
 		t.Errorf("no dependency: %v, %v", g.Write(), err)
 	}
-	g, err = f.SetVersion(mustVersion(t, denoV120), strp(denoFirst), versionedfile.Standard)
+	g, err = f.SetVersion(mustVersion(t, denoLockV120), strp(denoFirst), versionedfile.Standard)
 	if err != nil || g.Write() != nil {
 		t.Errorf("no specifiers: %v, %v", g.Write(), err)
 	}
@@ -312,7 +317,7 @@ func TestDenoLockBasics(t *testing.T) {
 		t.Fatal(err)
 	}
 	if g, err = bad.SetVersion(
-		mustVersion(t, denoV120),
+		mustVersion(t, denoLockV120),
 		strp(denoFirst),
 		versionedfile.Standard,
 	); err != nil ||
@@ -328,7 +333,7 @@ func TestDenoLockFromJSONFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := f.SetVersion(mustVersion(t, denoV120), strp(denoFirst), versionedfile.Standard)
+	g, err := f.SetVersion(mustVersion(t, denoLockV120), strp(denoFirst), versionedfile.Standard)
 	var d diag.Diagnostic
 	if g != nil || !errors.As(err, &d) {
 		t.Fatalf("got %v, %v; want a diagnostic", g, err)
@@ -568,7 +573,7 @@ func TestDenoLockGoldens(t *testing.T) {
 		diff  string
 	}{
 		"golden workspaces": {
-			"workspaces", [][2]string{{"@scope/first-package", v110}, {"@scope/second-package", "0.1.1"}},
+			"workspaces", [][2]string{{"@scope/first-package", v110}, {"@scope/second-package", denoLockV011}},
 			"@scope/first-package = 1.1.0, @scope/second-package = 0.1.1",
 		},
 		"golden file priority": {"file_priority", [][2]string{{"@scope/test-package", goV101}}, "@scope/test-package = 1.0.1"},
@@ -605,9 +610,9 @@ func readDenoGolden(t *testing.T, name string) string {
 
 func TestDenoLockIdempotent(t *testing.T) {
 	t.Parallel()
-	once := setDeno(t, denoSample, [2]string{denoFirst, denoV120}, [2]string{denoLeftPad, denoV140})
-	twice := setDeno(t, denoSample, [2]string{denoFirst, denoV120}, [2]string{denoLeftPad, denoV140},
-		[2]string{denoFirst, denoV120}, [2]string{denoLeftPad, denoV140})
+	once := setDeno(t, denoSample, [2]string{denoFirst, denoLockV120}, [2]string{denoLeftPad, denoV140})
+	twice := setDeno(t, denoSample, [2]string{denoFirst, denoLockV120}, [2]string{denoLeftPad, denoV140},
+		[2]string{denoFirst, denoLockV120}, [2]string{denoLeftPad, denoV140})
 	a, da := lockWrite(t, once)
 	b, db := lockWrite(t, twice)
 	if a != b {
@@ -619,7 +624,7 @@ func TestDenoLockIdempotent(t *testing.T) {
 	// The files are immutable: the original keeps no edit.
 	base := setDeno(t, denoSample)
 	if _, err := base.SetVersion(
-		mustVersion(t, denoV120),
+		mustVersion(t, denoLockV120),
 		strp(denoFirst),
 		versionedfile.Standard,
 	); err != nil ||
@@ -632,7 +637,7 @@ func TestDenoLockMatchesTheModel(t *testing.T) {
 	t.Parallel()
 	// The text written is the canonical print of the model built from it: reading it back and printing it again
 	// changes nothing.
-	out, _ := lockWrite(t, setDeno(t, denoSample, [2]string{denoFirst, denoV120}))
+	out, _ := lockWrite(t, setDeno(t, denoSample, [2]string{denoFirst, denoLockV120}))
 	c, err := denolock.Parse([]byte(out))
 	if err != nil || c.Print() != out {
 		t.Errorf("not canonical (%v):\n%s", err, out)

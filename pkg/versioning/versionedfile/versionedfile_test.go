@@ -250,8 +250,6 @@ func TestErrNoVersion(t *testing.T) {
 
 // stubbedFormats are the formats whose pull requests (deno.json: PR 58, pubspec.yaml: PR 57) are not on this branch
 // yet. Delete the map when they are: from then on no format may be a stub.
-var stubbedFormats = map[versionedfile.Format]bool{versionedfile.DenoJson: true, versionedfile.PubSpec: true}
-
 // TestNewEveryFormatBuilds checks that no format answers with the not-implemented error any more.
 func TestNewEveryFormatBuilds(t *testing.T) {
 	t.Parallel()
@@ -261,8 +259,8 @@ func TestNewEveryFormatBuilds(t *testing.T) {
 			_, err := versionedfile.New(versionedfile.Config{Path: "x", Format: f}, "", nil)
 			var d diag.Diagnostic
 			stub := errors.As(err, &d) && d.Code() == "remeris::versioned_file::not_implemented"
-			if stub != stubbedFormats[f] {
-				t.Errorf("format %s: stub=%v, want %v (%v)", f, stub, stubbedFormats[f], err)
+			if stub {
+				t.Errorf("format %s is still a stub: %v", f, err)
 			}
 		})
 	}
