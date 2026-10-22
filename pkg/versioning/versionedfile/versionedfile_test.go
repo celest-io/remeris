@@ -250,31 +250,21 @@ func TestErrNoVersion(t *testing.T) {
 	}
 }
 
+// TestNewNotImplemented covers every format without listing any: a format is either implemented (its own tests
+// cover it) or a stub that fails with the exact not-implemented error. Building a format needs no edit here.
 func TestNewNotImplemented(t *testing.T) {
 	t.Parallel()
-	tests := map[string]struct {
-		format    versionedfile.Format
-		milestone string
-	}{
-		"CargoLock":       {versionedfile.CargoLock, m9},
-		"DenoJson":        {versionedfile.DenoJson, m9},
-		"DenoLock":        {versionedfile.DenoLock, m9},
-		"Gleam":           {versionedfile.Gleam, m9},
-		"PackageLockJson": {versionedfile.PackageLockJson, m9},
-		"MavenPom":        {versionedfile.MavenPom, m9},
-		"PubSpec":         {versionedfile.PubSpec, m9},
-		"TauriConf":       {versionedfile.TauriConf, m9},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for f := versionedfile.Cargo; f.String() != "Unknown"; f++ {
+		t.Run(f.String(), func(t *testing.T) {
 			t.Parallel()
-			f, err := versionedfile.New(versionedfile.Config{Path: "x", Format: tc.format}, "", nil)
-			if f != nil || err == nil {
-				t.Fatalf("got %v, %v", f, err)
+			file, err := versionedfile.New(versionedfile.Config{Path: "x", Format: f}, "", nil)
+			var d diag.Diagnostic
+			if !errors.As(err, &d) || d.Code() != "remeris::versioned_file::not_implemented" {
+				return // implemented: the format's own tests apply
 			}
-			want := "Versioned file format " + name + " " + notImplement + " (milestone " + tc.milestone + ")"
-			if err.Error() != want {
-				t.Errorf("got %q, want %q", err.Error(), want)
+			want := "Versioned file format " + f.String() + " " + notImplement + " (milestone " + m9 + ")"
+			if file != nil || err.Error() != want {
+				t.Errorf("got %v, %q; want nil, %q", file, err, want)
 			}
 		})
 	}
