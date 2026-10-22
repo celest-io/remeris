@@ -77,7 +77,9 @@ Each format's pull request edits only its own section. Rows follow the table abo
 | Knope | remeris | Why |
 | --- | --- | --- |
 | Edits the `toml_edit` document and prints it back. | Splices the bytes of the `version` value (or appends `version = "..."` to the table), so everything else is untouched, as for Cargo.toml. | Same output as `toml_edit` for the files Cargo writes; byte-exact for hand-edited ones. |
-| The unsupported-version warning prints the `toml_edit` item with its decor. | The same text is built from the file's bytes: the whitespace after `=`, the raw value, then the rest of the line (whitespace and comment), so `version = 5` warns `Unsupported version of Cargo.lock:  5. Outcome may be unexpected` (two spaces). | Not confirmed byte for byte against a Knope run (no fixture shows it); the trailing-comment case in particular follows my reading of `toml_edit` and is the one to check. A top-level `[version]` table prints an empty value. |
+| A trailing comment on the edited `version` line is dropped (the decor reset of `value(...)`). | The comment is kept. | Same family as the Cargo.toml rows. |
+| `to_string()` ends the last pair with a newline. | A missing final newline is kept as read. | Byte-level splice. |
+| The unsupported-version warning prints the `toml_edit` item with its decor. | The same text is built from the file's bytes: the whitespace after `=`, the raw value, then the rest of the line (whitespace and comment), so `version = 5` warns `Unsupported version of Cargo.lock:  5. Outcome may be unexpected` (two spaces). | Not confirmed byte for byte against a Knope run (no fixture shows it); the trailing-comment rendering (`Cargo.lock:  5 # c.`) is derived from toml_edit's decor rules and could not be confirmed against Knope. A top-level `[version]` table prints an empty value. |
 | Error help says "Knope may not yet support a newer format". | "remeris may not yet support a newer format". | Naming (D1). |
 
 ### gleam.toml
