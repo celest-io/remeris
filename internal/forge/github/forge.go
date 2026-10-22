@@ -78,7 +78,7 @@ type Client struct {
 	Authenticated bool
 
 	// guard is the credential guard of the client; it knows the hosts that may receive credentials.
-	guard *hostGuard
+	guard *httpx.Guard
 }
 
 // Forge builds the GitHub client once and caches it.
@@ -160,21 +160,21 @@ func (f *Forge) client(ctx context.Context, require bool) (*Client, error) {
 // newClient builds a client that sends the token of src, or no credentials when src is nil.
 //
 // The URLs are resolved (and refused when untrusted or insecure) before anything is sent. Credentials go through a
-// [hostGuard] that adds them only for the scheme, host and port of the API and upload URLs, and CheckRedirect
+// [httpx.Guard] that adds them only for the scheme, host and port of the API and upload URLs, and CheckRedirect
 // refuses a redirect to another host, so a token never leaves the configured GitHub instance.
 func (f *Forge) newClient(src oauth2.TokenSource) (*Client, error) {
 	apiURL, uploadURL, err := resolveURLs(f.cfg)
 	if err != nil {
 		return nil, err
 	}
-	guard := newHostGuard(http.DefaultTransport, nil)
+	guard := httpx.NewGuard(http.DefaultTransport, nil)
 	if src != nil {
-		guard.creds = &oauth2.Transport{Source: src, Base: http.DefaultTransport}
+		guard.SetCreds(&oauth2.Transport{Source: src, Base: http.DefaultTransport})
 	}
 	retry := httpx.NewRetryTransport(guard)
 	retry.Authenticated = src != nil
 	opts := []gh.ClientOptionsFunc{
-		gh.WithHTTPClient(&http.Client{CheckRedirect: checkRedirect}),
+		gh.WithHTTPClient(&http.Client{CheckRedirect: urlPolicy.CheckRedirect}),
 		gh.WithTransport(retry),
 		gh.WithUserAgent(userAgent),
 		// httpx handles 429 and Retry-After; go-github's sticky local rate-limit state would add a second policy.
@@ -191,10 +191,10 @@ func (f *Forge) newClient(src oauth2.TokenSource) (*Client, error) {
 			WithHelp("Check the API and upload URLs.")
 	}
 	for _, u := range []string{api.BaseURL(), api.UploadURL()} {
-		if err := checkSecure(u); err != nil {
+		if err := urlPolicy.CheckSecure(u); err != nil {
 			return nil, err
 		}
-		guard.allow(u)
+		guard.Allow(u)
 	}
 	return &Client{
 		Client: api, Owner: f.cfg.Owner, Repo: f.cfg.Repo, Authenticated: src != nil, guard: guard,
@@ -212,7 +212,7 @@ func (f *Forge) checkURLs() error {
 		if u == "" {
 			continue
 		}
-		if err := checkSecure(u); err != nil {
+		if err := urlPolicy.CheckSecure(u); err != nil {
 			return err
 		}
 	}
@@ -296,9 +296,9 @@ func (f *Forge) appTokenSource(ctx context.Context) (oauth2.TokenSource, error) 
 	}
 	// Calls made as the App itself (the JWT) or to get installation tokens. go-githubauth adds the JWT above this
 	// transport; the guard drops it again for any host that is not the API or upload host.
-	jwtTransport := httpx.NewRetryTransport(probe.guard.withoutCreds())
+	jwtTransport := httpx.NewRetryTransport(probe.guard.WithoutCreds())
 	jwtTransport.Authenticated = true
-	jwtClient := &http.Client{Transport: jwtTransport, CheckRedirect: checkRedirect}
+	jwtClient := &http.Client{Transport: jwtTransport, CheckRedirect: urlPolicy.CheckRedirect}
 
 	id := f.app.InstallationID
 	if id == 0 {

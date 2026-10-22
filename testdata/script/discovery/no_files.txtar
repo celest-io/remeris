@@ -1,0 +1,17 @@
+# Nothing the default detection knows: no package, as before.
+! exec remeris release --dry-run
+cmp stderr release.log
+
+# Default detection does not look for deno.jsonc, as in Knope (see testdata/deviations.md); Q11 only accepts the name
+# in an explicit versioned_files.
+! exec remeris release --dry-run
+stderr 'No packages to operate on'
+
+-- README.md --
+Nothing to release.
+-- deno.jsonc --
+{ "imports": {} }
+-- release.log --
+Error: Problem with workflow release
+  ╰─▶ No packages to operate on
+      help: There must be at least one package for remeris to work with, no supported package files were found in this directory.

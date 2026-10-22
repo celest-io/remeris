@@ -1,0 +1,21 @@
+# npm and Deno workspace roots are errors too, until milestone M10. A workspace needs a member Knope can use: an npm
+# directory with a package.json, a Deno folder with a name and version (see no_workspace_members).
+mkdir npm
+cd npm
+! exec remeris release --dry-run
+stderr 'Package discovery for npm workspaces is not implemented yet \(milestone M10\)'
+cd ../deno
+! exec remeris release --dry-run
+stderr 'Package discovery for Deno workspaces is not implemented yet \(milestone M10\)'
+
+-- npm/package.json --
+{ "name": "root", "version": "1.0.0", "workspaces": ["packages/*"] }
+-- npm/packages/a/package.json --
+{ "name": "a", "version": "1.0.0" }
+-- deno/deno.jsonc --
+{
+  // members
+  "workspace": ["./a"],
+}
+-- deno/a/deno.json --
+{ "name": "a", "version": "1.0.0" }

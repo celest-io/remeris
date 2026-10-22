@@ -261,51 +261,6 @@ func TestReleaseDryRunWithoutGit(t *testing.T) {
 	}
 }
 
-func TestReleaseForges(t *testing.T) {
-	cases := map[string]struct {
-		github, gitea bool
-		want          string
-	}{
-		"github":       {github: true, want: "Step Release is not implemented yet (milestone M7)"},
-		"gitea":        {gitea: true, want: "Step Release is not implemented yet (milestone M8)"},
-		"both: github": {github: true, gitea: true, want: "Step Release is not implemented yet (milestone M7)"},
-	}
-	for name, tc := range cases {
-		for _, dry := range []bool{false, true} {
-			t.Run(name, func(t *testing.T) {
-				g := &recordingGit{forbidTag: t}
-				state := releaseState(t, []string{tagV100}, false, "")
-				state.Git, state.GiteaConfigured = g, tc.gitea
-				if tc.github {
-					state.GitHub = newTestForge()
-				}
-
-				_, err := runRelease(state, dry)
-
-				if err == nil || err.Error() != tc.want {
-					t.Errorf("err = %v, want %q", err, tc.want)
-				}
-			})
-		}
-	}
-}
-
-func TestReleaseForgeStillCreatesAddTag(t *testing.T) {
-	g := &recordingGit{}
-	state := releaseState(t, nil, false, "")
-	state.Git, state.GitHub = g, newTestForge()
-	state.PendingActions = []action.Action{action.AddTag(subTagV120), releaseOf(v120, "")}
-
-	_, err := runRelease(state, false)
-
-	if err == nil || !strings.Contains(err.Error(), "M7") {
-		t.Errorf("err = %v", err)
-	}
-	if !slices.Equal(g.tagged, []string{subTagV120}) {
-		t.Errorf("tags = %q", g.tagged)
-	}
-}
-
 func TestReleaseNoPackages(t *testing.T) {
 	logs := captureDebugLogs(t)
 	rt, err := runRelease(workflow.State{}, false)
@@ -369,3 +324,5 @@ func TestReleaseOpensGitWhenStateHasNone(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// giteaForge is a Gitea forge that is never asked for a client: the M8 stubs only test that it is there.

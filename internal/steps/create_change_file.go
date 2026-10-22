@@ -34,6 +34,9 @@ type CreateChangeFile struct{}
 // Type returns "CreateChangeFile".
 func (*CreateChangeFile) Type() string { return "CreateChangeFile" }
 
+// NeedsPackages is true: the step works on the packages.
+func (*CreateChangeFile) NeedsPackages() bool { return true }
+
 // Run asks the questions and writes the file. Packages are written to the front matter in the order the prompter
 // returns them, which is option order (quirk Q5); an existing file with the same name is overwritten.
 func (*CreateChangeFile) Run(

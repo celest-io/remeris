@@ -9,7 +9,9 @@
 // Reading can write: finding a value in the Knope directory copies it into the remeris one. A dry run must
 // therefore not look credentials up; the GitHub client is never built in a dry run.
 //
-// An empty environment variable counts as unset, where Knope would use the empty string as the token.
+// An empty environment variable counts as unset, where Knope would use the empty string as the token. So does a
+// stored file that holds only white space, and a blank answer to the prompt is refused and never saved: it would
+// otherwise be found at every later run, which would then never ask again.
 package credentials
 
 import (
@@ -20,6 +22,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/prompt"
@@ -44,6 +47,8 @@ type Key struct {
 	name   string
 	env    string
 	prompt string
+	// label names the value in the error for a blank answer: "No {label} was given".
+	label string
 }
 
 // Name returns the file name of the key.
@@ -59,27 +64,30 @@ func (k Key) Prompt() string { return k.prompt }
 var (
 	// GitHubToken is the GitHub personal access token, overridden by GITHUB_TOKEN.
 	GitHubToken = Key{
-		name: "github_token",
-		env:  "GITHUB_TOKEN",
+		name:  "github_token",
+		env:   "GITHUB_TOKEN",
+		label: "GitHub token",
 		prompt: "No GitHub token found, generate one from https://github.com/settings/tokens " +
 			"with `repo` permissions and input here",
 	}
 	// JiraToken is the Jira API token.
 	JiraToken = Key{
-		name: "jira_token",
+		name:  "jira_token",
+		label: "Jira token",
 		prompt: "No Jira token found, generate one from https://id.atlassian.com/manage-profile/security/api-tokens " +
 			"and input here",
 	}
 	// Email is the user's email address (Jira basic auth). Knope asks for it with the same masked prompt as tokens.
-	Email = Key{name: "email", prompt: "Input your email address"}
+	Email = Key{name: "email", prompt: "Input your email address", label: "email address"}
 )
 
 // GiteaToken returns the Gitea token key, overridden by GITEA_TOKEN. The stored value is shared by every host:
 // host only appears in the prompt text.
 func GiteaToken(host string) Key {
 	return Key{
-		name: "gitea_token",
-		env:  "GITEA_TOKEN",
+		name:  "gitea_token",
+		env:   "GITEA_TOKEN",
+		label: "Gitea token",
 		prompt: "No Gitea token found, generate one from " + host + "/user/settings/applications with\n" +
 			"`repository` permissions set to `Read and Write` and `issue` permissions set to `Read` and input here",
 	}
@@ -105,7 +113,7 @@ type Store struct {
 // the value.
 func (s *Store) Lookup(ctx context.Context, key Key) (value string, found bool, err error) {
 	if key.env != "" {
-		if v := s.getenv(key.env); v != "" {
+		if v := s.getenv(key.env); !blank(v) {
 			return v, true, nil
 		}
 	}
@@ -114,11 +122,11 @@ func (s *Store) Lookup(ctx context.Context, key Key) (value string, found bool, 
 		return "", false, err
 	}
 	v, ok, err := readValue(filepath.Join(base, dirName, key.name))
-	if err != nil || ok {
+	if err != nil || (ok && !blank(v)) {
 		return v, ok, err
 	}
 	v, ok, err = readValue(filepath.Join(base, legacyDirName, key.name))
-	if err != nil || !ok {
+	if err != nil || !ok || blank(v) {
 		return "", false, err
 	}
 	dir := filepath.Join(base, dirName)
@@ -145,6 +153,9 @@ func (s *Store) Get(ctx context.Context, key Key) (string, error) {
 		}
 		return "", prompt.Error(err)
 	}
+	if blank(answer) {
+		return "", errBlankAnswer(key)
+	}
 	base, err := s.baseDir()
 	if err != nil {
 		return "", err
@@ -153,6 +164,18 @@ func (s *Store) Get(ctx context.Context, key Key) (string, error) {
 		return "", err
 	}
 	return answer, nil
+}
+
+// blank reports whether v is empty or only white space.
+func blank(v string) bool { return strings.TrimSpace(v) == "" }
+
+// errBlankAnswer is the error for a blank answer to the prompt.
+func errBlankAnswer(key Key) *diag.Error {
+	help := "Enter a value when asked."
+	if key.env != "" {
+		help = "Set the " + key.env + " environment variable or enter a token when asked."
+	}
+	return diag.New("No " + key.label + " was given").WithCode("remeris::app_config::blank_answer").WithHelp(help)
 }
 
 func (s *Store) getenv(name string) string {

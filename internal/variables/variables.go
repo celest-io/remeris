@@ -50,6 +50,21 @@ type Template struct {
 	Variables []Entry `toml:"variables"`
 }
 
+// NeedsPackages reports whether Replace would read the packages: the text contains the key of a Version or
+// ChangelogEntry variable.
+func (t Template) NeedsPackages() bool {
+	entries := t.Variables
+	if entries == nil {
+		entries = defaults
+	}
+	for _, e := range entries {
+		if (e.Variable == Version || e.Variable == ChangelogEntry) && strings.Contains(t.Text, e.Key) {
+			return true
+		}
+	}
+	return false
+}
+
 // Replace returns the template text with every key replaced by its variable's value.
 //
 // Entries are applied in declared order. An entry whose key is not in the current text is skipped,

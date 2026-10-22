@@ -1,6 +1,6 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/allow_empty (MIT, see testdata/README.md).
-skip 'needs package discovery (milestone M10) and the Command output of git commit'
 
+# Knope's stdout.log uses its [..] wildcard for the commit hash; here a regular expression matches git's line.
 env REMERIS_FAKE_DATE=2026-01-01
 
 exec git init --initial-branch=main
@@ -16,7 +16,7 @@ cmp dryrun_actual.log dryrun_stdout.log
 ! stderr .
 
 exec remeris prepare-release
-cmp stdout stdout.log
+stdout '(?m)^\[main [0-9a-f]+\] chore: prepare release 1\.0\.0$'
 ! stderr .
 cmp CHANGELOG.md out/CHANGELOG.md
 
@@ -46,8 +46,6 @@ command = "git commit -m \"chore: prepare release $version\" --allow-empty"
 "$version" = "Version"
 -- dryrun_stdout.log --
 Would run git commit -m "chore: prepare release 1.0.0" --allow-empty
--- stdout.log --
-[..] chore: prepare release 1.0.0
 -- out/CHANGELOG.md --
 ## 1.0.0
 

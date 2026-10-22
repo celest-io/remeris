@@ -62,7 +62,7 @@ func TestCommandDryRunDoesNotRun(t *testing.T) {
 
 func TestCommandDryRunSubstitutesVariablesFirst(t *testing.T) {
 	logs := captureLogs(t)
-	step := &Command{Command: "echo $version"} // default variables apply, and Version cannot resolve in M0
+	step := &Command{Command: echoVersion} // default variables apply, and Version cannot resolve in M0
 
 	_, err := step.Run(context.Background(), workflow.DryRun(workflow.State{}))
 
@@ -142,7 +142,6 @@ func TestUnimplementedSteps(t *testing.T) {
 		step      workflow.Step
 		milestone string
 	}{
-		"CreatePullRequest":     {&CreatePullRequest{}, "M7"},
 		"SelectJiraIssue":       {&SelectJiraIssue{}, milestone11},
 		"TransitionJiraIssue":   {&TransitionJiraIssue{}, milestone11},
 		"SelectGitHubIssue":     {&SelectGitHubIssue{}, milestone11},

@@ -9,6 +9,7 @@ import (
 	"github.com/rogpeppe/go-internal/testscript"
 
 	"github.com/celest-io/remeris/internal/steps"
+	"github.com/celest-io/remeris/internal/testnet"
 )
 
 // scriptDir holds one directory per suite of golden scripts. Fixtures ported from Knope keep the
@@ -21,7 +22,11 @@ const fakeDateEnv = "REMERIS_FAKE_DATE"
 // TestMain registers the binary as the `remeris` command of the scripts, so no build step is
 // needed and the code under test is the code in this module.
 func TestMain(m *testing.M) {
+	// The test process and the binary of every script. The scripts set their own HOME (testscript's /no-home), so
+	// only the network guard is needed.
+	testnet.GuardNetwork()
 	testscript.Main(m, map[string]func(){"remeris": func() {
+		testnet.GuardNetwork()
 		if date := os.Getenv(fakeDateEnv); date != "" {
 			steps.Today = func() string { return date }
 		}

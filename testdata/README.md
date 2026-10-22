@@ -19,8 +19,13 @@ UPDATE_SCRIPTS=1 go test ./cmd/remeris      # rewrite the files compared with cm
 | `bump_version` | The `BumpVersion` step, ported from Knope's `bump_version` suite (`<dir>_<case>.txtar`). |
 | `command` | The `Command` step. `shell` and `replace_version` are ported from Knope; the rest are ours. |
 | `git_release` | The `Release` step in a repository with no forge, ported from Knope's `git_release` suite (`<dir>_<case>.txtar`). `split_workflow` is skipped until remeris prints all of Knope's `--verbose` debug lines; `split_workflow_quiet` (ours) runs the same case without `--verbose`. |
-| `default_workflows` | Knope's `default_workflows` suite (`<dir>_<case>.txtar`, where `<dir>` is `release` or `get_version`). Help is compared by content, as in `cli`. Ports that need a forge or package discovery are skipped until their milestones (see below). |
-| `prepare_release` | The `PrepareRelease` step. `changesets_*`, `enable_prerelease_*`, `second_prerelease`, `release_after_prerelease`, `override_*`, `scopes_*`, `multiple_packages` (skipped: needs M9), `allow_empty` (skipped: needs M10), `no_version_change`, `branching_history_*`, `cargo_*`, `changelog_*`, `custom_change_entries_all_custom`, `deno_*`, `gleam_toml`, `go_modules_*`, `handle_pre_versions_that_are_too_new`, `ignore_conventional_commits{,_toplevel}`, `inconsistent_versions`, `no_versioned_files`, `npm_*`, `override_version_multiple_packages`, `package_selection`, `prerelease_after_release`, `pubspec_yaml`, `pyproject_toml_*`, `readme_version`, `tauri_conf_json` and `verbose` are ported from Knope's `prepare_release` suite (skipped ones are listed below) (`<dir>_<case>.txtar`); `no_packages_ready`, `stages_files`, `forge_variable` and `go_modules_major_version_directories_quiet` are ours. Scripts set `REMERIS_FAKE_DATE=2026-01-01` and write that date where Knope has `[DATE]`; `rstrip` (defined in `cmd/remeris/main_test.go`) removes trailing spaces from a dry run's output before it is compared. |
+| `github_release` | The `Release` step with `[github]`, ported from Knope's `github_release` suite (`<dir>_<case>.txtar`). All are dry runs, as in Knope: a real release needs the GitHub API, which remeris tests with a fake server in Go (`internal/steps/release_github_test.go`). |
+| `gitea_release` | The `Release` step with `[gitea]`, ported from Knope's `gitea_release` suite (`<dir>_<case>.txtar`). All are dry runs, as in Knope, except `release_assets`, which runs `--validate` and expects the error for asset uploads on Gitea. The real run is tested with a fake server in Go (`internal/steps/release_gitea_test.go`). |
+| `multi_forge_release` | The `Release` step with `[github]` and `[gitea]`, ported from Knope's `multi_forge_release` suite (`<dir>_<case>.txtar`): the GitHub line, then the Gitea line, for each package in turn. `release_assets` has only `[gitea]` in Knope too. |
+| `create_pull_requests` | The `CreatePullRequest` step with `[github]`, ported from Knope's `create_pull_requests` suite (`<case>.txtar`), and our own `gitea_*` and `github_and_gitea` scripts (`[gitea]`; Knope has no Gitea fixture). All are dry runs, as in Knope; the real run is tested with a fake server in Go (`internal/steps/create_pull_request_test.go`). The branch is printed as `main`, not `refs/heads/main` (Q3, see `deviations.md`). |
+| `default_workflows` | Knope's `default_workflows` suite (`<dir>_<case>.txtar`, where `<dir>` is `release` or `get_version`). Help is compared by content, as in `cli`. Ports that need Cargo workspace discovery are skipped until their milestone (see below). |
+| `discovery` | Remeris' own scripts for what is found when `knope.toml` declares nothing. Package discovery at the root (spec F20.1): the default package, the M10 error for workspace roots, the unbuilt M9 formats, and no packages at all. Forge detection from the first remote (F20.5, F20.6): `github_remote_ssh` and `github_remote_https` run `git push` before the GitHub release, `codeberg_remote_ssh` and `codeberg_remote_https` do the same before the Gitea release, while `other_remote`, `no_remote`, `knope_toml_no_detection`, `codeberg_remote_evil` and `codeberg_remote_knope_toml` keep the no-forge order. All are dry runs. |
+| `prepare_release` | The `PrepareRelease` step. `changesets_*`, `enable_prerelease_*`, `second_prerelease`, `release_after_prerelease`, `override_*`, `scopes_*`, `multiple_packages` (skipped: needs M9), `allow_empty`, `no_version_change`, `branching_history_*`, `cargo_*`, `changelog_*`, `custom_change_entries_all_custom`, `deno_*`, `gleam_toml`, `go_modules_*`, `handle_pre_versions_that_are_too_new`, `ignore_conventional_commits{,_toplevel}`, `inconsistent_versions`, `no_versioned_files`, `npm_*`, `override_version_multiple_packages`, `package_selection`, `prerelease_after_release`, `pubspec_yaml`, `pyproject_toml_*`, `readme_version`, `tauri_conf_json` and `verbose` are ported from Knope's `prepare_release` suite (skipped ones are listed below) (`<dir>_<case>.txtar`); `no_packages_ready`, `stages_files`, `forge_variable` (it also checks the dry-run pull request data of F16.4, which no Knope script covers: Knope's only test of it, `integration_github`, needs real credentials) and `go_modules_major_version_directories_quiet` are ours. Scripts set `REMERIS_FAKE_DATE=2026-01-01` and write that date where Knope has `[DATE]`; `rstrip` (defined in `cmd/remeris/main_test.go`) removes trailing spaces from a dry run's output before it is compared. |
 
 `--help` is compared by content, not byte for byte: its layout comes from urfave/cli and differs from
 clap's (spec F3.1).
@@ -68,7 +73,7 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | Fixture | Status |
 | --- | --- |
 | `shell` | Ported: `script/command/shell.txtar`. |
-| `replace_version` | Ported but skipped: needs package discovery (M10), since its `knope.toml` declares no package. |
+| `replace_version` | Ported: `script/command/replace_version.txtar`. Its `knope.toml` declares no package, so it uses the root package discovery (F20.1). |
 
 ### Status of `crates/knope/tests/git_release/*`
 
@@ -77,16 +82,38 @@ Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/te
 | `single_package`, `multiple_packages` | Ported: `script/git_release/{single_package,multiple_packages}.txtar`. |
 | `split_workflow` | Ported but skipped: it checks `--verbose` output, and remeris does not print all of Knope's debug lines yet (as `prepare_release/verbose`). `split_workflow_quiet.txtar` (ours) runs it without `--verbose`. |
 
+### Status of `crates/knope/tests/github_release/*`
+
+| Fixture | Status |
+| --- | --- |
+| `simple`, `auto_generate_release_notes`, `multiple_packages`, `no_previous_tag`, `version_go_mod` | Ported: `script/github_release/<name>.txtar`. |
+| `release_assets/glob`, `release_assets/list` | Ported: `script/github_release/release_assets_{glob,list}.txtar`. |
+
+### Status of `crates/knope/tests/{gitea_release,multi_forge_release}/*`
+
+| Fixture | Status |
+| --- | --- |
+| `simple`, `auto_generate_release_notes`, `multiple_packages`, `no_previous_tag`, `version_go_mod` | Ported: `script/{gitea_release,multi_forge_release}/<name>.txtar`. |
+| `release_assets` | Ported: `script/{gitea_release,multi_forge_release}/release_assets.txtar` (`--validate`, as in Knope). |
+
+### Status of `crates/knope/tests/create_pull_requests/*`
+
+| Fixture | Status |
+| --- | --- |
+| `default_variables`, `disable_default_variables`, `explicit_variables`, `unused_variables` | Ported: `script/create_pull_requests/<name>.txtar`, with `main` where Knope's `stdout.log` has `refs/heads/main` (Q3). |
+| (no Knope fixture) | Ours: `script/create_pull_requests/{gitea_only,gitea_branch_with_slash,github_and_gitea}.txtar`. |
+
 ### Status of `crates/knope/tests/default_workflows/*`
 
 | Fixture | Status |
 | --- | --- |
 | `document_change`, `release/no_forge` | Ported: `script/default_workflows/{document_change,release_no_forge}.txtar`. |
 | `get_version/multi_package` | Ported: `script/default_workflows/get_version_multi_package.txtar`, with remeris' own unknown-workflow error (see `deviations.md`). |
-| `get_version/single_package`, `release/help_single_package`, `release/help_multi_package` | Ported but skipped: need package discovery (M10). |
-| `release/cargo_workspace` | Ported but skipped: needs the GitHub forge (M7) and package discovery (M10). |
-| `release/github` | Ported but skipped: needs the GitHub forge (M7) and package discovery (M10). |
-| `release/gitea` | Ported but skipped: needs the Gitea forge (M8). |
+| `get_version/single_package`, `release/help_single_package` | Ported: `script/default_workflows/{get_version,release_help}_single_package.txtar`. The help check leaves out the backticks of Knope's usage text (see `deviations.md`). |
+| `release/help_multi_package` | Ported but skipped: needs Cargo workspace discovery (M10). |
+| `release/cargo_workspace` | Ported but skipped: needs Cargo workspace discovery (M10). |
+| `release/github` | Ported: `script/default_workflows/release_github.txtar`. |
+| `release/gitea` | Ported: `script/default_workflows/release_gitea.txtar`. |
 
 ### Status of `crates/knope/tests/bump_version/*`
 
@@ -104,9 +131,9 @@ Every case that Knope's `mod.rs` files declare is ported. These scripts are skip
 
 | Fixture | Status |
 | --- | --- |
-| `changelog/header_level_detection` | Skipped: needs the GitHub forge (M7). |
 | `go_modules/major_version_directories` | Ported but skipped: it checks `--verbose` output (as `verbose`). `go_modules_major_version_directories_quiet.txtar` (ours) checks the same files and module tags without `--verbose`. |
-| `cargo/workspace/{full,no_lock}`, `deno/*`, `npm/workspaces`, `allow_empty` | Skipped: need package discovery (M10), and for `full`, `deno` and `npm` also `Cargo.lock`, `deno.json` or `package-lock.json` (M9). |
+| `allow_empty` | Ported: `script/prepare_release/allow_empty.txtar`. Knope's `[..]` wildcard for the commit hash is a regular expression. |
+| `cargo/workspace/{full,no_lock}`, `deno/*`, `npm/workspaces` | Skipped: need workspace discovery (M10), and for `full`, `deno` and `npm` also `Cargo.lock`, `deno.json` or `package-lock.json` (M9). |
 | `cargo/workspace/shared_version`, `npm/{dependencies,package}`, `gleam_toml`, `pubspec_yaml`, `tauri_conf_json`, `multiple_packages` | Skipped: need M9 formats. |
 | `verbose` | Skipped: remeris does not print five of Knope's `--verbose` debug lines yet (see `deviations.md`). |
 | `custom_change_entries/with_fallback`, `go_modules/major_versions/failed_v2` | Not ported: Knope's `mod.rs` does not declare them. |

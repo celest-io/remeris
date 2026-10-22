@@ -25,6 +25,7 @@ const (
 	dirKnope   = "knope"
 	fileGitHub = "github_token"
 	fileEmail  = "email"
+	fileGitea  = "gitea_token"
 	envGitHub  = "GITHUB_TOKEN"
 )
 
@@ -167,7 +168,7 @@ func TestGetPromptsAndSaves(t *testing.T) {
 		},
 		"gitea includes the host": {
 			key:  credentials.GiteaToken("https://gitea.example"),
-			file: "gitea_token",
+			file: fileGitea,
 			message: "No Gitea token found, generate one from https://gitea.example/user/settings/applications with\n" +
 				"`repository` permissions set to `Read and Write` and `issue` permissions set to `Read` and input here",
 		},
@@ -336,4 +337,102 @@ func TestFileErrors(t *testing.T) {
 			t.Errorf("err = %v", err)
 		}
 	})
+}
+
+func TestBlankAnswerIsNeitherSavedNorRemembered(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		key      credentials.Key
+		file     string
+		wantMsg  string
+		wantHelp string
+	}{
+		"gitea": {
+			key: credentials.GiteaToken("https://gitea.example"), file: fileGitea,
+			wantMsg:  "No Gitea token was given",
+			wantHelp: "Set the GITEA_TOKEN environment variable or enter a token when asked.",
+		},
+		"github": {
+			key: credentials.GitHubToken, file: fileGitHub,
+			wantMsg:  "No GitHub token was given",
+			wantHelp: "Set the GITHUB_TOKEN environment variable or enter a token when asked.",
+		},
+		"email": {
+			key:      credentials.Email,
+			file:     fileEmail,
+			wantMsg:  "No email address was given",
+			wantHelp: "Enter a value when asked.",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			base := t.TempDir()
+			for _, answer := range []string{"", "  ", " \n"} {
+				store := &credentials.Store{
+					Dir:      base,
+					Getenv:   env(nil),
+					Prompter: prompt.NewScripted(prompt.Answer{Text: answer}),
+				}
+
+				_, err := store.Get(context.Background(), tc.key)
+
+				var d diag.Diagnostic
+				if !errors.As(err, &d) || err.Error() != tc.wantMsg || d.Help() != tc.wantHelp {
+					t.Fatalf("answer %q: err = %v", answer, err)
+				}
+				if v, ok := read(t, base, dirRemeris, tc.file); ok {
+					t.Fatalf("answer %q was saved as %q", answer, v)
+				}
+			}
+			// A later run asks again, and a real answer is saved.
+			again := prompt.NewScripted(prompt.Answer{Text: fakeAnswer})
+			store := &credentials.Store{Dir: base, Getenv: env(nil), Prompter: again}
+			if got, err := store.Get(context.Background(), tc.key); err != nil || got != fakeAnswer {
+				t.Fatalf("Get = %q, %v", got, err)
+			}
+			if len(again.Asked()) != 1 {
+				t.Errorf("asked %d times, want 1", len(again.Asked()))
+			}
+		})
+	}
+}
+
+func TestWhitespaceOnlyValuesAreMissing(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		key            credentials.Key
+		file           string
+		env            map[string]string
+		remeris, knope string
+		want           string
+		found          bool
+	}{
+		"gitea stored file":  {key: credentials.GiteaToken("h"), file: fileGitea, remeris: "  \n"},
+		"github stored file": {key: credentials.GitHubToken, file: fileGitHub, remeris: " "},
+		"knope file":         {key: credentials.GitHubToken, file: fileGitHub, knope: "\n"},
+		"blank env":          {key: credentials.GitHubToken, file: fileGitHub, env: map[string]string{envGitHub: " "}},
+		"blank remeris file falls back to knope": {
+			key: credentials.GitHubToken, file: fileGitHub, remeris: " ", knope: fakeLegacy, want: fakeLegacy, found: true,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			base := t.TempDir()
+			if tc.remeris != "" {
+				put(t, base, dirRemeris, tc.file, tc.remeris)
+			}
+			if tc.knope != "" {
+				put(t, base, dirKnope, tc.file, tc.knope)
+			}
+			store := &credentials.Store{Dir: base, Getenv: env(tc.env), Prompter: failingPrompter{t: t}}
+
+			got, found, err := store.Lookup(context.Background(), tc.key)
+
+			if err != nil || found != tc.found || got != tc.want {
+				t.Errorf("Lookup = %q, %v, %v; want %q, %v", got, found, err, tc.want, tc.found)
+			}
+		})
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"reflect"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/forge/gitea"
 	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/prompt"
@@ -45,8 +46,29 @@ type State struct {
 	// GitHub is the GitHub forge, or nil when the configuration has no `[github]` table. It builds its client on
 	// demand and caches it; a step must not ask for the client in a dry run. Clones of the state share it.
 	GitHub *github.Forge
-	// GiteaConfigured is true when the configuration has a `[gitea]` table. Release needs it to pick the forge.
-	GiteaConfigured bool
+	// ReleaseAssets are the `assets` of the packages that have some, for the GitHub release. They are kept beside
+	// the packages, not in them: the versioning core knows nothing about forges. Use [State.AssetsOf].
+	ReleaseAssets []PackageAssets
+	// Gitea is the Gitea forge, or nil when the configuration has no `[gitea]` table. Like GitHub, it builds its
+	// client on demand and caches it; a step must not ask for the client in a dry run. Release and CreatePullRequest
+	// test it to pick the forge.
+	Gitea *gitea.Forge
+}
+
+// PackageAssets is the `assets` setting of one package.
+type PackageAssets struct {
+	Name   versioning.PackageName
+	Assets *github.Assets
+}
+
+// AssetsOf returns the assets of the package called name, or nil when it has none.
+func (s State) AssetsOf(name versioning.PackageName) *github.Assets {
+	for _, a := range s.ReleaseAssets {
+		if a.Name.Equal(name) {
+			return a.Assets
+		}
+	}
+	return nil
 }
 
 // RunType says whether a step may change the world. A dry run must do no writes, make no network
@@ -81,6 +103,21 @@ type Workflow struct {
 func (w Workflow) HasStep(stepType string) bool {
 	for _, step := range w.Steps {
 		if step.Type() == stepType {
+			return true
+		}
+	}
+	return false
+}
+
+// PackageUser is implemented by the steps that read the packages of the project.
+type PackageUser interface {
+	NeedsPackages() bool
+}
+
+// NeedsPackages reports whether any step reads the packages, so that a failure to discover them matters (spec F20.1).
+func (w Workflow) NeedsPackages() bool {
+	for _, step := range w.Steps {
+		if u, ok := step.(PackageUser); ok && u.NeedsPackages() {
 			return true
 		}
 	}

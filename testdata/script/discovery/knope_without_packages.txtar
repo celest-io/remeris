@@ -1,0 +1,20 @@
+# A knope.toml that declares no package gets the one found at the root, even when it has its own workflows
+# (Knope's fill_in_gaps).
+exec remeris --dry-run show
+stdout 'version is 1\.2\.3'
+! stderr .
+
+-- knope.toml --
+[[workflows]]
+name = "show"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo version is $version"
+
+[workflows.steps.variables]
+"$version" = "Version"
+-- Cargo.toml --
+[package]
+name = "m"
+version = "1.2.3"

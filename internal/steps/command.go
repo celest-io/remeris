@@ -26,6 +26,11 @@ type Command struct {
 
 func (*Command) Type() string { return "Command" }
 
+// NeedsPackages is true when the command uses the Version or ChangelogEntry variable.
+func (c *Command) NeedsPackages() bool {
+	return variables.Template{Text: c.Command, Variables: c.Variables}.NeedsPackages()
+}
+
 func (c *Command) Run(ctx context.Context, rt workflow.RunType[workflow.State]) (workflow.RunType[workflow.State], error) {
 	line, err := variables.Template{Text: c.Command, Variables: c.Variables}.Replace(rt.State)
 	if err != nil {

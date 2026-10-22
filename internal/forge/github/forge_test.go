@@ -477,3 +477,19 @@ func TestEmptyStoredTokenIsNoToken(t *testing.T) {
 		t.Errorf("auth = %q, authenticated = %v, want an anonymous request", got.Auth, c.Authenticated)
 	}
 }
+
+// TestNoRealGitHubInTests proves the guard of TestMain: a forge without a trusted URL talks to api.github.com,
+// and the request must fail before it leaves the machine.
+func TestNoRealGitHubInTests(t *testing.T) {
+	c, err := github.New(github.Config{Owner: "o", Repo: "r"}, nil, storeIn(t, nil, nil)).
+		MaybeAuthenticated(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = c.Repositories.GetRelease(context.Background(), "o", "r", 1)
+
+	if err == nil || !strings.Contains(err.Error(), "tests must use httptest") {
+		t.Errorf("err = %v, want the guard's error", err)
+	}
+}

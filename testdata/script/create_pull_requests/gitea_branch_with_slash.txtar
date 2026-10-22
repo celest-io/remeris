@@ -1,0 +1,56 @@
+# Ours (Knope has no Gitea fixture): a branch name with a slash is printed whole (Knope would print the last segment).
+# A dry run reads no credentials and makes no request; the branch is the full short name (Quirk Q3, see
+# testdata/deviations.md).
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git checkout -b feature/x
+
+exec remeris pr --dry-run
+cmp stdout stdout.log
+! stderr .
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- New feature in existing release
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+name = "test"
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "pr"
+
+[[workflows.steps]]
+type = "CreatePullRequest"
+base = "main"
+
+[workflows.steps.title]
+template = "chore: Release $version"
+
+[workflows.steps.body]
+template = "Merging this PR will release the following:\n\n$changelog"
+
+[gitea]
+owner = "knope-dev"
+repo = "knope"
+host = "https://codeberg.org"
+-- stdout.log --
+Would create or update a pull request from feature/x to main:
+	Title: chore: Release 1.0.0
+	Body: Merging this PR will release the following:
+
+
+## Features
+
+- New feature in existing release

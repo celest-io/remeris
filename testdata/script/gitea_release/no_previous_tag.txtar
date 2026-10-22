@@ -1,0 +1,49 @@
+# Ported from knope-dev/knope, crates/knope/tests/gitea_release/no_previous_tag (MIT, see testdata/README.md).
+# Without PrepareRelease, Release finds the release that an earlier workflow prepared (the package version is newer than any tag).
+# Knope only runs this as a dry run (a real release needs the Gitea API); so does this script. A dry run reads no
+# credentials and makes no request. [COMMIT] is the HEAD commit, matched as 40 hex digits.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+grep '(?s)\AWould create a release on Gitea \[https://codeberg\.org\] with name 1\.0\.0 \(2026-01-01\) and tag v1\.0\.0 at commit [0-9a-f]{40} and body:\n## Features\n\n- New feature in existing release\n\z' stdout_actual.log
+! stderr .
+
+exec git tag --list
+! stdout 'v1\.0\.0|v1\.1\.0|2\.0\.0|0\.5\.0|go/v1\.1\.0'
+-- CHANGELOG.md --
+## 1.0.0 (2026-01-01)
+
+### Features
+
+- New feature in existing release
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "Release"
+
+[gitea]
+owner = "knope-dev"
+repo = "knope"
+host = "https://codeberg.org"

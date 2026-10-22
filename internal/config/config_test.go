@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/steps"
@@ -59,7 +60,7 @@ func stepsOf(t *testing.T, cfg *Config, name string) []workflow.Step {
 }
 
 func TestLoadMissingFileGivesDefault(t *testing.T) {
-	cfg, err := Load(filepath.Join(t.TempDir(), "knope.toml"))
+	cfg, err := LoadFS(filepath.Join(t.TempDir(), "knope.toml"), fstest.MapFS{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +79,7 @@ func TestLoadMissingFileGivesDefault(t *testing.T) {
 func TestLoadFillsInWorkflows(t *testing.T) {
 	cases := map[string]struct {
 		toml      string
+		files     []string
 		wantNames []string
 		wantPush  string // the step after PrepareRelease and the commit
 	}{
@@ -93,6 +95,7 @@ func TestLoadFillsInWorkflows(t *testing.T) {
 		},
 		"one declared package adds get-version": {
 			toml:      "[package]\nversioned_files = [\"Cargo.toml\"]\n",
+			files:     []string{"Cargo.toml"},
 			wantNames: []string{wfRelease, wfDocumentChange, "get-version"},
 			wantPush:  stepRelease,
 		},
@@ -104,7 +107,10 @@ func TestLoadFillsInWorkflows(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			cfg := mustLoad(t, tc.toml)
+			cfg, err := loadIn(t, tc.toml, tc.files...)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if cfg.Source != SourceHybrid {
 				t.Errorf("Source = %v, want hybrid", cfg.Source)
 			}
@@ -533,7 +539,7 @@ project = "PRJ"
 	}
 	wantFiles := []VersionedFile{
 		{Path: "Cargo.toml"},
-		{Path: "Cargo.lock", Dependency: &dep},
+		{Path: cargoLockName, Dependency: &dep},
 		{Path: "README.md", Regex: []string{`version (?<version>\d+)`}},
 		{Path: "docs.md", Regex: []string{"a(?<version>1)", "b(?<version>2)"}},
 	}
@@ -548,7 +554,7 @@ project = "PRJ"
 	) {
 		t.Errorf("extra sections = %+v", cfg.Package.ExtraChangelogSections)
 	}
-	if want := []Asset{{Path: "dist/*.zip", Name: "bundle"}}; !reflect.DeepEqual(cfg.Package.Assets, want) {
+	if want := (&Assets{List: []Asset{{Path: "dist/*.zip", Name: "bundle"}}}); !reflect.DeepEqual(cfg.Package.Assets, want) {
 		t.Errorf("assets = %+v", cfg.Package.Assets)
 	}
 	if *cfg.GitHub != (GitHub{Owner: "celest-io", Repo: "remeris"}) || *cfg.Jira != (Jira{"https://x.atlassian.net", "PRJ"}) {
@@ -558,15 +564,33 @@ project = "PRJ"
 
 func TestDecodeGitea(t *testing.T) {
 	cfg := mustLoad(t, "[gitea]\nowner = \"o\"\nrepo = \"r\"\nhost = \"https://codeberg.org\"\n")
-	if *cfg.Gitea != (Gitea{"o", "r", "https://codeberg.org"}) {
+	if *cfg.Gitea != (Gitea{"o", "r", codebergHost}) {
 		t.Errorf("gitea = %+v", cfg.Gitea)
 	}
 }
 
-func TestAssetsAsGlobString(t *testing.T) {
-	cfg := mustLoad(t, "[package]\nassets = \"dist/*\"\n")
-	if want := []Asset{{Path: "dist/*"}}; !reflect.DeepEqual(cfg.Package.Assets, want) {
-		t.Errorf("assets = %+v, want %+v", cfg.Package.Assets, want)
+const distGlob = "dist/*"
+
+func TestAssetsFormsStayApart(t *testing.T) {
+	cases := map[string]struct {
+		toml string
+		want *Assets
+	}{
+		"glob":             {"[package]\nassets = \"dist/*\"\n", &Assets{IsGlob: true, Glob: distGlob}},
+		"list of one star": {"[package]\nassets = [{ path = \"dist/*\" }]\n", &Assets{List: []Asset{{Path: distGlob}}}},
+		"empty list":       {"[package]\nassets = []\n", &Assets{List: []Asset{}}},
+		"absent":           {packageHeader, nil},
+		"array of tables": {
+			"[[package.assets]]\npath = \"a\"\nname = \"b\"\n", &Assets{List: []Asset{{Path: "a", Name: "b"}}},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := mustLoad(t, tc.toml).Package.Assets
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("assets = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 

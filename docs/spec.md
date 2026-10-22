@@ -92,7 +92,7 @@ internal/steps/                # one file per step
 internal/variables/            # Template + Variable substitution
 internal/git/                  # Git interface + implementation
 internal/forge/github/         # go-github client, auth (token or GitHub App), releases, PRs, issues
-internal/forge/gitea/
+internal/forge/gitea/          # Gitea client on net/http (leaf): header auth, hardened host, releases, PRs, issues
 internal/issues/jira/
 internal/httpx/                # client with retry/backoff/rate-limit logging, ApiRequestError
 internal/credentials/          # token/email store in user config dir, prompting
@@ -1306,7 +1306,12 @@ Sources: `integrations/http.rs`, `app_config.rs`, `prompt.rs`
   unauthenticated, also warn `To increase your rate limit, set the GITHUB_TOKEN environment variable`.
 - Status errors are wrapped as `ApiRequestError`:
   `Trouble communicating with {service} while {activity}: {status error} with body: {body}`.
-  JSON decode errors: `Trouble decoding the response from {GitHub|the Gitea instance at host} while {activity}: …`.
+  JSON decode errors: `Trouble decoding the response from {GitHub|Gitea} while {activity}: …`, whose help names `GitHub`
+  or `the Gitea instance at {host}` (`httpx.NewDecodeErrorFor` takes the two names apart).
+- `httpx.Guard` and `httpx.URLPolicy` hold the credential-host rules both forges share: credentials only go to the
+  allowed origins, a redirect to another host or port or from https to http is refused, and plain http is accepted for
+  loopback hosts only. The service name and the diagnostic code prefix (`remeris::github`, `remeris::gitea`) are
+  parameters.
 
 ### F15.2 Credential store
 Directory: `os.UserConfigDir()/remeris/` (Knope used `…/knope/`, the same base as Rust `dirs::config_dir()`). One file
@@ -1321,7 +1326,8 @@ into `remeris/`, so existing Knope users are not prompted again.
 | `email` | (none) | `Input your email address` |
 
 Order: env var → stored file → prompt (masked, with display toggle, no confirmation) → save to file (create the dir).
-Note: the stored gitea token is **not** per host.
+Note: the stored gitea token is **not** per host (binding it to a host is deferred). A Gitea token is trimmed of
+surrounding white space before it goes into a header; an empty one is `No Gitea token was given`.
 Prompt failure / non-interactive → `Failed to get user input` (help: `This step requires user input, but no user input was provided. Try running the step again.`).
 
 ---
@@ -1415,11 +1421,42 @@ Nothing found → debug log.
 
 ## F17: Gitea integration
 
-Config: `{owner, repo, host}`. Base = `{host}/api/v1`. Auth = query parameter `access_token={token}`.
+Config: `{owner, repo, host}`. Base = `{host}/api/v1`, with the trailing slashes of `host` removed (a path prefix such as
+`https://example.com/gitea` is kept). The code is in `internal/forge/gitea`, a leaf package.
+
+**Auth (decision, changes Knope):** the header `Authorization: token {token}`, not the `access_token` query parameter
+Knope sends: a token in a URL ends up in logs, proxies and error messages. The token is never part of a URL. It comes from
+`GITEA_TOKEN`, the stored token or a prompt (F15.2), is asked for at most once per run, and never in a dry run. It is
+also replaced by `[REDACTED]` in every error message the package produces.
+
+**The `host` is trusted, but hardened (decision):** it is a required key of `[gitea]`, so unlike GitHub's `api_url` it needs
+no confirmation on the command line. When a client is built (a real run only; a dry run prints `host` as written):
+- it must be a URL with a scheme: otherwise `remeris::gitea::invalid_host`, as for userinfo (`user:pw@`), a query or a
+  fragment, spaces and control characters. The message never repeats a host that may hold a password;
+- the scheme is `https`; `http` is accepted only for `localhost` and other loopback addresses
+  (`remeris::gitea::insecure_url`, and `remeris::gitea::invalid_url` for any other scheme);
+- a redirect that changes the host or the port, or goes from https to http, is refused
+  (`remeris::gitea::redirect`), and `Authorization` is never sent to another origin. These rules are those of
+  `httpx.Guard` and `httpx.URLPolicy`, shared with GitHub.
+
+Requests send `Accept: application/json`, a JSON body when there is one, and `User-Agent: Remeris`. The retry policy is
+F15.1's, without the `GITHUB_TOKEN` hint. Errors name the service as the host written in the configuration:
+`Trouble communicating with {host} while {activity}: {status error} with body: {body}`. A response that does not decode
+gives `Trouble decoding the response from Gitea while {activity}: {error}` (code `remeris::gitea::api_response_error`, help
+`Failure to decode a response from the Gitea instance at {host} is probably a bug. Please report it at {issue tracker}`).
+The activities are `creating a release`, `fetching existing pull requests`, `updating pull request` and
+`creating pull request`.
+
 - Releases: `POST {base}/repos/{o}/{r}/releases`. Same JSON as GitHub, with `draft=false` (assets are not supported).
   Dry run: `Would create a {kind} on Gitea [{host}] with name … and tag …[ at commit …] and …`.
-- Pulls: `GET {base}/repos/{o}/{r}/pulls?state=open&head={owner}:{branch}&base={base}` → `[{number,url}]`. Then
-  `PATCH …/pulls/{number}` `{body,title}`, or `POST …/pulls` `{title,body,head,base}`.
+- Pulls: Knope sends `GET {base}/repos/{o}/{r}/pulls?state=open&head={owner}:{branch}&base={base}` and takes the first
+  result. **Deviation:** Gitea's list endpoint has no `head` filter (its query parameters are `state`, `sort`,
+  `milestone`, `labels`, `poster`, `page`, `limit` and `base_branch`), so a server ignores `head` and Knope may update an
+  unrelated open pull request. remeris sends `GET …/pulls?state=open&base_branch={base}&limit=50&page={n}`, reads pages
+  until an empty one (a server may cap the page size below 50) (at most 20 pages, then it creates), and takes the first pull request whose `head.ref` is
+  the branch, whose `head.repo.owner.login` is the configured owner (case-insensitive; a null `head.repo`, a deleted fork,
+  never matches) and whose `base.ref` is the base. Unknown or missing JSON fields are tolerated. Then
+  `PATCH …/pulls/{number}` `{body,title}`, or `POST …/pulls` `{title,body,head,base}` (any JSON answer is accepted).
 - Issues: `GET {base}/repos/{o}/{r}/issues?labels={comma-joined}&state=open&limit=30` → `[{number,title}]`.
 - `TryFromRemote(url)`: `git@host:owner/repo(.git)` → host `https://host`. `https://host/owner/repo(.git)` → the same.
   Anything else → none. Known public Gitea hosts for auto-detection: `codeberg.org`.
@@ -1435,13 +1472,13 @@ Config: `{owner, repo, host}`. Base = `{host}/api/v1`. Auth = query parameter `a
      `\tTitle: {title}`, `\tBody: {body}`.
    - GitHub (go-github, F16.0): `PullRequests.List` with `Head: owner+":"+branch`, `Base: base`. If one exists →
      `PullRequests.Edit` with `{title, body}`. Else → `PullRequests.Create` with `{title, body, head: branch, base}`.
-   - Gitea: as in F17, using only the **last path segment** of the branch ref as `branch`.
+   - Gitea: as in F17 (Pulls), with the full short branch name as `branch` (Q3).
 
 **Quirk Q3:** for GitHub, Knope sends `head=owner:refs/heads/<branch>` and `"head": "refs/heads/<branch>"`, and the
 dry-run text shows `refs/heads/main`. **Decision:** use the short branch name everywhere in Go (this fixes a real
 bug). Update the three `tests/create_pull_requests/*/stdout.log` golden files and record the deviation. Using the
-last segment (as the Gitea code does) is also wrong for branches that contain `/`. Use the full short name (`git
-rev-parse --abbrev-ref HEAD`).
+last path segment (as Knope's Gitea code does) is also wrong for branches that contain `/`, so Gitea gets the full short
+name too, in the dry-run text, the lookup and the `head` of the new pull request (`git rev-parse --abbrev-ref HEAD`).
 
 ---
 
@@ -1583,7 +1620,8 @@ get-version (help "Get the current version of the project")      ← only when E
 First remote URL:
 - Contains `github.com`: split on `/`. owner = the second-to-last part without a `git@github.com:` prefix. repo =
   the last part without `.git`.
-- Contains a known Gitea host (`codeberg.org`): `TryFromRemote` (F17).
+- Otherwise, a known Gitea host (`codeberg.org`): `TryFromRemote` (F17). Knope tests `remote.contains(host)`;
+  remeris requires the parsed host to equal the known host and drops the userinfo (testdata/deviations.md).
 
 ### F20.7 `--generate` output
 Serialise:

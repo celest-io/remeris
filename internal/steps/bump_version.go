@@ -33,6 +33,9 @@ type BumpVersion struct {
 // Type returns "BumpVersion".
 func (*BumpVersion) Type() string { return "BumpVersion" }
 
+// NeedsPackages is true: the step works on the packages.
+func (*BumpVersion) NeedsPackages() bool { return true }
+
 // SemverRule maps the TOML rule to the versioning core's rule. Pre is based on a patch bump.
 func (s *BumpVersion) SemverRule() semver.Rule {
 	switch s.Rule {

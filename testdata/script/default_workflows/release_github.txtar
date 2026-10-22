@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/default_workflows/release/github (MIT, see testdata/README.md).
-skip 'needs the GitHub forge (M7) and package discovery (M10)'
 
 env REMERIS_FAKE_DATE=2026-01-01
 

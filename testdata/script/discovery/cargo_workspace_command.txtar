@@ -1,0 +1,54 @@
+# A Cargo workspace root only fails the workflows that read the packages. A Command step that does not use $version
+# or $changelog runs as it did before package discovery existed.
+exec remeris show
+stdout '^shown$'
+! stderr .
+
+# $version needs the packages, so it reports the discovery error.
+! exec remeris version
+stderr 'Package discovery for Cargo workspaces is not implemented yet'
+
+# So does any of the steps that work on packages.
+! exec remeris prepare
+stderr 'Package discovery for Cargo workspaces is not implemented yet'
+
+# Without variables, $version is plain text.
+exec remeris plain
+stdout '^\$version$'
+
+-- Cargo.toml --
+[workspace]
+members = ["first"]
+-- first/Cargo.toml --
+[package]
+name = "first-package"
+version = "1.0.0"
+-- knope.toml --
+[[workflows]]
+name = "show"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo shown"
+
+[[workflows]]
+name = "version"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo $version"
+
+[[workflows]]
+name = "prepare"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows]]
+name = "plain"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo $version"
+
+[workflows.steps.variables]

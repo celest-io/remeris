@@ -23,6 +23,8 @@ const (
 	fixCommit     = "fix: Something fixed"
 	changeFile    = ".changeset/note.md"
 	prNumber      = "$pr_number"
+	summaryLine   = "- $summary"
+	patchNote     = "---\ndefault: patch\n---\n\n# A note\n"
 	v200          = "2.0.0"
 )
 
@@ -38,6 +40,9 @@ type recordingGit struct {
 	tagErr error
 	// forbidTag, when set, makes every CreateTag call fail this test.
 	forbidTag *testing.T
+	// head and headErr are what HeadCommitSHA returns.
+	head    string
+	headErr error
 }
 
 func (*recordingGit) AllTagsOnBranch(context.Context) ([]string, error) { return nil, nil }
@@ -64,7 +69,7 @@ func (g *recordingGit) CreateTag(_ context.Context, name string, _ git.TagOption
 	return g.tagErr
 }
 
-func (*recordingGit) HeadCommitSHA(context.Context) (string, error) { return "", nil }
+func (g *recordingGit) HeadCommitSHA(context.Context) (string, error) { return g.head, g.headErr }
 
 func (*recordingGit) CurrentBranch(context.Context) (string, error) { return "", nil }
 
@@ -241,7 +246,7 @@ func TestPrepareReleaseForgeVariable(t *testing.T) {
 		wantErr    string
 		wantStaged bool
 	}{
-		"no forge variable":               {"- $summary", false, []string{featCommit}, "", true},
+		"no forge variable":               {summaryLine, false, []string{featCommit}, "", true},
 		"variable but nothing to release": {prNumber, false, nil, "", false},
 		"pr_author_login without [github]": {
 			"$pr_author_login",
@@ -255,13 +260,6 @@ func TestPrepareReleaseForgeVariable(t *testing.T) {
 			false,
 			[]string{featCommit},
 			"You must configure [github] to use the variable $pr_number in a change template",
-			false,
-		},
-		"with [github]": {
-			prNumber,
-			true,
-			[]string{featCommit},
-			"Step PrepareRelease is not implemented yet (milestone M7)",
 			false,
 		},
 	}
@@ -295,7 +293,7 @@ func TestPrepareReleaseForgeVariable(t *testing.T) {
 }
 
 func TestPrepareReleaseStagesInOrder(t *testing.T) {
-	prepareDir(t, map[string]string{changeFile: "---\ndefault: patch\n---\n\n# A note\n"})
+	prepareDir(t, map[string]string{changeFile: patchNote})
 	g := &recordingGit{commits: commits(featCommit)}
 	state := stateFor(t, []string{tagV123}, cargo(v123), "")
 	state.Git = g
@@ -320,7 +318,7 @@ func TestPrepareReleaseStagesInOrder(t *testing.T) {
 }
 
 func TestPrepareReleaseDryRunStaging(t *testing.T) {
-	prepareDir(t, map[string]string{changeFile: "---\ndefault: patch\n---\n\n# A note\n"})
+	prepareDir(t, map[string]string{changeFile: patchNote})
 	logs := captureLogs(t)
 	state := stateFor(t, []string{tagV123}, cargo(v123), "")
 	state.Git = &recordingGit{commits: commits(featCommit)}

@@ -54,6 +54,9 @@ type Config struct {
 	index *tomlIndex
 	// packages are the validated packages, in declaration order.
 	packages []PackageConfig
+	// discoveryErr is why package discovery failed. It is reported when the project is loaded, so that --help and
+	// the other commands that read no packages keep working.
+	discoveryErr error
 }
 
 type Changes struct {
@@ -70,7 +73,7 @@ type Package struct {
 	Changelog               string          `toml:"changelog"`
 	Scopes                  []string        `toml:"scopes"`
 	ExtraChangelogSections  []ExtraSection  `toml:"extra_changelog_sections"`
-	Assets                  []Asset         `toml:"assets"`
+	Assets                  *Assets         `toml:"assets"`
 	IgnoreGoMajorVersioning bool            `toml:"ignore_go_major_versioning"`
 }
 
@@ -93,7 +96,18 @@ type ExtraSection struct {
 	Types   []string `toml:"types"`
 }
 
-// Asset is a release asset. A bare `assets = "glob"` string becomes an Asset with only a Path.
+// Assets is the `assets` setting of a package: a glob pattern (`assets = "dist/*"`) or a list of files
+// (`assets = [{ path = "dist/app", name = "app" }]`). The two forms stay apart because Knope expands a pattern
+// and takes a list entry as a literal path, even when it holds a `*`.
+type Assets struct {
+	// IsGlob is true for the string form. Then Glob is the pattern and List is nil.
+	IsGlob bool
+	Glob   string
+	// List holds the entries of the list form; an empty non-nil list is `assets = []`.
+	List []Asset
+}
+
+// Asset is an entry of the list form of `assets`.
 type Asset struct {
 	Path string `toml:"path"`
 	Name string `toml:"name"`
@@ -133,14 +147,11 @@ type Jira struct {
 // HasForge reports whether a GitHub or Gitea integration is configured.
 func (c *Config) HasForge() bool { return c.GitHub != nil || c.Gitea != nil }
 
-// PackageCount is the number of packages declared in the file.
-func (c *Config) PackageCount() int {
-	n := len(c.Packages)
-	if c.Package != nil {
-		n++
-	}
-	return n
-}
+// PackageCount is the number of packages: those declared in the file, or the one discovered at the root.
+func (c *Config) PackageCount() int { return len(c.packages) }
+
+// DiscoveryError is the error of package discovery (spec F20.1), nil when it succeeded or did not run.
+func (c *Config) DiscoveryError() error { return c.discoveryErr }
 
 // Span returns where the table or array element at path (as in tomlIndex.Span) sits in knope.toml.
 func (c *Config) Span(path ...any) (Span, bool) {
@@ -162,14 +173,38 @@ func Load(path string) (*Config, error) { return LoadFS(path, osRoot{}) }
 
 // LoadFS is Load with the file system that the existence checks of `versioned_files` use. Paths are
 // slash-separated and relative to its root, which is the working directory for Load.
-func LoadFS(path string, root fs.StatFS) (*Config, error) {
+func LoadFS(path string, root fs.StatFS) (*Config, error) { return LoadFSWithRemote(path, root, nil) }
+
+// LoadWithRemote is Load with the getter of the first Git remote that forge detection reads (spec F20.6).
+func LoadWithRemote(path string, remote RemoteFunc) (*Config, error) {
+	return LoadFSWithRemote(path, osRoot{}, remote)
+}
+
+// LoadFSWithRemote is LoadFS with the getter of the first Git remote. The remote is read only when there is no
+// file, as in Knope: a knope.toml without [github] stays without GitHub. A nil remote disables detection.
+func LoadFSWithRemote(path string, root fs.StatFS, remote RemoteFunc) (*Config, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
-		return Default(), nil
+		cfg := Default()
+		cfg.packages, cfg.discoveryErr = discoverPackages(root)
+		if remote != nil {
+			if url, ok := remote(); ok {
+				// GitHub first, as in Knope; Gitea only for a known public host.
+				if cfg.GitHub, _ = GitHubFromRemote(url); cfg.GitHub == nil {
+					cfg.Gitea = GiteaFromRemote(url)
+				}
+			}
+		}
+		cfg.Workflows = DefaultWorkflows(cfg.HasForge(), len(cfg.packages))
+		return cfg, nil
 	}
 	cfg, err := decode(path, src, root)
 	if err != nil {
 		return nil, err
+	}
+	// Like Knope's fill_in_gaps: a file without packages gets the discovered ones, whatever its workflows.
+	if len(cfg.packages) == 0 {
+		cfg.packages, cfg.discoveryErr = discoverPackages(root)
 	}
 	if len(cfg.Workflows) == 0 {
 		cfg.Workflows = DefaultWorkflows(cfg.HasForge(), cfg.PackageCount())
@@ -178,8 +213,9 @@ func LoadFS(path string, root fs.StatFS) (*Config, error) {
 	return cfg, nil
 }
 
-// Default returns the configuration used when there is no knope.toml: no packages, no forge and
-// the default workflows. Package and forge discovery are not implemented yet.
+// Default returns the bare configuration used when there is no knope.toml: no packages, no forge and
+// the default workflows. LoadFS adds the package discovered at the root (spec F20.1) and
+// LoadFSWithRemote the GitHub detected from the first remote (F20.6).
 func Default() *Config {
 	return &Config{Source: SourceDefault, Workflows: DefaultWorkflows(false, 0)}
 }

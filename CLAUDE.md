@@ -115,14 +115,15 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 Milestones M0 to M5 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
 `PrepareRelease` steps, with the SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod,
 regex), packages, Git tags and staging, conventional commits, change files, changelogs, prompts and the `Version`
-and `ChangelogEntry` variables. Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; forges, discovery, `--generate` and `--upgrade` come later (see spec section 1).
+and `ChangelogEntry` variables. `Release` publishes on GitHub and Gitea (GitHub first, each package in turn). Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; the other forge steps, workspace discovery (a workspace root is an error until M10), `--generate` and `--upgrade` come later (see spec section 1).
 
 ```
 cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests
 internal/diag/      Diagnostic interface and the renderer for errors (message, help, related errors)
 internal/app/       GlobalOptions, WorkflowOptions and the generic LoadConfig[T]
 internal/cli/       root command, one subcommand per workflow, logging, --validate
-internal/config/    Knope configuration (knope.toml) loading: koanf + a go-toml unstable index for key order and spans
+internal/config/    Knope configuration (knope.toml) loading: koanf + a go-toml unstable index for key order and spans;
+                    discover.go finds the root package when none is declared (workspace roots are an M10 error)
 internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
 internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines
@@ -130,9 +131,10 @@ internal/fsx/       dry-run aware file writes
 internal/glob/      Glob(fs.FS, pattern) with the semantics of Rust's glob crate (`**`, brackets, no backslash escape)
 internal/git/       Git access: the Git interface, the git CLI backend, the go-git fallback, Open picks one
 internal/project/   reads the packages, versioned files and Git tags into a workflow.State
-internal/httpx/     HTTP behaviour (F15.1): User-Agent, retrying RoundTripper with Retry-After and rate-limit warnings, ApiRequestError diagnostics
+internal/httpx/     HTTP behaviour (F15.1): User-Agent, retrying RoundTripper with Retry-After and rate-limit warnings, ApiRequestError diagnostics, the credential host Guard and URLPolicy shared by the forges
 internal/credentials/ stored tokens and email: env, remeris/ file, knope/ migration, prompt, save (F15.2)
 internal/forge/github/ GitHub client on go-github: the auth chain (App, GITHUB_TOKEN, stored token, prompt), WrapError; a leaf
+internal/forge/gitea/ Gitea client on net/http: header auth, hardened host, token scrubbed from errors; a leaf (not forge/github)
 internal/prompt/    Prompter interface (select, multi-select, input, password) on huh v2, and a scripted fake
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
@@ -146,8 +148,8 @@ pkg/versioning/     pure core (the knope-versioning equivalent): no file system,
   internal/jsonedit/ ordered JSON tree printed exactly like serde_json to_string_pretty (package.json & co.)
 ```
 
-Imports flow one way: `workflow` imports only `diag`, `internal/git`, `internal/prompt`, `internal/forge/github` and
-`pkg/versioning/...`,
+Imports flow one way: `workflow` imports only `diag`, `internal/git`, `internal/prompt`, `internal/forge/github`,
+`internal/forge/gitea` and `pkg/versioning/...`,
 then `variables`, `steps`, `config`, `project`, `cli`. Keep it so.
 `pkg/versioning` may import `internal/diag` (pure) and nothing else from `internal/`.
 Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.

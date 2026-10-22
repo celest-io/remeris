@@ -1,0 +1,29 @@
+# Without a knope.toml, a GitHub first remote (scp style) enables the forge workflow: git push, then Release (spec F20.5, F20.6).
+# Ours; Knope's config::generate does the detection (spec F20.6). A dry run reads no credentials and makes no request.
+# [COMMIT] is the HEAD commit, matched as 40 hex digits.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git remote add origin git@github.com:o/r.git
+exec git add .
+exec git commit -m 'feat: Existing' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: New Feature' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+grep '(?s)\AWould add the following to Cargo\.toml: version = 1\.1\.0\nWould add the following to CHANGELOG\.md:\n## 1\.1\.0 \(2026-01-01\)\n\n### Features\n\n- New Feature\n\nWould add files to git:\n  Cargo\.toml\n  CHANGELOG\.md\nWould run git commit -m "chore: prepare release 1\.1\.0"\nWould run git push\nWould create a release on GitHub with name 1\.1\.0 \(2026-01-01\) and tag v1\.1\.0 at commit [0-9a-f]{40} and body:\n## Features\n\n- New Feature\n\z' stdout_actual.log
+! stderr .
+
+-- Cargo.toml --
+[package]
+name = "my-package"
+version = "1.0.0"
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- Existing

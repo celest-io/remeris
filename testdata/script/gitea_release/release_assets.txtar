@@ -1,0 +1,49 @@
+# Ported from knope-dev/knope, crates/knope/tests/gitea_release/release_assets (MIT, see testdata/README.md).
+# Gitea has no asset uploads: a configuration file with `[[package.assets]]` and `[gitea]` is refused when it is loaded.
+# Knope runs `--validate`; so does this script.
+
+! exec remeris --validate
+! stdout .
+cmp stderr stderr.log
+
+-- stderr.log --
+Error: Asset uploads for Gitea are not supported
+  help: Remove the `[[package.assets]]` key from your config.
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- New feature in existing release
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[package.assets]]
+name = "first_thing_alt_name"
+path = "assets/first_thing"
+
+[[package.assets]]
+path = "assets/second_thing"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "Release"
+
+[gitea]
+owner = "knope-dev"
+repo = "knope"
+host = "https://codeberg.org"

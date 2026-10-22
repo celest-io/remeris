@@ -1,0 +1,54 @@
+# Ported from knope-dev/knope, crates/knope/tests/create_pull_requests/default_variables (MIT, see testdata/README.md).
+# Knope only runs this as a dry run (a real run needs the GitHub API); so does this script. Quirk Q3: the branch is
+# printed as `main`, where Knope prints `refs/heads/main` (see testdata/deviations.md).
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'feat: Existing feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+
+exec remeris pr --dry-run
+cmp stdout stdout.log
+! stderr .
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- New feature in existing release
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- knope.toml --
+[package]
+name = "test"
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "pr"
+
+[[workflows.steps]]
+type = "CreatePullRequest"
+base = "main"
+
+[workflows.steps.title]
+template = "chore: Release $version"
+
+[workflows.steps.body]
+template = "Merging this PR will release the following:\n\n$changelog"
+
+[github]
+owner = "knope-dev"
+repo = "knope"
+-- stdout.log --
+Would create or update a pull request from main to main:
+	Title: chore: Release 1.0.0
+	Body: Merging this PR will release the following:
+
+
+## Features
+
+- New feature in existing release

@@ -49,6 +49,9 @@ type PrepareRelease struct {
 // Type returns "PrepareRelease".
 func (*PrepareRelease) Type() string { return "PrepareRelease" }
 
+// NeedsPackages is true: the step works on the packages.
+func (*PrepareRelease) NeedsPackages() bool { return true }
+
 // Run prepares the release of every package (spec F13).
 func (s *PrepareRelease) Run(
 	ctx context.Context, rt workflow.RunType[workflow.State],
@@ -80,7 +83,7 @@ func (s *PrepareRelease) Run(
 				return rt, diag.Newf("You must configure [github] to use the variable %s in a change template", forgeVariable).
 					WithCode(codeNeedsForge)
 			}
-			return rt, notImplemented(s, "M7") // enriching the changes from GitHub (F16.4)
+			enrichGitInfo(ctx, state.GitHub, list, rt.DryRun)
 		}
 
 		logImpliedRules(ctx, pkg, list)

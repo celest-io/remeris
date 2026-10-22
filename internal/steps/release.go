@@ -3,9 +3,13 @@ package steps
 import (
 	"context"
 	"log/slog"
+	"strings"
 
+	"github.com/celest-io/remeris/internal/forge/gitea"
+	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/workflow"
+	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/action"
 )
 
@@ -13,15 +17,19 @@ import (
 // that PrepareRelease left in State.PendingActions. When there are none, it looks for a release that an earlier
 // workflow prepared but did not publish: a package whose version is newer than its last tag.
 //
-// A release becomes a Git tag, unless [github] or [gitea] is configured; publishing on a forge arrives in
-// milestones M7 and M8, and the step fails with "not implemented" until then, in a dry run too.
+// A release becomes a Git tag, unless [github] or [gitea] is configured: then the forge creates the tag, and no
+// local tag is made. With both configured, each release is made on GitHub first, then on Gitea, as in Knope, and
+// the first failure stops everything after it: nothing is rolled back.
 type Release struct{}
 
 // Type returns "Release".
 func (*Release) Type() string { return "Release" }
 
+// NeedsPackages is true: the step works on the packages.
+func (*Release) NeedsPackages() bool { return true }
+
 // Run creates the tags and releases of the pending actions (spec F14). Afterwards State.PendingActions is empty.
-func (s *Release) Run(
+func (*Release) Run(
 	ctx context.Context, rt workflow.RunType[workflow.State],
 ) (workflow.RunType[workflow.State], error) {
 	state := rt.State
@@ -32,6 +40,7 @@ func (s *Release) Run(
 	state.PendingActions = nil
 	rt.State = state
 
+	var head headSHA
 	for _, a := range pending {
 		switch a.Kind {
 		case action.KindAddTag:
@@ -43,11 +52,18 @@ func (s *Release) Run(
 			}
 		case action.KindCreateRelease:
 			tag := action.ReleaseTag(a.Release.Version, a.Release.PackageName)
-			switch {
-			case rt.State.GitHub != nil:
-				return rt, notImplemented(s, "M7")
-			case rt.State.GiteaConfigured:
-				return rt, notImplemented(s, "M8")
+			if rt.State.GitHub != nil {
+				if err := releaseOnGitHub(ctx, &rt, a.Release, tag, &head); err != nil {
+					return rt, err
+				}
+			}
+			if rt.State.Gitea != nil {
+				if err := releaseOnGitea(ctx, &rt, a.Release, tag, &head); err != nil {
+					return rt, err
+				}
+			}
+			if rt.State.GitHub != nil || rt.State.Gitea != nil {
+				continue
 			}
 			if err := createTag(ctx, &rt, tag); err != nil {
 				return rt, err
@@ -108,4 +124,103 @@ func createTag(ctx context.Context, rt *workflow.RunType[workflow.State], tag st
 		rt.State.Git = g
 	}
 	return rt.State.Git.CreateTag(ctx, tag, git.TagOptions{})
+}
+
+// headSHA reads the commit HEAD points to once per step run.
+type headSHA struct {
+	value string
+	read  bool
+}
+
+// get returns the SHA, or "" when it cannot be read: like Knope, a failure is not an error, and the release then
+// has no target_commitish. Reading Git is allowed in a dry run.
+func (h *headSHA) get(ctx context.Context, state *workflow.State) string {
+	if h.read {
+		return h.value
+	}
+	h.read = true
+	g := state.Git
+	if g == nil {
+		var err error
+		if g, err = git.Open(ctx, "."); err != nil {
+			slog.DebugContext(ctx, "Could not open the Git repository: "+err.Error())
+			return ""
+		}
+	}
+	sha, err := g.HeadCommitSHA(ctx)
+	if err != nil {
+		slog.DebugContext(ctx, "Could not read the HEAD commit: "+err.Error())
+		return ""
+	}
+	h.value = sha
+	return sha
+}
+
+// releaseName is the title of the release: "{package} {title}" for a named package, else the title.
+func releaseName(rel *action.Release) string {
+	if rel.PackageName != nil {
+		return *rel.PackageName + " " + rel.Title
+	}
+	return rel.Title
+}
+
+// releaseOnGitHub creates the GitHub release of rel (spec F16.2). A dry run logs what would happen: it builds no
+// client, so it neither reads the credential store nor touches the network.
+func releaseOnGitHub(
+	ctx context.Context, rt *workflow.RunType[workflow.State], rel *action.Release, tag string, head *headSHA,
+) error {
+	in := github.ReleaseInput{
+		TagName:         tag,
+		Name:            releaseName(rel),
+		Body:            strings.TrimSpace(rel.Notes),
+		Prerelease:      rel.Version.IsPrerelease(),
+		TargetCommitish: head.get(ctx, &rt.State),
+	}
+	assets := rt.State.AssetsOf(packageName(rel))
+	if rt.DryRun {
+		lines, err := github.DescribeRelease(in, assets, "")
+		if err != nil {
+			return err
+		}
+		for _, line := range lines {
+			slog.InfoContext(ctx, line)
+		}
+		return nil
+	}
+	client, err := rt.State.GitHub.RequireAuthentication(ctx)
+	if err != nil {
+		return err
+	}
+	return client.CreateRelease(ctx, in, assets, "")
+}
+
+// releaseOnGitea creates the Gitea release of rel (spec F16.2). A dry run logs what would happen and nothing
+// else: it builds no client, so it neither reads the credential store, nor prompts, nor touches the network.
+// Gitea has no asset uploads: a configuration that has some is refused when it is loaded.
+func releaseOnGitea(
+	ctx context.Context, rt *workflow.RunType[workflow.State], rel *action.Release, tag string, head *headSHA,
+) error {
+	in := gitea.ReleaseInput{
+		TagName:         tag,
+		Name:            releaseName(rel),
+		Body:            strings.TrimSpace(rel.Notes),
+		Prerelease:      rel.Version.IsPrerelease(),
+		TargetCommitish: head.get(ctx, &rt.State),
+	}
+	if rt.DryRun {
+		slog.InfoContext(ctx, gitea.DescribeRelease(rt.State.Gitea.Config(), in))
+		return nil
+	}
+	client, err := rt.State.Gitea.RequireAuthentication(ctx)
+	if err != nil {
+		return err
+	}
+	return client.CreateRelease(ctx, in)
+}
+
+func packageName(rel *action.Release) versioning.PackageName {
+	if rel.PackageName != nil {
+		return versioning.CustomName(*rel.PackageName)
+	}
+	return versioning.DefaultName()
 }
