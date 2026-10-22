@@ -810,7 +810,10 @@ For each format: **read** (where the version comes from), **write** (what is edi
      order `version`, `specifiers`, `jsr`, `npm`, `redirects`, `remote`, `workspace`, empty sections left out, and the
      maps sorted: `specifiers` and the dependency arrays by the normalised requirement text
      (`JsrDepPackageReq::to_string_normalized`: `^1.0.0` prints as `1`, see deno_semver 0.9.1 `range.rs`), `jsr` by
-     `PackageNv` order (name, then version precedence), `npm`, `members` and `links` by key text. The Go port of the
+     `PackageNv` order (name, then version precedence), `npm`, `members` and `links` by key text. Two more printer rules (`printer.rs` 183-271): a `jsr` package's dependency
+     prints as bare `scheme:name` when that name has a single specifier in `specifiers`, otherwise as the normalised
+     requirement; an `npm` dependency prints as `name@npm:pkg@ver` for an alias and as the bare name when the package
+     has a single version. `JsrDepPackageReq::cmp` is not the print order. The Go port of the
      requirement and version types is `pkg/versioning/internal/denosemver`. Check against fixtures
      `tests/prepare_release/deno`.
 

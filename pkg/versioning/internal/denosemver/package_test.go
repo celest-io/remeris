@@ -365,3 +365,18 @@ func TestPackageKind(t *testing.T) {
 		t.Errorf("Npm = %q", got)
 	}
 }
+
+func TestKeys(t *testing.T) {
+	t.Parallel()
+	a, _ := denosemver.ParseJsrDepPackageReq("jsr:@std/path@^1.0.0")
+	b, _ := denosemver.ParseJsrDepPackageReq("jsr:@std/path@1")
+	c, _ := denosemver.ParseJsrDepPackageReq("npm:@std/path@1")
+	if a.Key() != b.Key() || a.Key() == c.Key() {
+		t.Errorf("keys: %q %q %q", a.Key(), b.Key(), c.Key())
+	}
+	nv1, _ := denosemver.ParsePackageNv("a@1.0.0+x")
+	nv2, _ := denosemver.ParsePackageNv("a@1.0.0+y")
+	if nv1.Compare(nv2) != 0 || nv1.Key() == nv2.Key() {
+		t.Errorf("nv keys: %q %q", nv1.Key(), nv2.Key())
+	}
+}

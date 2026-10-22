@@ -33,6 +33,10 @@ type PackageNv struct {
 	Version Version
 }
 
+// Key returns the text of the package, for use as a map key or set member. Versions that differ only by build
+// metadata have different keys although Compare says they are equal (a BTreeMap would merge them).
+func (nv PackageNv) Key() string { return nv.String() }
+
 // String returns "name@version".
 func (nv PackageNv) String() string { return nv.Name + "@" + nv.Version.String() }
 
@@ -305,6 +309,11 @@ func (d JsrDepPackageReq) String() string { return d.Kind.SchemeWithColon() + d.
 func (d JsrDepPackageReq) Normalized() string {
 	return d.Kind.SchemeWithColon() + d.Req.Name + "@" + d.Req.VersionReq.Normalized()
 }
+
+// Key returns a string that is equal for requirements that are equal, for use as a map key or set member (the types
+// hold slices, so they are not comparable). It is the normalised text, which equals the Rust Eq except that an empty
+// range set and "*" both print "*".
+func (d JsrDepPackageReq) Key() string { return d.Normalized() }
 
 // Equal compares the kinds and the requirements.
 func (d JsrDepPackageReq) Equal(o JsrDepPackageReq) bool {

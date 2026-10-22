@@ -12,9 +12,14 @@
 // What the lockfile needs from it:
 //
 //   - ParseJsrDepPackageReq and its loose and normalised variants parse the keys of "specifiers" and the entries
-//     of the dependency arrays; JsrDepPackageReq.Normalized prints them the way deno.lock stores them, and
-//     JsrDepPackageReq.Compare gives the order of the printed maps.
-//   - ParsePackageNv parses the keys of "jsr" and "npm"; PackageNv.Compare gives their order.
+//     of the dependency arrays; JsrDepPackageReq.Normalized prints them the way deno.lock stores them. The printed
+//     maps and arrays are sorted bytewise by that normalised text (deno_lockfile's printer.rs sorts
+//     SerializedJsrDepPackageReq, a string); JsrDepPackageReq.Compare is deno_semver's own order and is NOT that
+//     order ("a@1.5.0" sorts before "a@1" there, "*" sorts last).
+//   - ParsePackageNv parses the keys of "jsr" and "npm"; PackageNv.Compare gives the order of the "jsr" map (a
+//     BTreeMap keyed by PackageNv).
+//   - Key methods give a comparable string for each requirement type, for use as Go map keys and set members where
+//     the Rust code uses HashMap and HashSet.
 //   - VersionReq.VersionText is the raw requirement text, which Knope matches against; VersionReq.Normalized is the
 //     printed form ("^1.0.0" becomes "1", "^0.1.0" becomes "0.1").
 //   - ParseStandard parses the version Remeris writes. Its error text is "Invalid version".
