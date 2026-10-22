@@ -1,7 +1,7 @@
 package versionedfile
 
 import (
-	"bytes"
+	"fmt"
 	"strings"
 
 	"github.com/tailscale/hujson"
@@ -42,6 +42,10 @@ func parseDenoJSON(path, content string) (denoDoc, error) {
 	if strings.HasPrefix(content, denoBOMPrefix) {
 		doc.bom = len(denoBOMPrefix)
 	}
+	if err := checkDenoDepth(content[doc.bom:]); err != nil {
+		return denoDoc{}, diag.New("Could not parse " + path + ": " + err.Error()).
+			WithCode(codeDenoJSONParse).WithHelp("Make sure the file is valid JSON")
+	}
 	root, err := hujson.Parse([]byte(content[doc.bom:]))
 	if err != nil {
 		return denoDoc{}, diag.New("Could not parse " + path + ": " + err.Error()).
@@ -50,6 +54,49 @@ func parseDenoJSON(path, content string) (denoDoc, error) {
 	doc.root = root
 	doc.obj, _ = root.Value.(*hujson.Object)
 	return doc, nil
+}
+
+// maxDenoDepth is the deepest nesting of objects and arrays that is parsed. hujson recurses without a limit, and a
+// few megabytes of "[" would overflow the stack.
+const maxDenoDepth = 10000
+
+// checkDenoDepth fails if brackets nest deeper than maxDenoDepth. Brackets in strings and comments do not count.
+// It does not check the syntax: hujson does.
+func checkDenoDepth(s string) error {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '[', '{':
+			depth++
+			if depth > maxDenoDepth {
+				return fmt.Errorf("nesting is deeper than %d levels", maxDenoDepth)
+			}
+		case ']', '}':
+			depth--
+		case '"':
+			for i++; i < len(s) && s[i] != '"'; i++ {
+				if s[i] == '\\' {
+					i++
+				}
+			}
+		case '/':
+			switch {
+			case strings.HasPrefix(s[i:], "//"):
+				if j := strings.IndexByte(s[i:], '\n'); j >= 0 {
+					i += j
+				} else {
+					i = len(s)
+				}
+			case strings.HasPrefix(s[i:], "/*"):
+				if j := strings.Index(s[i+2:], "*/"); j >= 0 {
+					i += 2 + j + 1
+				} else {
+					i = len(s)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // lastVersion returns the index of the last top level "version" member, as the JSON tree of Knope keeps the last of
@@ -178,14 +225,15 @@ func commentSeparator(raw string, at, from int, sep string) string {
 	if at == from || sep != " " {
 		return sep
 	}
-	if strings.HasPrefix(raw[at:], "\r") {
+	if strings.HasPrefix(raw[at:], "\r\n") {
 		return "\r\n"
 	}
 	return "\n"
 }
 
 // endOfLineComment returns the offset after the spaces and the // comment that follow from on the same line, or from
-// itself if there is no such comment. The line break is not included.
+// itself if there is no such comment. Like hujson, the comment ends only at a line feed. The line break (CRLF or LF)
+// is not included; a lone CR belongs to the comment.
 func endOfLineComment(raw string, from int) int {
 	i := from
 	for i < len(raw) && (raw[i] == ' ' || raw[i] == '\t') {
@@ -194,10 +242,15 @@ func endOfLineComment(raw string, from int) int {
 	if !strings.HasPrefix(raw[i:], "//") {
 		return from
 	}
-	if j := bytes.IndexAny([]byte(raw[i:]), "\r\n"); j >= 0 {
-		return i + j
+	j := strings.IndexByte(raw[i:], '\n')
+	if j < 0 {
+		return len(raw)
 	}
-	return len(raw)
+	end := i + j
+	if end > i+len("//") && raw[end-1] == '\r' {
+		end--
+	}
+	return end
 }
 
 // Write returns the write action, or nil if nothing was edited.

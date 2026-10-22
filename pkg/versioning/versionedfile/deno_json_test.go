@@ -5,12 +5,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/tailscale/hujson"
 
 	"github.com/celest-io/remeris/pkg/versioning/semver"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
@@ -25,6 +22,9 @@ const (
 	denoParseErr = "Could not parse deno.json: "
 	denoVerKey   = `"version": `
 	denoTestdata = "testdata/deno_json"
+
+	// denoBS is a backslash, built from its code so that no tool can decode an escape in the test tables.
+	denoBS = string(rune(92))
 
 	denoV100      = "1.0.0"
 	denoV101      = "1.0.1"
@@ -153,7 +153,8 @@ func TestDenoSplice(t *testing.T) {
 		"splice trailing commas":   {"{\"a\": [1, 2,],\n  " + denoVerKey, denoOld, ",\n}\n"},
 		"splice comma only":        {"{" + denoVerKey, denoOld, ",}"},
 		"splice duplicate last":    {`{"version": "0.1.0", "a": 1, ` + denoVerKey, denoOld, `}`},
-		"splice duplicate escaped": {`{"version": "0.1.0", "version": `, denoOld, `}`},
+		"splice duplicate second":  {`{"version": "1.0.0", "version": `, `"0.1.0"`, `}`},
+		"splice duplicate escaped": {`{"version": "0.1.0", "vers` + denoBS + `u0069on": `, denoOld, `}`},
 		"splice nested before":     {`{"a": {"version": "9.9.9"}, ` + denoVerKey, denoOld, `}`},
 		"splice nested after":      {"{" + denoVerKey, denoOld, `, "a": {"version": "9.9.9"}}`},
 		"splice in comment":        {`{/* "version": "9.9.9" */ // "version": "8"` + "\n" + denoVerKey, denoOld, `}`},
@@ -163,8 +164,13 @@ func TestDenoSplice(t *testing.T) {
 		"splice BOM and comment":   {denoBOM + "// c\n{" + denoVerKey, denoOld, denoCloseNL},
 		"splice tabs":              {"{\n\t\"a\":\t1,\n\t" + denoVerKey + "\t", denoOld, "\t\n}\n"},
 		"splice unicode content":   {`{"é": "日本語 😀", ` + denoVerKey, denoOld, `, "ü": 1}`},
-		"splice unicode escape":    {"{" + denoVerKey, `"1.0.0"`, `}`},
-		"splice key escape":        {`{"version": `, denoOld, `}`},
+		"splice unicode escape":    {"{" + denoVerKey, `"1` + denoBS + `u002e0.0"`, `}`},
+		"splice key escape":        {`{"vers` + denoBS + `u0069on": `, denoOld, `}`},
+		"splice key all escaped":   {`{"` + denoBS + `u0076` + denoBS + `u0065rsion": `, denoOld, `}`},
+		"splice escaped quote":     {"{" + denoVerKey, `"a` + denoBS + `"b"`, `}`},
+		"splice escaped backslash": {"{" + denoVerKey, `"a` + denoBS + denoBS + `b"`, `}`},
+		"splice escaped slash":     {"{" + denoVerKey, `"a` + denoBS + `/b` + denoBS + `n"`, `, "x": 1}`},
+		"splice quote then comma":  {"{" + denoVerKey, `"a` + denoBS + `",` + denoBS + `"}"`, `}`},
 		"splice build metadata":    {"{" + denoVerKey, `"1.0.0+build.5"`, `}`},
 		"splice number":            {"{" + denoVerKey, `5`, `}`},
 		"splice null":              {"{" + denoVerKey, denoNull, `}`},
@@ -196,7 +202,8 @@ func TestDenoIdentity(t *testing.T) {
 	t.Parallel()
 	tests := map[string]string{
 		"identity plain":     "{\n  \"version\": \"1.0.0\"\n}\n",
-		"identity escaped":   denoOneObject,
+		"identity escaped":   `{"version": "1` + denoBS + `u002e0.0"}`,
+		"identity key":       `{"vers` + denoBS + `u0069on": "1` + denoBS + `u002e` + denoBS + `u0030.0"}`,
 		"identity comments":  "// a\n{ /* b */ \"version\": \"1.0.0\", // c\n}\n",
 		"identity CRLF":      "{\r\n\t\"version\": \"1.0.0\",\r\n}",
 		"identity BOM":       denoBOM + "{\"version\": \"1.0.0\"}",
@@ -237,8 +244,15 @@ func TestDenoInsert(t *testing.T) {
 		},
 		"insert inline comment":       {"{\"a\": 1 // c\n}", "{\"a\": 1, // c\n\"version\": \"2.0.0\"\n}"},
 		"insert inline comma comment": {"{\"a\": 1, // c\r\n}", "{\"a\": 1, // c\r\n\"version\": \"2.0.0\",\r\n}"},
-		"insert block comment":        {`{"a": 1 /* c */}`, `{"a": 1, "version": "2.0.0" /* c */}`},
-		"insert nested only":          {`{"a": {"version": "1.0.0"}}`, `{"a": {"version": "1.0.0"}, "version": "2.0.0"}`},
+		"insert lone CR in comment": {
+			"{\"a\": 1 // x\ry\n}", "{\"a\": 1, // x\ry\n\"version\": \"2.0.0\"\n}",
+		},
+		"insert lone CR after comma": {
+			"{\"a\": 1, // x\ry\n}", "{\"a\": 1, // x\ry\n\"version\": \"2.0.0\",\n}",
+		},
+		"insert CRLF after comment": {"{\"a\": 1 // x\r\n}", "{\"a\": 1, // x\r\n\"version\": \"2.0.0\"\r\n}"},
+		"insert block comment":      {`{"a": 1 /* c */}`, `{"a": 1, "version": "2.0.0" /* c */}`},
+		"insert nested only":        {`{"a": {"version": "1.0.0"}}`, `{"a": {"version": "1.0.0"}, "version": "2.0.0"}`},
 		"insert after nested": {
 			"{\n  \"a\": {\n    \"b\": 1\n  }\n}\n",
 			"{\n  \"a\": {\n    \"b\": 1\n  },\n  \"version\": \"2.0.0\"\n}\n",
@@ -359,11 +373,30 @@ func TestDenoHuge(t *testing.T) {
 
 func TestDenoDeepNesting(t *testing.T) {
 	t.Parallel()
-	const depth = 20000
-	in := `{"a": ` + strings.Repeat("[", depth) + strings.Repeat("]", depth) + `, ` + denoVerKey + denoOld + "}"
+	nested := func(depth int) string {
+		return `{"a": ` + strings.Repeat("[", depth-1) + strings.Repeat("]", depth-1) + `, ` + denoVerKey + denoOld + "}"
+	}
+	in := nested(10000) // the root object counts as a level
 	got := denoSet(t, in, denoNew)
 	if want := strings.TrimSuffix(in, denoOld+"}") + denoNewLit + "}"; got != want {
 		t.Error("deep file edited wrongly")
+	}
+	_, err := denoNewFile(denoPath, nested(10001))
+	if err == nil || !strings.HasPrefix(err.Error(), denoParseErr) || !strings.Contains(err.Error(), "deeper than 10000") {
+		t.Errorf("got %v, want a nesting error", err)
+	}
+	// A few megabytes of brackets must be an error, not a stack overflow.
+	if _, err := denoNewFile(denoPath, strings.Repeat("[", 4<<20)); err == nil {
+		t.Error("want an error")
+	}
+}
+
+func TestDenoDepthIgnoresStringsAndComments(t *testing.T) {
+	t.Parallel()
+	in := `{"s": "` + strings.Repeat("[", 20000) + `", "t": "a` + denoBS + `"` + strings.Repeat("{", 20000) + `", ` +
+		"// " + strings.Repeat("[", 20000) + "\n/* " + strings.Repeat("{", 20000) + " */ " + denoVerKey + denoOld + "}"
+	if got := denoSet(t, in, denoNew); !strings.HasSuffix(got, denoNewLit+"}") {
+		t.Error("brackets in strings and comments were counted")
 	}
 }
 
@@ -422,19 +455,155 @@ func readDenoFixture(t *testing.T, name string) string {
 	return string(b)
 }
 
-// denoStandard parses content as JSON with comments and returns it without the top level version.
-func denoStandard(content string) (map[string]any, bool) {
-	content = strings.TrimPrefix(content, denoBOM)
-	std, err := hujson.Standardize([]byte(content))
-	if err != nil {
-		return nil, false
+// denoSkipSpace returns the offset of the first byte at or after i that is not white space or part of a comment. A line
+// comment ends only at a line feed. This scanner and the ones below are the fuzz oracle: they share no code with
+// the implementation and none with hujson.
+func denoSkipSpace(s string, i int) int {
+	for i < len(s) {
+		switch {
+		case s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n':
+			i++
+		case strings.HasPrefix(s[i:], "//"):
+			j := strings.IndexByte(s[i:], '\n')
+			if j < 0 {
+				return len(s)
+			}
+			i += j + 1
+		case strings.HasPrefix(s[i:], "/*"):
+			j := strings.Index(s[i+2:], "*/")
+			if j < 0 {
+				return len(s)
+			}
+			i += j + len("/**/")
+		default:
+			return i
+		}
 	}
-	var m map[string]any
-	if err := json.Unmarshal(std, &m); err != nil {
-		return nil, false
+	return i
+}
+
+// denoStringEnd returns the offset after the string that starts at s[i].
+func denoStringEnd(s string, i int) int {
+	for i++; i < len(s); i++ {
+		switch s[i] {
+		case denoBS[0]:
+			i++
+		case '"':
+			return i + 1
+		}
 	}
-	delete(m, "version")
-	return m, true
+	return len(s)
+}
+
+// denoValueEnd returns the offset after the value that starts at s[i].
+func denoValueEnd(s string, i int) int {
+	if i >= len(s) {
+		return i
+	}
+	switch s[i] {
+	case '"':
+		return denoStringEnd(s, i)
+	case '{', '[':
+		for depth := 0; i < len(s); {
+			switch s[i] {
+			case '{', '[':
+				depth++
+				i++
+			case '}', ']':
+				depth--
+				i++
+				if depth == 0 {
+					return i
+				}
+			case '"':
+				i = denoStringEnd(s, i)
+			case '/':
+				if next := denoSkipSpace(s, i); next > i {
+					i = next
+				} else {
+					i++
+				}
+			default:
+				i++
+			}
+		}
+		return i
+	}
+	for i < len(s) && !strings.ContainsRune(",}] \t\r\n/", rune(s[i])) {
+		i++
+	}
+	return i
+}
+
+// denoLastVersion returns the span of the value of the last top level "version" member of the object in s.
+func denoLastVersion(s string) (start, end int, found bool) {
+	i := denoSkipSpace(s, 0)
+	if i >= len(s) || s[i] != '{' {
+		return 0, 0, false
+	}
+	i++
+	for {
+		i = denoSkipSpace(s, i)
+		if i >= len(s) || s[i] != '"' {
+			return start, end, found
+		}
+		keyEnd := denoStringEnd(s, i)
+		var key string
+		_ = json.Unmarshal([]byte(s[i:keyEnd]), &key)
+		i = denoSkipSpace(s, keyEnd)
+		if i >= len(s) || s[i] != ':' {
+			return start, end, found
+		}
+		valueStart := denoSkipSpace(s, i+1)
+		valueEnd := denoValueEnd(s, valueStart)
+		if key == pubspecKey {
+			start, end, found = valueStart, valueEnd, true
+		}
+		i = denoSkipSpace(s, valueEnd)
+		if i < len(s) && s[i] == ',' {
+			i++
+		}
+	}
+}
+
+// denoCheckOutput is the byte-level oracle of the fuzz test. A file with a version must come out as the input with
+// the span of the last version value replaced by the new quoted version (and unchanged if it already had that
+// version). A file without one must come out as the input plus the member and some white space and commas.
+func denoCheckOutput(t *testing.T, in, out string) {
+	t.Helper()
+	if strings.HasPrefix(in, denoBOM) != strings.HasPrefix(out, denoBOM) {
+		t.Fatalf("byte order mark changed:\n%q\n%q", in, out)
+	}
+	in, out = strings.TrimPrefix(in, denoBOM), strings.TrimPrefix(out, denoBOM)
+	start, end, found := denoLastVersion(in)
+	if found {
+		var current string
+		want := in[:start] + denoNewLit + in[end:]
+		if json.Unmarshal([]byte(in[start:end]), &current) == nil && current == denoNew {
+			want = in
+		}
+		if out != want {
+			t.Fatalf("not a splice of [%d:%d]:\n%q\n%q", start, end, in, out)
+		}
+		return
+	}
+	vs, ve, ok := denoLastVersion(out)
+	if !ok || out[vs:ve] != denoNewLit || vs < len(denoVerKey) || out[vs-len(denoVerKey):vs] != denoVerKey {
+		t.Fatalf("no new version member in the output:\n%q\n%q", in, out)
+	}
+	rest := out[:vs-len(denoVerKey)] + out[ve:]
+	j := 0
+	for k := 0; k < len(rest); k++ {
+		switch {
+		case j < len(in) && in[j] == rest[k]:
+			j++
+		case !strings.ContainsRune(" ,\t\r\n", rune(rest[k])):
+			t.Fatalf("the output changes more than the member:\n%q\n%q", in, out)
+		}
+	}
+	if j != len(in) {
+		t.Fatalf("the output lost bytes of the input:\n%q\n%q", in, out)
+	}
 }
 
 func FuzzDenoSetVersion(f *testing.F) {
@@ -442,6 +611,9 @@ func FuzzDenoSetVersion(f *testing.F) {
 		denoOneObject, denoEmptyObj, denoEmptyArr, ``, "\xef\xbb\xbf{\"version\": \"1.0.0\"}",
 		"// c\n{\n  /* x */ \"version\": \"1.0.0\", // y\n}\n", `{"version": "1.0.0", "version": 3}`,
 		`{"a": {"version": "1"}, "version": "1.0.0"}`, "{\r\n\t\"a\": 1,\r\n}", `{"a": 1 // c` + "\n}",
+		"{\"a\": 1 // x\ry\n}", "{\"a\": 1, // x\ry\n}", "{\"a\": 1 // x\r\n}", "{\"a\": 1, // x\r\n}",
+		`{"vers` + denoBS + `u0069on": "1` + denoBS + `u002e0.0"}`, `{"version": "a` + denoBS + `"b` + denoBS + denoBS + `"}`,
+		`{"version": "1.0.0", "version": "0.1.0"}`, `{"a": "` + denoBS + `"version` + denoBS + `": 1"}`,
 	}
 	for _, s := range seeds {
 		f.Add(s)
@@ -468,10 +640,6 @@ func FuzzDenoSetVersion(f *testing.F) {
 		if v, err := again.Version(); err != nil || v.String() != denoNew {
 			t.Fatalf("output version: %v, %v\n%q", v, err, out)
 		}
-		a, okA := denoStandard(in)
-		b, okB := denoStandard(out)
-		if okA != okB || (okA && !reflect.DeepEqual(a, b)) {
-			t.Fatalf("content changed besides the version:\n%q\n%q", in, out)
-		}
+		denoCheckOutput(t, in, out)
 	})
 }

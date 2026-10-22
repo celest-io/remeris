@@ -167,6 +167,7 @@ is a float and fails), the diff is the bare version, and a dependency is ignored
 | Empty file, or only comments | `Could not parse {path}: ...`. Knope reads it as `null` (no version). | hujson requires a value. |
 | Parse error text | `Could not parse {path}: {err}` with the text of hujson's error, not jsonc-parser's. | Different library. |
 | Content after the root value | Rejected (`invalid character ... after top-level value`). | hujson. |
+| Nesting depth (remeris addition) | Objects and arrays nested deeper than 10000 levels are a parse error (`Could not parse {path}: nesting is deeper than 10000 levels`). Brackets inside strings and comments do not count. Knope has no such limit (jsonc-parser reports its own depth error). | hujson recurses without a limit: a few megabytes of `[` would overflow the stack, which Go cannot recover from. |
 | `dependency` | Ignored, with no diff and no write, as in Knope. | `deno.lock` owns dependency versions. |
 
 A line comment cannot contain U+2028 or U+2029 (hujson rejects them).
