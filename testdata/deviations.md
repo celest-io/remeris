@@ -177,4 +177,10 @@ A line comment cannot contain U+2028 or U+2029 (hujson rejects them).
 
 ### deno.lock
 
-None yet.
+| Case | Change | Reason |
+| --- | --- | --- |
+| A lockfile that deno_lockfile's `from_json` rejects, edited by a `SetVersion` that matches a specifier | Error `Could not update {path}: {reason}` (`remeris::deno_lock::update`), where `{reason}` is the text of the model error, for example `Invalid redirects section: invalid type: integer `5`, expected a map`. Knope's `write()` ends in `from_json(self.json).ok()?`, so it writes nothing and prints nothing: the release goes on and the lockfile is silently left behind. | A release that leaves the lockfile out of date without a word is worse than a clear failure. The check runs in `SetVersion`, after the match, so a lockfile that no edit touches is never rejected (as in Knope). |
+| When a write happens | Same as Knope: only when at least one `specifiers` entry named the dependency (and had a string value). Then the whole file is re-printed in the canonical form of deno_lockfile (2-space indent, fixed key order, sorted maps, final newline, empty sections and unknown top-level keys dropped), not patched in place. A call with no dependency, no `specifiers` object or no match changes nothing. | Parity; the canonical print is what Deno itself writes. |
+| Specifier keys | The key text is not rewritten, only its value; the printed key is the normalised requirement (`^1.0.0` prints as `1`), a property of the printer. | Parity with Knope's `deno_lock.rs`. |
+| JSON syntax errors | `Error deserializing {path}: {err}` with the text of Go's JSON reader, not serde_json's. | Different JSON library. |
+| `Version()` | Always `This file can't contain a version`, as in Knope (code `remeris::versioned_file::no_version`). | Parity. |

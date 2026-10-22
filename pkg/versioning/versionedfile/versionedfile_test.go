@@ -10,14 +10,12 @@ import (
 )
 
 const (
-	cargoToml    = "Cargo.toml"
-	packageJSON  = "package.json"
-	setupPy      = "setup.py"
-	unknownPref  = "Unknown file: "
-	notImplement = "is not implemented yet"
-	denoJSONC    = "deno.jsonc"
-	goMod        = "go.mod"
-	m9           = "M9"
+	cargoToml   = "Cargo.toml"
+	packageJSON = "package.json"
+	setupPy     = "setup.py"
+	unknownPref = "Unknown file: "
+	denoJSONC   = "deno.jsonc"
+	goMod       = "go.mod"
 )
 
 func strp(s string) *string { return &s }
@@ -250,21 +248,21 @@ func TestErrNoVersion(t *testing.T) {
 	}
 }
 
-// TestNewNotImplemented covers every format without listing any: a format is either implemented (its own tests
-// cover it) or a stub that fails with the exact not-implemented error. Building a format needs no edit here.
-func TestNewNotImplemented(t *testing.T) {
+// stubbedFormats are the formats whose pull requests (deno.json: PR 58, pubspec.yaml: PR 57) are not on this branch
+// yet. Delete the map when they are: from then on no format may be a stub.
+var stubbedFormats = map[versionedfile.Format]bool{versionedfile.DenoJson: true, versionedfile.PubSpec: true}
+
+// TestNewEveryFormatBuilds checks that no format answers with the not-implemented error any more.
+func TestNewEveryFormatBuilds(t *testing.T) {
 	t.Parallel()
 	for f := versionedfile.Cargo; f.String() != "Unknown"; f++ {
 		t.Run(f.String(), func(t *testing.T) {
 			t.Parallel()
-			file, err := versionedfile.New(versionedfile.Config{Path: "x", Format: f}, "", nil)
+			_, err := versionedfile.New(versionedfile.Config{Path: "x", Format: f}, "", nil)
 			var d diag.Diagnostic
-			if !errors.As(err, &d) || d.Code() != "remeris::versioned_file::not_implemented" {
-				return // implemented: the format's own tests apply
-			}
-			want := "Versioned file format " + f.String() + " " + notImplement + " (milestone " + m9 + ")"
-			if file != nil || err.Error() != want {
-				t.Errorf("got %v, %q; want nil, %q", file, err, want)
+			stub := errors.As(err, &d) && d.Code() == "remeris::versioned_file::not_implemented"
+			if stub != stubbedFormats[f] {
+				t.Errorf("format %s: stub=%v, want %v (%v)", f, stub, stubbedFormats[f], err)
 			}
 		})
 	}

@@ -1,5 +1,5 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/deno/file_priority (MIT, see testdata/README.md).
-skip 'needs package discovery (milestone M10) and deno.lock support (milestone M9)'
+skip 'needs package discovery (milestone M10)'
 
 exec git init --initial-branch=main
 exec git config user.email fake@remeris.dev

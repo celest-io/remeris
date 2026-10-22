@@ -1,8 +1,0 @@
-# Removed by the PR that builds deno.lock (M9 PR 61): no format will be unbuilt after it.
-# deno.lock is found by default detection, but its format is milestone M9. The error is the one an explicit
-# versioned_files entry gives; the file is not dropped silently.
-! exec remeris release --dry-run
-stderr 'Versioned file format DenoLock is not implemented yet \(milestone M9\)'
-
--- deno.lock --
-{}
