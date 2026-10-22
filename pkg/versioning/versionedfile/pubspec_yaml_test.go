@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/pkg/versioning/semver"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
@@ -20,6 +22,7 @@ const (
 	pubspecErrPre  = "Error deserializing pubspec.yaml: "
 	pubspecVerLine = "version: "
 
+	pubspecKey        = "version"
 	pubspecNotMapping = "YAML was not a mapping"
 	pubspecNotString  = "YAML `version` field was not a string"
 )
@@ -164,7 +167,7 @@ func TestPubspecIdentityIdempotenceAndImmutability(t *testing.T) {
 	}
 	a, _ := lockWrite(t, once)
 	b, diff := lockWrite(t, twice)
-	if a != b || diff != pubspecNew+", "+pubspecNew {
+	if a != b || diff != pubspecNew {
 		t.Errorf("not idempotent: %q then %q (diff %q)", a, b, diff)
 	}
 	if f.Write() != nil || f.Path() != pubspecPath {
@@ -198,6 +201,8 @@ func TestPubspecLoadErrors(t *testing.T) {
 		"load sequence":         {"- version: 1.0.0\n", pubspecNotMapping},
 		"load scalar":           {"1.0.0\n", pubspecNotMapping},
 		"load empty document":   {"---\n", pubspecNotMapping},
+		"load bare marker":      {"---", pubspecNotMapping},
+		"load timestamp":        {"version: 2001-01-01\n", pubspecNotString},
 		"load no version":       {"name: x\n", "YAML did not contain a top-level `version` field"},
 		"load only nested":      {"a:\n  version: 1.0.0\n", "YAML did not contain a top-level `version` field"},
 		"load version in a seq": {"- a\n", pubspecNotMapping},
@@ -340,26 +345,45 @@ func TestPubspecLargeFileIsLinear(t *testing.T) {
 	}
 }
 
-// pubspecSpliced reports whether out is in with one range replaced by v, the splice invariant.
-func pubspecSpliced(in, out, v string) bool {
-	prefix := 0
-	for prefix < len(in) && prefix < len(out) && in[prefix] == out[prefix] {
-		prefix++
+// pubspecTree parses the first YAML document of content and returns it with the value node of its top-level version.
+func pubspecTree(content string) (root, version *yaml.Node, err error) {
+	var doc yaml.Node
+	if err := yaml.NewDecoder(strings.NewReader(content)).Decode(&doc); err != nil {
+		return nil, nil, err
 	}
-	suffix := 0
-	for suffix < len(in) && suffix < len(out) && in[len(in)-1-suffix] == out[len(out)-1-suffix] {
-		suffix++
-	}
-	for a := 0; a <= prefix; a++ {
-		tail := len(out) - a - len(v)
-		if tail < 0 || tail > suffix || len(in)-tail < a {
-			continue
-		}
-		if out[a:a+len(v)] == v {
-			return true
+	if len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
+		m := doc.Content[0]
+		for i := 0; i+1 < len(m.Content); i += 2 {
+			if m.Content[i].Value == pubspecKey && m.Content[i].Tag == "!!str" {
+				version = m.Content[i+1]
+			}
 		}
 	}
-	return false
+	return &doc, version, nil
+}
+
+// pubspecTreeDiff returns the first difference between two node trees (kind, style, tag, value, anchor, comments and
+// children), or "". The node skip is compared without its value. Positions are ignored: they move with the edit.
+func pubspecTreeDiff(a, b, skip *yaml.Node) string {
+	if a.Kind != b.Kind || a.Style != b.Style || a.Tag != b.Tag || a.Anchor != b.Anchor ||
+		a.HeadComment != b.HeadComment || a.LineComment != b.LineComment || a.FootComment != b.FootComment {
+		return "node differs: " + a.Value + " / " + b.Value
+	}
+	if a != skip && a.Value != b.Value {
+		return "value differs: " + a.Value + " / " + b.Value
+	}
+	if (a.Alias == nil) != (b.Alias == nil) || (a.Alias != nil && a.Alias.Anchor != b.Alias.Anchor) {
+		return "alias differs"
+	}
+	if len(a.Content) != len(b.Content) {
+		return "children differ"
+	}
+	for i := range a.Content {
+		if d := pubspecTreeDiff(a.Content[i], b.Content[i], skip); d != "" {
+			return d
+		}
+	}
+	return ""
 }
 
 func FuzzPubspecSetVersion(f *testing.F) {
@@ -399,8 +423,19 @@ func FuzzPubspecSetVersion(f *testing.F) {
 			t.Fatalf("got %d actions", len(acts))
 		}
 		out := acts[0].Content
-		if !pubspecSpliced(in, out, pubspecNew) {
-			t.Fatalf("not a splice: %q -> %q", in, out)
+		inRoot, inVersion, err := pubspecTree(in)
+		if err != nil || inVersion == nil {
+			t.Fatalf("input tree: %v", err)
+		}
+		outRoot, outVersion, err := pubspecTree(out)
+		if err != nil || outVersion == nil {
+			t.Fatalf("output tree: %v (%q)", err, out)
+		}
+		if outVersion.Value != pubspecNew {
+			t.Fatalf("version is %q (%q)", outVersion.Value, out)
+		}
+		if d := pubspecTreeDiff(inRoot, outRoot, inVersion); d != "" {
+			t.Fatalf("%s: %q -> %q", d, in, out)
 		}
 		again, err := pubspecNewFile(out)
 		if err != nil {

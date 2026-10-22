@@ -138,7 +138,7 @@ func (f pubSpecFile) SetVersion(v semver.Version, _ *string, _ GoVersioning) (Fi
 	out := f
 	out.raw = raw
 	out.version = v
-	out.diff = f.diff.Add(text)
+	out.diff = Diff{}.Add(text) // replaced, not accumulated, like Knope
 	return out, nil
 }
 

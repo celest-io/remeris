@@ -810,8 +810,12 @@ For each format: **read** (where the version comes from), **write** (what is edi
 
 #### `pubspec.yaml`
 - Read top-level `version` (YAML).
-- Write: find the first line starting with `version: ` and replace **that line only** with `version: {v}`. If there
-  is no such line, parse to a YAML mapping, insert `version`, and re-serialise the whole file. Diff `{v}`.
+- Write: replace only the bytes of the top-level `version` scalar (found from the position yaml.v3 reports for the
+  first top-level `version` key), so comments, quote style, line endings and nested `version:` keys stay. Quoted values
+  keep their quotes. A block scalar, anchor, tag, escaped or multi-line value fails with a diagnostic and is not
+  written. The file is never re-serialised: a mapping with no `version` key (unreachable, since loading requires the
+  key) gets a `version: {v}` line appended. Knope replaces the whole line, everywhere it occurs. Diff `{v}`,
+  replacing any earlier diff.
 
 #### `pom.xml`
 - The root element must be `<project>` (`{path} was missing required property project`). Read `project > version` text.

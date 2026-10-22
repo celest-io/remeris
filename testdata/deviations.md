@@ -127,6 +127,9 @@ are not supported.
 | Flutter versions such as `1.0.0+1` | The build metadata is part of the version (D8), so `1.0.0+1` loads. A bump writes the new version as semver prints it: the old `+1` is not carried over, and build metadata on the new version is kept. Nothing is special-cased. | No Flutter rule in the spec. |
 | Two top-level `version` keys | The load fails with ``YAML contained more than one top-level `version` field``. | Knope's choice between them is the YAML library's. |
 | An invalid YAML document | The message after `Error deserializing {path}: ` is the text of the go-yaml error, not saphyr's. | Different YAML library. |
+| A plain value shaped like a timestamp (`version: 2001-01-01`) | The load fails with ``YAML `version` field was not a string``, because yaml.v3 tags it `!!timestamp`. Knope reads it as a string and fails with a semver parse error. | Different YAML library and tag resolution. |
+| The help text of the `Could not update {path}: ...` error | It says to write `version: x.y.z` on one line without an anchor or a tag. Knope's serialize help says to report a bug. | remeris refuses to edit such a file instead of re-serialising it. |
+| Spec F6.2 ("replace that line only", re-serialise when no line) | remeris splices the scalar's bytes only, in the first top-level `version` key, and appends a line for the unreachable no-key case. It never re-serialises. | See the first rows. |
 | A file without a top-level `version` | Never reached: the load fails first (as in Knope). The insert branch appends `version: {v}` on a new line at the end of a block mapping, with the file's line ending, instead of re-serialising the document. | The spec's re-serialise branch is unreachable after F7.2 validation. |
 
 The rest is Knope's behaviour: exactly one YAML document that is a mapping, a top-level `version` that is a string (`version: 1.0`
