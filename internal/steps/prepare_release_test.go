@@ -34,6 +34,8 @@ const (
 
 // recordingGit serves canned commits and records what steps ask of it.
 type recordingGit struct {
+	git.Git
+
 	commits []git.Commit
 	tagArg  *string
 	called  bool
