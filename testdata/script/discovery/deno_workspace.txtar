@@ -20,7 +20,7 @@ cmp stderr broken.log
 cp b/deno.json.orig b/deno.json
 cp deno.jsonc.missing deno.jsonc
 ! exec remeris release --dry-run
-stderr 'Failed to discover Deno workspace: Could not find config file for workspace member in ''gone/''\.'
+stderr 'Failed to discover Deno workspace: Could not find config file for workspace member in "gone/"\.'
 
 -- deno.jsonc --
 {
@@ -63,7 +63,7 @@ stderr 'Failed to discover Deno workspace: Could not find config file for worksp
 -- pkgs/c/README.md --
 no config here, so it is no member
 -- broken.log --
-Error: Failed to discover Deno workspace: Could not parse b/deno.json
+Error: Failed to discover Deno workspace: Could not parse "b/deno.json"
 -- want.log --
 Would add the following to deno.lock: @s/a = 1.1.0
 Would add the following to pkgs/a/deno.json: version = 1.1.0

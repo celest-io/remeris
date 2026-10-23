@@ -24,6 +24,7 @@ const (
 	dtLockA     = dtRootA + " deno.lock@@s/a"
 	dtMemA      = "@s/a a/CHANGELOG.md @s/a: a/deno.json"
 	dtEdgeA     = dtMemA + " b/deno.json@@s/a"
+	dtPkgsA     = "@s/a pkgs/a/CHANGELOG.md @s/a: pkgs/a/deno.json"
 	dtMemB      = "@s/b b/CHANGELOG.md @s/b: b/deno.json"
 	dtWsA       = `{"workspace":["a"]}`
 	dtJSRA      = "jsr @s/a"
@@ -103,13 +104,13 @@ func TestDenoWorkspace(t *testing.T) {
 				dtRoot: `{"workspace":["pkgs/*","!pkgs/b"]}`, "pkgs/a/deno.json": dtA, "pkgs/b/deno.json": dtB,
 				"pkgs/c/README.md": "", "pkgs/node_modules/deno.json": dtB,
 			},
-			want: []string{"@s/a pkgs/a/CHANGELOG.md @s/a: pkgs/a/deno.json"},
+			want: []string{dtPkgsA},
 		},
 		"glob with a negated glob": {
 			files: map[string]string{
 				dtRoot: `{"workspace":["pkgs/*","!pkgs/b*"]}`, "pkgs/a/deno.json": dtA, "pkgs/b1/deno.json": dtB,
 			},
-			want: []string{"@s/a pkgs/a/CHANGELOG.md @s/a: pkgs/a/deno.json"},
+			want: []string{dtPkgsA},
 		},
 		"glob finds package.json folders and ignores brackets": {
 			files: map[string]string{
@@ -287,27 +288,27 @@ func TestDenoWorkspaceErrors(t *testing.T) {
 	}{
 		"member that does not parse": {
 			files: map[string]string{dtRoot: dtWsA, dtADeno: `{"name": `},
-			want:  "Failed to discover Deno workspace: Could not parse a/deno.json",
+			want:  "Failed to discover Deno workspace: Could not parse \"a/deno.json\"",
 		},
 		"member package.json that does not parse": {
-			files: map[string]string{dtRoot: dtWsA, "a/package.json": `[1]`},
-			want:  "Failed to discover Deno workspace: Could not parse a/package.json",
+			files: map[string]string{dtRoot: dtWsA, memberPkgJSON: `[1]`},
+			want:  "Failed to discover Deno workspace: Could not parse \"a/package.json\"",
 		},
 		"root that does not parse": {
 			files: map[string]string{dtRoot: `{"name": `},
-			want:  "Failed to discover Deno workspace: Could not parse deno.json",
+			want:  "Failed to discover Deno workspace: Could not parse \"deno.json\"",
 		},
 		"root that is not an object": {
 			files: map[string]string{dtRootC: `[]`},
-			want:  "Failed to discover Deno workspace: Could not parse deno.jsonc",
+			want:  "Failed to discover Deno workspace: Could not parse \"deno.jsonc\"",
 		},
 		"missing member directory": {
 			files: map[string]string{dtRoot: `{"workspace":["nope"]}`},
-			want:  "Failed to discover Deno workspace: Could not find config file for workspace member in 'nope/'.",
+			want:  "Failed to discover Deno workspace: Could not find config file for workspace member in \"nope/\".",
 		},
 		"member directory without a config": {
 			files: map[string]string{dtRoot: dtWsA, "a/README.md": ""},
-			want:  "Failed to discover Deno workspace: Could not find config file for workspace member in 'a/'.",
+			want:  "Failed to discover Deno workspace: Could not find config file for workspace member in \"a/\".",
 		},
 		"member names the file": {
 			files: map[string]string{dtRoot: `{"workspace":["a/deno.json"]}`, dtADeno: dtA},
@@ -331,16 +332,16 @@ func TestDenoWorkspaceErrors(t *testing.T) {
 		},
 		"member twice as path and glob": {
 			files: map[string]string{dtRoot: `{"workspace":["a","*"]}`, dtADeno: dtA},
-			want:  "Failed to discover Deno workspace: Cannot specify a workspace member twice ('a').",
+			want:  "Failed to discover Deno workspace: Cannot specify a workspace member twice (\"a\").",
 		},
 		"member twice as two spellings": {
 			files: map[string]string{dtRoot: `{"workspace":["a","./a"]}`, dtADeno: dtA},
-			want:  "Cannot specify a workspace member twice ('./a').",
+			want:  "Cannot specify a workspace member twice (\"./a\").",
 		},
 		"duplicate package names": {
 			files: map[string]string{dtRoot: dtWorkspace, dtADeno: dtA, dtBDeno: dtA},
-			want: "Failed to discover Deno workspace: The '@s/a' package ('b/deno.json') cannot have the same name as " +
-				"the package at 'a/deno.json'.",
+			want: `Failed to discover Deno workspace: The "@s/a" package ("b/deno.json") cannot have the same name as ` +
+				`the package at "a/deno.json".`,
 		},
 		"duplicate names without a version": {
 			files: map[string]string{dtRoot: dtWorkspace, dtADeno: `{"name":"x"}`, dtBDeno: `{"name":"x"}`},
@@ -348,7 +349,7 @@ func TestDenoWorkspaceErrors(t *testing.T) {
 		},
 		"duplicate with the root": {
 			files: map[string]string{dtRoot: `{"name":"@s/a","workspace":["a"]}`, dtADeno: dtA},
-			want:  "The '@s/a' package ('a/deno.json') cannot have the same name as the package at 'deno.json'.",
+			want:  `The "@s/a" package ("a/deno.json") cannot have the same name as the package at "deno.json".`,
 		},
 		"invalid workspace type": {
 			files: map[string]string{dtRoot: `{"workspace":"a"}`},
@@ -362,22 +363,22 @@ func TestDenoWorkspaceErrors(t *testing.T) {
 			files: map[string]string{dtRoot: `{"workspace":{"members":[],"x":1}}`},
 			want:  dtBadWorkspace,
 		},
-		"non-string member": {
+		"member that is a number": {
 			files: map[string]string{dtRoot: `{"workspace":["a",1]}`},
 			want:  dtBadWorkspace,
 		},
 		"pattern that does not compile": {
 			files: map[string]string{dtRoot: `{"workspace":["a/***"]}`},
-			want:  "Failed converting Deno workspace member 'a/***' to pattern",
+			want:  `Failed converting Deno workspace member "a/***" to pattern`,
 		},
 		"lock outside the root": {
 			files: map[string]string{dtRoot: `{"name":"@s/a","version":"1.0.0","lock":"../deno.lock"}`},
-			want:  "Failed to resolve deno.lock path: ../deno.lock is outside the project directory",
+			want:  `Failed to resolve deno.lock path: "../deno.lock" is outside the project directory`,
 			code:  codeDenoLockfilePath,
 		},
 		"absolute lock": {
 			files: map[string]string{dtRoot: `{"name":"@s/a","version":"1.0.0","lock":{"path":"/tmp/deno.lock"}}`},
-			want:  "Failed to resolve deno.lock path: /tmp/deno.lock is outside the project directory",
+			want:  `Failed to resolve deno.lock path: "/tmp/deno.lock" is outside the project directory`,
 			code:  codeDenoLockfilePath,
 		},
 		"lock of the wrong type": {
@@ -408,7 +409,7 @@ func TestDenoWorkspaceErrors(t *testing.T) {
 }
 
 func TestDenoWorkspaceLimits(t *testing.T) {
-	big := fstest.MapFS{dtRoot: &fstest.MapFile{Data: []byte(`{"pad":"` + strings.Repeat("x", maxDenoManifestBytes) + `"}`)}}
+	big := fstest.MapFS{dtRoot: &fstest.MapFile{Data: []byte(`{"pad":"` + strings.Repeat("x", maxManifestSize) + `"}`)}}
 	if _, err := denoWorkspace(big); err == nil || !strings.Contains(err.Error(), "larger than 8 MiB") {
 		t.Errorf("error = %v, want the size limit", err)
 	}
@@ -448,9 +449,9 @@ func TestParseDenoRequirement(t *testing.T) {
 		"jsr with req":        {"jsr:@s/a@^1.2.3", dtJSRA},
 		"jsr with subpath":    {"jsr:@s/a@1/mod.ts", dtJSRA},
 		"jsr with slash":      {"jsr:/@s/a", dtJSRA},
-		"jsr unscoped":        {"jsr:a", ""},
+		"jsr unscoped":        {"jsr:foo@1", "jsr foo"},
 		"jsr no name":         {"jsr:@s/", ""},
-		"jsr no scope":        {"jsr:@/a", ""},
+		"jsr empty scope":     {"jsr:@/a", "jsr @/a"},
 		"npm":                 {"npm:left-pad", dtNPMPad},
 		"npm with req":        {"npm:left-pad@1", dtNPMPad},
 		"npm scoped":          {"npm:@s/a@1/sub", "npm @s/a"},
@@ -459,7 +460,7 @@ func TestParseDenoRequirement(t *testing.T) {
 		"npm scope only":      {"npm:@s", ""},
 		"https":               {"https://deno.land/x/a", ""},
 		"relative":            {"./a.ts", ""},
-		"empty":               {"", ""},
+		"empty spec":          {"", ""},
 		"jsr prefix, no name": {"jsr:", ""},
 	}
 	for name, tc := range cases {

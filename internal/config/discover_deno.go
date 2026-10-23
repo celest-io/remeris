@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"io/fs"
 	"path"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
-
-	"github.com/tailscale/hujson"
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/glob"
@@ -19,12 +18,11 @@ import (
 )
 
 const (
-	// Knope's workspaces::deno_discover and workspaces::deno_lockfile_path.
+	// Knope's workspaces::deno_discover and workspaces::deno_lockfile_path; the third is the size cap of the Cargo
+	// detector, shared.
 	codeDenoDiscover     = "remeris::workspace::deno_discover"
 	codeDenoLockfilePath = "remeris::workspace::deno_lockfile_path"
-
-	// maxDenoManifestBytes caps every manifest read: a configuration file larger than this is an error.
-	maxDenoManifestBytes = 8 << 20
+	codeDenoTooLarge     = "remeris::workspace::too_large"
 
 	denoJSONFile   = "deno.json"
 	denoJSONCFile  = "deno.jsonc"
@@ -37,6 +35,9 @@ const (
 	rootDir        = "."
 	parentDirNames = ".."
 )
+
+// denoWindows is true when paths are Windows paths; the checks take it as a parameter so that tests can run both.
+var denoWindows = runtime.GOOS == "windows"
 
 // denoConfigNames are the files that make a directory a workspace member, in deno_config's order.
 var denoConfigNames = []string{denoJSONFile, denoJSONCFile, packageJSON}
@@ -115,7 +116,7 @@ func denoFailure(format string, args ...any) *diag.Error {
 
 // loadDenoFolder reads the configuration files of dir. It returns nil when there is none, and an error when one does
 // not parse. deno.json wins over deno.jsonc.
-func loadDenoFolder(root fs.FS, dir string) (*denoFolder, error) {
+func loadDenoFolder(root fs.StatFS, dir string) (*denoFolder, error) {
 	f := &denoFolder{dir: dir}
 	for _, name := range []string{denoJSONFile, denoJSONCFile} {
 		doc, found, err := readDenoManifest(root, path.Join(dir, name), true)
@@ -141,37 +142,67 @@ func loadDenoFolder(root fs.FS, dir string) (*denoFolder, error) {
 }
 
 // readDenoManifest reads a JSON object (with comments and trailing commas when jsonc). A missing file is not an
-// error. A file that cannot be read, is larger than maxDenoManifestBytes or is not an object is; the message names
-// the file and never quotes it. An empty deno.json(c) is an empty object, as in Deno.
-func readDenoManifest(root fs.FS, name string, jsonc bool) (doc map[string]any, found bool, err error) {
-	f, err := root.Open(name)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, false, nil
-		}
-		return nil, false, denoFailure("Could not read %s", name)
+// error. A file that cannot be read, is not a regular file, is larger than 8 MiB, is nested deeper than
+// maxJSONDepth, is not an object or has a field of the wrong type (`name` or `version` that is not a string, a
+// `lock.path` that is not a string) is. The messages name the file and never quote it. As in Deno, an empty
+// deno.json(c) and one that holds `null` are the default (empty) configuration.
+func readDenoManifest(root fs.StatFS, name string, jsonc bool) (doc map[string]any, found bool, err error) {
+	data, err := readManifestFile(root, name)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil, false, nil
+	case errors.Is(err, errManifestTooLarge):
+		return nil, false, denoFailure("%q is larger than 8 MiB", name).WithCode(codeDenoTooLarge)
+	case err != nil:
+		return nil, false, denoFailure("Could not read %q", name)
 	}
-	defer func() { _ = f.Close() }()
-	data, err := io.ReadAll(io.LimitReader(f, maxDenoManifestBytes+1))
-	if err != nil {
-		return nil, false, denoFailure("Could not read %s", name)
-	}
-	if len(data) > maxDenoManifestBytes {
-		return nil, false, denoFailure("%s is larger than 8 MiB", name)
-	}
-	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	if jsonc {
-		if data, err = hujson.Standardize(data); err != nil {
-			return nil, false, denoFailure("Could not parse %s", name)
+		if data, err = standardizeJSONC(data); err != nil {
+			return nil, false, denoParseFailure(name, err)
 		}
 		if len(bytes.TrimSpace(data)) == 0 {
 			return map[string]any{}, true, nil
 		}
+	} else {
+		data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
+		if jsonDepthExceeded(data, maxJSONDepth) {
+			return nil, false, denoParseFailure(name, errJSONTooDeep)
+		}
 	}
-	if err := json.Unmarshal(data, &doc); err != nil || doc == nil {
-		return nil, false, denoFailure("Could not parse %s", name)
+	if err := json.Unmarshal(data, &doc); err != nil || (doc == nil && !jsonc) || !denoFieldTypesOK(doc) {
+		return nil, false, denoParseFailure(name, nil)
+	}
+	if doc == nil {
+		doc = map[string]any{}
 	}
 	return doc, true, nil
+}
+
+func denoParseFailure(name string, cause error) *diag.Error {
+	if errors.Is(cause, errJSONTooDeep) {
+		return denoFailure("Could not parse %q: %s", name, cause)
+	}
+	return denoFailure("Could not parse %q", name)
+}
+
+// denoFieldTypesOK checks the typed fields deno_config deserializes at load time: `name` and `version` are optional
+// strings, and `lock`, when an object, has an optional string `path`.
+func denoFieldTypesOK(doc map[string]any) bool {
+	for _, key := range []string{"name", "version"} {
+		if v, ok := doc[key]; ok && v != nil {
+			if _, isString := v.(string); !isString {
+				return false
+			}
+		}
+	}
+	if lock, ok := doc["lock"].(map[string]any); ok {
+		if v, ok := lock["path"]; ok && v != nil {
+			if _, isString := v.(string); !isString {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // denoMembers parses the `workspace` key: absent or null is no members, an array of strings is the members, and an
@@ -213,7 +244,7 @@ type denoMemberDir struct {
 	pattern  bool
 }
 
-func denoMemberFolders(root fs.FS, rootFolder *denoFolder) ([]*denoFolder, error) {
+func denoMemberFolders(root fs.StatFS, rootFolder *denoFolder) ([]*denoFolder, error) {
 	members, err := denoMembers(rootFolder.deno)
 	if err != nil {
 		return nil, err
@@ -232,7 +263,7 @@ func denoMemberFolders(root fs.FS, rootFolder *denoFolder) ([]*denoFolder, error
 
 	var dirs []denoMemberDir
 	for _, raw := range plain {
-		dir, err := resolveDenoMember(raw)
+		dir, err := resolveDenoMember(raw, denoWindows)
 		if err != nil {
 			return nil, err
 		}
@@ -254,7 +285,7 @@ func denoMemberFolders(root fs.FS, rootFolder *denoFolder) ([]*denoFolder, error
 			if prev == m {
 				continue
 			}
-			return nil, denoFailure("Cannot specify a workspace member twice ('%s').", m.raw)
+			return nil, denoFailure("Cannot specify a workspace member twice (%q).", m.raw)
 		}
 		f, err := loadDenoFolder(root, m.dir)
 		if err != nil {
@@ -274,15 +305,33 @@ func denoMemberFolders(root fs.FS, rootFolder *denoFolder) ([]*denoFolder, error
 func denoMemberNotFound(m denoMemberDir) error {
 	last := path.Base(m.dir)
 	if !m.pattern && slices.Contains(denoConfigNames, last) {
-		return denoFailure("Could not find config file for workspace member in '%s/'. Ensure you specify the directory "+
-			"and not the configuration file in the workspace member.", m.dir)
+		return denoFailure("Could not find config file for workspace member in %q. Ensure you specify the directory "+
+			"and not the configuration file in the workspace member.", m.dir+"/")
 	}
-	return denoFailure("Could not find config file for workspace member in '%s/'.", m.dir)
+	return denoFailure("Could not find config file for workspace member in %q.", m.dir+"/")
+}
+
+// unsafeDenoPath reports whether p, a member or lock path of deno.json, is absolute or names another volume, which
+// would leave the project: a rooted path, a drive or UNC path, and on Windows (windows true) any backslash, since it
+// separates components there. The check is lexical and runs before the path is cleaned.
+func unsafeDenoPath(p string, windows bool) bool {
+	if p == "" || strings.HasPrefix(p, "/") || filepath.IsAbs(p) || filepath.VolumeName(p) != "" {
+		return true
+	}
+	if windows {
+		if strings.Contains(p, `\`) {
+			return true
+		}
+		if len(p) >= 2 && p[1] == ':' && (p[0]|0x20 >= 'a' && p[0]|0x20 <= 'z') {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveDenoMember joins a member written as a path to the root and checks it stays below it.
-func resolveDenoMember(raw string) (string, error) {
-	if raw == "" || strings.HasPrefix(raw, "/") {
+func resolveDenoMember(raw string, windows bool) (string, error) {
+	if unsafeDenoPath(raw, windows) {
 		return "", denoNonDescendant(raw)
 	}
 	dir := path.Clean(raw)
@@ -293,12 +342,12 @@ func resolveDenoMember(raw string) (string, error) {
 }
 
 func denoNonDescendant(raw string) error {
-	return denoFailure("Workspace member must be nested in a directory under the workspace. Member: %s", raw)
+	return denoFailure("Workspace member must be nested in a directory under the workspace. Member: %q", raw)
 }
 
 // hasDenoGlobChars is deno_config's is_glob_pattern: only `*` and `?` count, and URLs are never patterns.
 func hasDenoGlobChars(s string) bool {
-	for _, p := range []string{"http://", "https://", "file://", prefixNPM} {
+	for _, p := range []string{"http://", "https://", "file://", prefixNPM, prefixJSR} {
 		if strings.HasPrefix(s, p) {
 			return false
 		}
@@ -307,28 +356,35 @@ func hasDenoGlobChars(s string) bool {
 }
 
 // globDenoMembers finds the directories under the root that hold a deno.json, deno.jsonc or package.json and match one
-// of the patterns, minus those at or below a directory matched by a negated pattern. `.git` and `node_modules`
-// directories are never members. Brackets are literal, as in deno_config.
-func globDenoMembers(root fs.FS, patterns, negated []string) ([]denoMemberDir, error) {
-	var excluded []string
-	for _, q := range negated {
+// of the patterns. deno_config turns `!p` into the exclusion of `p/deno.json` (and the other two names), so a
+// directory is excluded when it is matched by `p` itself, never because it is below a match. Brackets are literal.
+//
+// The walk is internal/glob's: it cannot prune `.git` and `node_modules` while walking, nor keep out of linked
+// directories, so those matches are dropped afterwards, as are matches that deno_config's hidden-file rule refuses.
+func globDenoMembers(root fs.StatFS, patterns, negated []string) ([]denoMemberDir, error) {
+	excluded := map[string]bool{}
+	for _, q := range uniqueStrings(negated) {
 		matches, err := expandDenoPattern(root, q, "")
 		if err != nil {
 			return nil, err
 		}
-		excluded = append(excluded, matches...)
+		for _, m := range matches {
+			excluded[m] = true
+		}
 	}
+	linked := map[string]bool{}
 	var out []denoMemberDir
-	for _, p := range patterns {
+	for _, p := range uniqueStrings(patterns) {
 		for _, name := range denoConfigNames {
 			files, err := expandDenoPattern(root, p, name)
 			if err != nil {
 				return nil, err
 			}
+			components := denoPatternComponents(p, name)
 			for _, file := range files {
 				dir := path.Dir(file)
-				if slices.ContainsFunc(strings.Split(dir, "/"), isIgnoredDenoDir) ||
-					slices.ContainsFunc(excluded, func(e string) bool { return dir == e || strings.HasPrefix(dir, e+"/") }) {
+				if excluded[dir] || slices.ContainsFunc(strings.Split(dir, "/"), isIgnoredDenoDir) ||
+					!hiddenAllowed(components, strings.Split(file, "/")) || throughSymlink(root, dir, linked) {
 					continue
 				}
 				out = append(out, denoMemberDir{raw: dir, dir: dir, pattern: true})
@@ -338,11 +394,91 @@ func globDenoMembers(root fs.FS, patterns, negated []string) ([]denoMemberDir, e
 	return out, nil
 }
 
+func uniqueStrings(in []string) []string {
+	var out []string
+	for _, s := range in {
+		if !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func isIgnoredDenoDir(segment string) bool { return segment == ".git" || segment == "node_modules" }
+
+// throughSymlink reports whether a component of dir is a symbolic link. deno_config reads lstat metadata and never
+// enters a linked directory. Results are cached in seen.
+func throughSymlink(root fs.FS, dir string, seen map[string]bool) bool {
+	if dir == rootDir {
+		return false
+	}
+	prefix := ""
+	for _, c := range strings.Split(dir, "/") {
+		prefix = path.Join(prefix, c)
+		link, known := seen[prefix]
+		if !known {
+			info, err := fs.Lstat(root, prefix)
+			link = err == nil && info.Mode()&fs.ModeSymlink != 0
+			seen[prefix] = link
+		}
+		if link {
+			return true
+		}
+	}
+	return false
+}
+
+// denoPatternComponents splits member/name the way expandDenoPattern builds its pattern, without `.` components.
+func denoPatternComponents(member, name string) []string {
+	var out []string
+	for _, c := range strings.Split(member+"/"+name, "/") {
+		if c != "" && c != "." {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// hiddenAllowed applies the leading-dot rule deno_config matches with (the glob crate's require_literal_leading_dot):
+// a component of the match that starts with `.` must be matched by a pattern component that starts with a literal `.`,
+// and `**` never matches such a component. internal/glob lets `*` match a leading dot, so the matches are filtered
+// here. The pattern components are assumed to match already; only the dots are checked.
+func hiddenAllowed(pattern, match []string) bool {
+	type key struct{ p, m int }
+	memo := map[key]bool{}
+	var ok func(p, m int) bool
+	ok = func(p, m int) bool {
+		if p == len(pattern) {
+			return m == len(match)
+		}
+		k := key{p, m}
+		if v, done := memo[k]; done {
+			return v
+		}
+		memo[k] = false
+		res := false
+		if pattern[p] == "**" {
+			for j := m; ; j++ {
+				if ok(p+1, j) {
+					res = true
+					break
+				}
+				if j >= len(match) || strings.HasPrefix(match[j], ".") {
+					break
+				}
+			}
+		} else if m < len(match) && (!strings.HasPrefix(match[m], ".") || strings.HasPrefix(pattern[p], ".")) {
+			res = ok(p+1, m+1)
+		}
+		memo[k] = res
+		return res
+	}
+	return ok(0, 0)
+}
 
 // expandDenoPattern expands member/name (or member alone when name is empty) the way deno_config builds its patterns:
 // a leading "./" and a trailing "/" are dropped. A member without glob characters is a plain path, which is not
-// checked for existence here.
+// checked for existence here. The matching is case sensitive; deno_config's is not.
 func expandDenoPattern(root fs.FS, member, name string) ([]string, error) {
 	member = strings.TrimSuffix(strings.TrimPrefix(member, "./"), "/")
 	pattern := strings.NewReplacer("[", "[[]", "]", "[]]").Replace(member)
@@ -355,11 +491,7 @@ func expandDenoPattern(root fs.FS, member, name string) ([]string, error) {
 	files, err := glob.Glob(root, pattern)
 	var readErr *glob.ReadError
 	if err != nil && !errors.As(err, &readErr) {
-		return nil, denoFailure(
-			"Failed converting Deno workspace member '%s' to pattern for config '%s'.",
-			member,
-			denoJSONFile,
-		)
+		return nil, denoFailure("Failed converting Deno workspace member %q to pattern for config %q.", member, denoJSONFile)
 	}
 	return files, nil
 }
@@ -374,7 +506,7 @@ func checkDenoDuplicateNames(folders []*denoFolder) error {
 			continue
 		}
 		if other, dup := seen[name]; dup {
-			return denoFailure("The '%s' package ('%s') cannot have the same name as the package at '%s'.",
+			return denoFailure("The %q package (%q) cannot have the same name as the package at %q.",
 				name, f.denoPath, other)
 		}
 		seen[name] = f.denoPath
@@ -402,7 +534,7 @@ func nameAndVersion(doc map[string]any) (string, bool) {
 
 // denoLockfile is the lockfile of the root config: the `lock` setting (false: none; a path, or an object with a
 // `path`; otherwise deno.lock next to the config), only when the file exists. A path that leaves the project is an
-// error, whether or not the file exists.
+// error, whether or not the file exists, and so is a lock that is not a regular file (the release would write to it).
 func denoLockfile(root fs.StatFS, rootFolder *denoFolder) (string, error) {
 	lock := denoLockFile
 	switch v := rootFolder.deno["lock"].(type) {
@@ -421,15 +553,29 @@ func denoLockfile(root fs.StatFS, rootFolder *denoFolder) (string, error) {
 		return "", diag.New("Failed to resolve deno.lock path: the \"lock\" setting is not a boolean, a path or an object").
 			WithCode(codeDenoLockfilePath)
 	}
-	lock = path.Clean(lock)
-	if lock == parentDirNames || strings.HasPrefix(lock, parentDirNames+"/") || strings.HasPrefix(lock, "/") {
-		return "", diag.Newf("Failed to resolve deno.lock path: %s is outside the project directory", lock).
+	if unsafeDenoPath(lock, denoWindows) {
+		return "", denoLockOutside(lock)
+	}
+	clean := path.Clean(lock)
+	if clean == parentDirNames || strings.HasPrefix(clean, parentDirNames+"/") {
+		return "", denoLockOutside(lock)
+	}
+	info, err := root.Stat(clean)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "", nil
+	case err != nil:
+		return "", diag.Newf("Failed to resolve deno.lock path: could not read %q", clean).WithCode(codeDenoLockfilePath)
+	case !info.Mode().IsRegular():
+		return "", diag.Newf("Failed to resolve deno.lock path: %q is not a regular file", clean).
 			WithCode(codeDenoLockfilePath)
 	}
-	if info, err := root.Stat(lock); err != nil || info.IsDir() {
-		return "", nil
-	}
-	return lock, nil
+	return clean, nil
+}
+
+func denoLockOutside(lock string) error {
+	return diag.Newf("Failed to resolve deno.lock path: %q is outside the project directory", lock).
+		WithCode(codeDenoLockfilePath)
 }
 
 // packageConfig builds the package of t (spec F20.4): its config, the lockfile entry, and the config of every other
@@ -529,9 +675,11 @@ func denoImportRequirements(doc map[string]any) []denoRequirement {
 	return out
 }
 
-// parseDenoRequirement reads `jsr:@scope/name[@req][/path]` and `npm:[@scope/]name[@req][/path]`. This is the part of
-// deno_semver's grammar that finds the package name; the version requirement is not parsed, so `jsr:@a/b@nonsense`
-// counts as a requirement on @a/b, where Deno would reject it.
+// parseDenoRequirement reads `jsr:[@scope/]name[@req][/path]` and `npm:[@scope/]name[@req][/path]` the way
+// deno_semver finds the package name: the path starts at the first `/` (the second for a name that starts with `@`),
+// and the requirement is split at the last `@` after the first character. jsr names need no scope, and the scope may
+// be empty (`jsr:@/a` is a requirement on `@/a`). The version requirement is not parsed, so `jsr:@a/b@nonsense`
+// counts as a requirement on `@a/b`, where Deno would reject it.
 func parseDenoRequirement(spec string) (denoRequirement, bool) {
 	var jsr bool
 	var rest string
@@ -544,22 +692,24 @@ func parseDenoRequirement(spec string) (denoRequirement, bool) {
 		return denoRequirement{}, false
 	}
 	rest = strings.TrimPrefix(rest, "/")
-	scope := ""
+	nameReq := rest
 	if strings.HasPrefix(rest, "@") {
-		slash := strings.Index(rest, "/")
-		if slash < 2 {
+		slash := strings.IndexByte(rest, '/')
+		if slash < 0 {
 			return denoRequirement{}, false
 		}
-		scope, rest = rest[:slash+1], rest[slash+1:]
-	} else if jsr {
+		if next := strings.IndexByte(rest[slash+1:], '/'); next >= 0 {
+			nameReq = rest[:slash+1+next]
+		}
+	} else if slash := strings.IndexByte(rest, '/'); slash >= 0 {
+		nameReq = rest[:slash]
+	}
+	name := nameReq
+	if at := strings.LastIndexByte(nameReq, '@'); at > 0 {
+		name = nameReq[:at]
+	}
+	if name == "" || strings.HasSuffix(name, "/") {
 		return denoRequirement{}, false
 	}
-	end := strings.IndexAny(rest, "@/")
-	if end < 0 {
-		end = len(rest)
-	}
-	if end == 0 {
-		return denoRequirement{}, false
-	}
-	return denoRequirement{jsr: jsr, name: scope + rest[:end]}, true
+	return denoRequirement{jsr: jsr, name: name}, true
 }
