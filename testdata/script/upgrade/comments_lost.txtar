@@ -1,0 +1,32 @@
+# Quirk Q9: the whole file is regenerated, so comments and formatting are lost.
+
+exec remeris --upgrade
+cmp knope.toml out.toml
+
+-- knope.toml --
+# The release setup
+[package]   # the only package
+changelog   =   "CHANGELOG.md"   # where the notes go
+
+
+# the workflow
+[[workflows]]
+name = "prepare-release"
+help_text = "Prepare a release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+-- out.toml --
+[changes]
+ignore_conventional_commits = true
+
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+help_text = "Prepare a release"
+
+[[workflows.steps]]
+type = "PrepareRelease"

@@ -1,0 +1,41 @@
+# Ported from knope-dev/knope, crates/knope/tests/upgrade/ignore_conventional_commits (MIT, see testdata/README.md).
+# The step-level flag moves to [changes]. Knope prints nothing; remeris adds one line saying the file was
+# regenerated (deviations.md).
+
+exec remeris --upgrade
+cmp stdout stdout.log
+! stderr .
+cmp knope.toml out/knope.toml
+
+-- CHANGELOG.md --
+# Changelog
+-- Cargo.toml --
+[package]
+version = "1.0.0"
+name = "test-upgrade"
+-- knope.toml --
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+-- stdout.log --
+Warning: knope.toml was regenerated: its comments and formatting were not kept.
+-- out/knope.toml --
+[changes]
+ignore_conventional_commits = true
+
+[package]
+versioned_files = ["Cargo.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
