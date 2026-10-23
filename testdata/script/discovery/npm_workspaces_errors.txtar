@@ -1,0 +1,43 @@
+# npm workspace discovery errors (spec F20.3). They are raised when the project is loaded.
+
+# A workspace without a name, reported after every pattern was expanded.
+cd noname
+! exec remeris release --dry-run
+cmp stderr ../noname.log
+
+# A pattern that does not compile.
+cd ../badglob
+! exec remeris release --dry-run
+stderr '^Error: Could not process workspaces glob pattern packages/\[a in package.json: Pattern syntax error'
+
+# Deviation from Knope: `..` and absolute patterns are errors here (see testdata/deviations.md).
+cd ../parent
+! exec remeris release --dry-run
+stderr 'Could not process workspaces glob pattern \.\./sibling in package.json: '
+cd ../absolute
+! exec remeris release --dry-run
+stderr 'Could not process workspaces glob pattern /tmp/\* in package.json: '
+
+# The object form of workspaces gives none: discovery succeeds with the default package, and the workflow then
+# fails on the missing Git repository instead.
+cd ../object
+! exec remeris release --dry-run
+stderr 'not a git repository'
+! stderr 'workspaces'
+
+-- noname/package.json --
+{ "workspaces": ["packages/*"] }
+-- noname/packages/a/package.json --
+{ "version": "1.0.0" }
+-- badglob/package.json --
+{ "workspaces": ["packages/[a"] }
+-- parent/package.json --
+{ "workspaces": ["../sibling"] }
+-- absolute/package.json --
+{ "workspaces": ["/tmp/*"] }
+-- object/package.json --
+{ "name": "o", "version": "1.0.0", "workspaces": { "packages": ["packages/*"] } }
+-- object/packages/a/package.json --
+{ "name": "a", "version": "1.0.0" }
+-- noname.log --
+Error: Could not find a name in packages/a/package.json

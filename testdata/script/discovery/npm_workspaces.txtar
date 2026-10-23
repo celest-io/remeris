@@ -1,0 +1,51 @@
+# npm workspaces are discovered when knope.toml declares no package (spec F20.3, Knope's npm_workspaces).
+# Patterns are expanded in order and each package gets its package.json first, the root package-lock.json, then the
+# package.json of the workspaces that depend on it. Changelogs are always set (Q13), so they are created.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git commit --allow-empty -m 'feat(app)!: Breaking' --author 'Knope <knope@example.com>'
+exec git commit --allow-empty -m 'fix(lib): A fix' --author 'Knope <knope@example.com>'
+
+exec remeris --dry-run release
+! stderr .
+# Expansion order: libs/* (lib), then apps/app. The dependent's own package.json gets the dependency edit.
+stdout '^Would add the following to libs/lib/package.json: version = 0.1.1$'
+stdout '^Would add the following to apps/app/package.json: lib = 0.1.1, version = 0.6.0$'
+stdout 'Would add the following to libs/lib/CHANGELOG.md:'
+stdout 'Would add the following to apps/app/CHANGELOG.md:'
+! stdout 'tools'
+! stdout 'package-lock'
+
+# With a root lock file the package-lock.json is edited too.
+cp package-lock.json.src package-lock.json
+exec remeris --dry-run release
+stdout '^Would add the following to package-lock.json: lib = 0.1.1, app = 0.6.0$'
+
+-- knope.toml --
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- package.json --
+{ "name": "root", "workspaces": ["tools/*", "libs/*", "apps/app", "libs/lib", "not-a-glob", 3, "!apps/app"] }
+-- tools/readme.txt --
+a file is not a workspace
+-- tools/empty/README.md --
+a directory without package.json is skipped
+-- tools/broken/package.json --
+{ not json
+-- libs/lib/package.json --
+{ "name": "lib", "version": "0.1.0" }
+-- apps/app/package.json --
+{
+  "name": "app",
+  "version": "0.5.0",
+  "dependencies": { "lib": "0.1.0" },
+  "peerDependencies": { "other": "1.0.0" }
+}
+-- package-lock.json.src --
+{ "name": "root", "lockfileVersion": 3, "packages": {} }

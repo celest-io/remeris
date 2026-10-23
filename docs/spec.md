@@ -1597,12 +1597,18 @@ Read `./Cargo.toml`; a missing (unreadable) file means no packages, but a file t
   - There is no changelog.
 
 ### F20.3 npm workspaces
-Read `./package.json` `workspaces` (array of glob strings). Expand each pattern (in order). For each match with a
-readable, parseable `{dir}/package.json`, add a workspace. For each workspace W (the package must have a `name`, else
-`Could not find a name in {path}`):
-- `versioned_files` = `[W/package.json]`, plus `{package-lock.json, dependency: W.name}` if the root lock exists,
-  plus `{O/package.json, dependency: W.name}` for every other workspace O that lists W.name in `dependencies` or
-  `devDependencies`.
+Read `./package.json` `workspaces` (an array of strings; the object form `{packages: [...]}` and non-string entries
+give nothing). Expand each pattern (in order, F-glob semantics; a `!negation` is a literal pattern that matches
+nothing; a pattern that does not compile is `Could not process workspaces glob pattern {p} in package.json: {e}`,
+`remeris::workspaces::npm_glob`). For each match with a readable, parseable `{dir}/package.json` (a file match or a
+directory without one is skipped), add a workspace; a directory matched twice is added once (Knope adds it twice).
+Patterns that leave the project lexically (`..`, absolute, NUL, and on Windows backslash, colon, device names) are glob
+errors; symbolic links are still followed, as in Knope. A `package.json` over 8 MiB is an error
+(`remeris::workspace::too_large`). Once all patterns are expanded, each workspace W must have a
+string `name`, else `Could not find a name in {path}` (`remeris::workspaces::npm_no_name`). For each workspace W:
+- `versioned_files` = `[W/package.json]`, plus `{package-lock.json, dependency: W.name}` if the root lock exists
+  (yarn and pnpm locks are ignored), plus `{O/package.json, dependency: W.name}` for every other workspace O that has
+  W.name as a key of `dependencies` or `devDependencies` (not peer or optional dependencies).
 - `changelog = {W dir}/CHANGELOG.md` (**always** set, even if the file is missing; it gets created).
 - `scopes = [W.name]`.
 

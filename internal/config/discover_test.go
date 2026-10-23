@@ -145,7 +145,6 @@ func TestDiscoverWorkspaces(t *testing.T) {
 		files map[string]string
 		want  string
 	}{
-		kindNPM: {map[string]string{packageJSONName: workspacesA, memberPkgJSON: nameOnlyA}, kindNPM},
 		"deno": {
 			map[string]string{
 				denoJSONName:   denoWorkspaceA,
@@ -158,16 +157,6 @@ func TestDiscoverWorkspaces(t *testing.T) {
 				denoJSONCName: "{\n// members\n\"workspace\": [\"./a\", /* x */],\n}\n",
 				memberPkgJSON: nameVersionA,
 			}, kindDeno,
-		},
-		"npm member with a package.json": {
-			map[string]string{
-				packageJSONName:           `{"workspaces":["packages/*"]}`,
-				"packages/a/package.json": nameOnlyA,
-			},
-			kindNPM,
-		},
-		"npm member without a name": {
-			map[string]string{packageJSONName: workspacesA, memberPkgJSON: `{}`}, kindNPM,
 		},
 		"deno member with deno.json": {
 			map[string]string{
@@ -201,12 +190,6 @@ func TestDiscoverWorkspaces(t *testing.T) {
 		},
 		"deno root with a named package.json": {
 			map[string]string{denoJSONName: `{}`, packageJSONName: nameVersionA}, kindDeno,
-		},
-		"cargo then npm": {
-			map[string]string{
-				cargoTomlName: cargoMembers, "a/Cargo.toml": "[package]\nname = \"a\"\n",
-				packageJSONName: workspacesA, memberPkgJSON: nameOnlyA,
-			}, kindNPM,
 		},
 	}
 	for name, tc := range cases {
@@ -261,7 +244,7 @@ func TestLoadFSDiscoversPackages(t *testing.T) {
 }
 
 func TestLoadFSDefersWorkspaceError(t *testing.T) {
-	root := rootOf(map[string]string{packageJSONName: workspacesA, memberPkgJSON: nameOnlyA})
+	root := rootOf(map[string]string{packageJSONName: workspacesA, memberPkgJSON: emptyObject})
 	cfg, err := LoadFS(filepath.Join(t.TempDir(), "knope.toml"), root)
 	if err != nil {
 		t.Fatalf("loading must succeed so that --help works: %v", err)
