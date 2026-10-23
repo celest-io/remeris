@@ -448,7 +448,7 @@ remeris --help | --version
 
 - Each workflow is a subcommand, and `help_text` is its description.
 - No subcommand (and no `--validate`) → error `No workflow selected. Run 'remeris --help' for a list of options.`
-- Unknown workflow names are rejected by the CLI parser. Knope also has a fallback `No workflow named {name}`.
+- Unknown workflow names are rejected by the CLI parser. Knope also has a fallback `No workflow named {name}`. Remeris gives that error for the name, before any mode flag (`--validate nosuch` fails). A flag that is not defined (`--validate` without a `knope.toml`) is `unexpected argument '--validate' found`, as clap says it.
 - `--help` on the root lists workflows. `<workflow> --help` shows the flags for that workflow.
 
 **urfave/cli v3 + koanf: the readykit pattern (decision D9).** Reuse the structure of
@@ -1697,7 +1697,9 @@ printed, or the same error if the path exists. See testdata/deviations.md.
   workflows that were auto-detected in Hybrid mode get written out). Otherwise log `Nothing to upgrade`.
 - `--validate`: build the state and run **every** workflow in **dry-run** mode with logs suppressed. Collect the
   errors (`There are problems with the defined workflows`, one related error per workflow `Problem with workflow {name}`).
-  Exit 0 if there are none. Config load errors (F2.2) are reported before validation starts.
+  Exit 0 if there are none. Config load errors (F2.2) and package errors are reported before validation starts;
+  `--override-version` and `--prerelease-label` are applied first. A dry run reads no credentials and never prompts.
+  The issue steps (M11) fail in a dry run until they are built.
 
 Fixtures: `tests/upgrade/*`, `tests/validate/*`.
 

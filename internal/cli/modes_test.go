@@ -20,10 +20,10 @@ func TestSpecialModesExistOnlyWithTheirConfigSource(t *testing.T) {
 	hybrid := func(t *testing.T) *config.Config { return loadConfig(t, "") }
 	none := func(t *testing.T) *config.Config { return defaultConfig(t) }
 	cases := map[string]source{
-		"generate with a file":        {file, "--generate"},
-		"generate with a hybrid file": {hybrid, "--generate"},
-		"upgrade without a file":      {none, "--upgrade"},
-		"validate without a file":     {none, "--validate"},
+		"generate with a file":        {file, "--" + flagGenerate},
+		"generate with a hybrid file": {hybrid, "--" + flagGenerate},
+		"upgrade without a file":      {none, "--" + flagUpgrade},
+		"validate without a file":     {none, "--" + flagValidate},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
