@@ -10,7 +10,9 @@ stdout '--generate'
 
 # --validate and --upgrade do not exist without a knope.toml.
 ! exec remeris --validate
-stderr 'flag provided but not defined: -validate'
+stderr 'Error: unexpected argument ''--validate'' found'
+stderr 'help: To pass ''--validate'' as a value, use ''-- --validate''.'
+! stdout .
 
 # The default release workflow starts with PrepareRelease.
 ! exec remeris --dry-run release
@@ -27,7 +29,7 @@ stdout '--prerelease-label'
 exec remeris --generate
 exists knope.toml
 ! exec remeris --generate
-stderr 'flag provided but not defined: -generate'
+stderr 'unexpected argument ''--generate'' found'
 -- release.log --
 Error: Problem with workflow release
   ╰─▶ No packages to operate on

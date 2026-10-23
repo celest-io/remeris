@@ -92,7 +92,12 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 			}
 			return ctx, global.ValidateGitHubApp(os.Getenv)
 		},
+		OnUsageError: usageError,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			// clap rejects a name that is no workflow before it looks at any flag, so --validate does not hide it.
+			if specialModeGiven(global) && cmd.Args().Present() {
+				return diag.Newf("No workflow named %s", cmd.Args().First())
+			}
 			if handled, err := runSpecialMode(ctx, global, cfg, nil); handled {
 				return err
 			}
@@ -186,9 +191,10 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 	}
 
 	return &cli.Command{
-		Name:  w.Name,
-		Usage: w.HelpText,
-		Flags: flags,
+		Name:         w.Name,
+		Usage:        w.HelpText,
+		Flags:        flags,
+		OnUsageError: usageError,
 		// A comma is not a separator: "a=2.0.0,b=3.0.0" is one (invalid) value, as in Knope.
 		DisableSliceFlagSeparator: true,
 		Action: func(ctx context.Context, cmd *cli.Command) error {

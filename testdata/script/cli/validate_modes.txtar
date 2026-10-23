@@ -1,0 +1,40 @@
+# --validate with a knope.toml that declares no workflows validates the default ones (Knope fills the gaps in, then validates).
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'feat: Existing'
+exec git tag v1.0.0
+exec remeris --validate
+! stdout .
+! stderr .
+
+# A dry run reads no credentials and never prompts: Release on GitHub validates without a token.
+env GITHUB_TOKEN=
+env HOME=$WORK/home
+cp knope-github.toml knope.toml
+exec remeris --validate
+! stdout .
+! stderr .
+
+# A name that is no workflow is an error, --validate or not (clap rejects it before any flag is looked at).
+! exec remeris --validate nosuch
+! stdout .
+cmp stderr nosuch.log
+
+-- Cargo.toml --
+[package]
+name = "my-package"
+version = "1.0.0"
+-- knope.toml --
+[package]
+-- knope-github.toml --
+[github]
+owner = "o"
+repository = "r"
+
+[[workflows]]
+name = "publish"
+steps = [{ type = "PrepareRelease" }, { type = "Release" }]
+-- nosuch.log --
+Error: No workflow named nosuch

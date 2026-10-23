@@ -12,7 +12,7 @@ exec remeris --dry-run before
 cmp stdout before.log
 
 ! exec remeris --generate
-stderr 'unknown flag|not defined|flag provided but not defined'
+stderr 'unexpected argument ''--generate'' found'
 
 -- knope.toml --
 [[workflows]]
