@@ -1,0 +1,29 @@
+# A knope.toml that is a symbolic link is never replaced or written through.
+
+symlink knope.toml -> real.toml
+! exec remeris --upgrade
+stderr 'knope.toml is a symbolic link'
+stderr 'Replace the link by the file'
+cmp real.toml original.toml
+exists knope.toml
+
+-- real.toml --
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+-- original.toml --
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true

@@ -1,0 +1,28 @@
+# A knope.toml with workflows and no packages: the package found at the root is written out (Quirk Q9).
+
+exec remeris --upgrade
+cmp knope.toml out.toml
+
+-- Cargo.toml --
+[package]
+version = "1.0.0"
+name = "hybrid"
+-- knope.toml --
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+-- out.toml --
+[changes]
+ignore_conventional_commits = true
+
+[package]
+versioned_files = ["Cargo.toml"]
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"

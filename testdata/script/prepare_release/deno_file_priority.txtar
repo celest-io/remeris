@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/deno/file_priority (MIT, see testdata/README.md).
-skip 'needs package discovery (milestone M10)'
 
 exec git init --initial-branch=main
 exec git config user.email fake@remeris.dev
@@ -17,8 +16,7 @@ cmp deno.lock out/deno.lock
 cmp deno.json deno.json.orig
 cmp packages/test-package/deno.jsonc packages/test-package/deno.jsonc.orig
 cmp packages/test-package/package.json packages/test-package/package.json.orig
-exec sh -c 'printf %s "$(cat out/packages/test-package/deno.json)" > packages/test-package/deno.json.want'
-cmp packages/test-package/deno.json packages/test-package/deno.json.want
+cmp packages/test-package/deno.json out/packages/test-package/deno.json
 
 -- deno.json --
 {

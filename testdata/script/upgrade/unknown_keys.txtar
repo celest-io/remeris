@@ -1,0 +1,42 @@
+# The rewrite keeps only the settings remeris reads. A key it would drop (here one that a later version reads) makes
+# --upgrade refuse before the file is touched; the same in a dry run.
+
+cp knope.toml before.toml
+! exec remeris --upgrade
+! stdout .
+stderr 'knope.toml has keys that --upgrade would drop: changes.ignore_conventional_merge_commits, package.bogus'
+stderr 'Remove them, or edit the file by hand'
+cmp knope.toml before.toml
+exec ls -a
+! stdout '^\.knope\.toml\.'
+
+! exec remeris --dry-run --upgrade
+stderr 'would drop'
+cmp knope.toml before.toml
+
+# Without the step flag there is nothing to rewrite, so the file is not refused.
+cp nothing.toml knope.toml
+exec remeris --upgrade
+stdout '^Nothing to upgrade$'
+cmp knope.toml nothing.toml
+
+-- knope.toml --
+[changes]
+ignore_conventional_merge_commits = true
+
+[package]
+bogus = 1
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+-- nothing.toml --
+[changes]
+ignore_conventional_merge_commits = true
+
+[[workflows]]
+name = "No-op"
+steps = []

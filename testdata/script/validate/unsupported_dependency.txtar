@@ -1,0 +1,15 @@
+# Ported from knope-dev/knope, crates/knope/tests/validate/unsupported_dependency (MIT, see testdata/README.md).
+# A versioned file whose format cannot hold the dependency is a configuration error, which --validate reports.
+! exec remeris --validate
+! stdout .
+cmp stderr stderr.log
+
+-- knope.toml --
+[package]
+versioned_files = [{ path = "pyproject.toml", dependency = "blah" }]
+-- pyproject.toml --
+[project]
+version = "1.0.0"
+-- stderr.log --
+Error: Dependencies are not supported in pyproject.toml files
+  help: Dependencies aren't supported in every file type.

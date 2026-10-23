@@ -1,0 +1,66 @@
+# Ported from knope-dev/knope, crates/knope/tests/generate/gitea (MIT, see testdata/README.md): https_remote,
+# https_without_git_suffix, ssh_remote and ssh_without_git_suffix. A remote on a known public Gitea host (Codeberg)
+# adds [gitea] with its host, and puts the push before the Release step.
+exec git init --initial-branch=main
+
+exec git remote add origin https://codeberg.org/knope-dev/knope.git
+exec remeris --generate
+cmp stdout generate.log
+! stderr .
+cmp knope.toml want.toml
+exec remeris --help
+stdout 'release +Prepare and create a new release'
+stdout 'document-change'
+stdout '--validate'
+! stdout '--generate'
+
+# The other three forms of the remote give the same file.
+rm knope.toml
+exec git remote set-url origin https://codeberg.org/knope-dev/knope
+exec remeris --generate
+cmp stdout generate.log
+cmp knope.toml want.toml
+
+rm knope.toml
+exec git remote set-url origin git@codeberg.org:knope-dev/knope.git
+exec remeris --generate
+cmp stdout generate.log
+cmp knope.toml want.toml
+
+rm knope.toml
+exec git remote set-url origin git@codeberg.org:knope-dev/knope
+exec remeris --generate
+cmp stdout generate.log
+cmp knope.toml want.toml
+-- generate.log --
+Generating a knope.toml file
+-- want.toml --
+[[workflows]]
+name = "release"
+help_text = "Prepare and create a new release (update changelog, bump version, create release)"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = 'git commit -m "chore: prepare release $version"'
+
+[[workflows.steps]]
+type = "Command"
+command = "git push"
+
+[[workflows.steps]]
+type = "Release"
+
+[[workflows]]
+name = "document-change"
+help_text = "Create a new change file to be included in the next release"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
+
+[gitea]
+owner = "knope-dev"
+repo = "knope"
+host = "https://codeberg.org"

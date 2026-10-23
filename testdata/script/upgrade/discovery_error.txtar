@@ -1,0 +1,17 @@
+# A package discovery error is reported before anything is written.
+
+cp knope.toml before.toml
+! exec remeris --upgrade
+stderr 'Could not parse TOML in Cargo.toml'
+cmp knope.toml before.toml
+
+-- Cargo.toml --
+[package
+name = "broken"
+-- knope.toml --
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true

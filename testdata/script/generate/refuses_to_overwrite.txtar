@@ -1,0 +1,33 @@
+# Not in Knope. --generate never replaces anything. Knope overwrites the path whenever it could not read it as text
+# (a directory, an unreadable file); remeris refuses whenever the path exists, in any form (testdata/deviations.md).
+# A knope.toml that can be read, even one that is not valid, makes the flag disappear instead (CLI tests).
+
+# A directory. A dry run says so too, since it tells what a real run would do.
+exec git init --initial-branch=main
+mkdir knope.toml
+! exec remeris --generate
+cmp stdout generate.log
+cmp stderr exists.log
+exists knope.toml
+! exec remeris --dry-run --generate
+! stdout .
+cmp stderr exists.log
+rm knope.toml
+
+# A symbolic link, dangling or not, is not followed and not replaced.
+symlink knope.toml -> nowhere
+! exec remeris --generate
+cmp stderr exists.log
+! exists nowhere
+! exec remeris --dry-run --generate
+cmp stderr exists.log
+rm knope.toml
+
+# Without the obstacle it works.
+exec remeris --generate
+exists knope.toml
+-- generate.log --
+Generating a knope.toml file
+-- exists.log --
+Error: knope.toml already exists
+  help: Remove or rename it to generate a new one. remeris never overwrites a configuration file.

@@ -23,13 +23,11 @@ const (
 	denoJSONCName   = "deno.jsonc"
 	denoMemberJSON  = "a/deno.json"
 	kindNPM         = "npm"
-	kindDeno        = "Deno"
 	emptyObject     = "{}"
 	denoWorkspaceA  = `{"workspace":["./a"]}`
 	nameOnlyA       = `{"name":"a"}`
 	memberPkgJSON   = "a/package.json"
 	workspacesA     = `{"workspaces":["a"]}`
-	nameVersionA    = `{"name":"a","version":"1.0.0"}`
 )
 
 func rootOf(files map[string]string) fstest.MapFS {
@@ -101,16 +99,8 @@ func TestDiscoverPackages(t *testing.T) {
 			},
 			wantFiles: []string{denoJSONName},
 		},
-		"deno object without members": {
-			files:     map[string]string{denoJSONName: `{"workspace":{}}`},
-			wantFiles: []string{denoJSONName},
-		},
 		"deno root without name or version": {
 			files:     map[string]string{denoJSONName: `{"imports":{}}`},
-			wantFiles: []string{denoJSONName},
-		},
-		"unparseable deno.json": {
-			files:     map[string]string{denoJSONName: `{"name": "x", "version": `},
 			wantFiles: []string{denoJSONName},
 		},
 	}
@@ -135,73 +125,6 @@ func TestDiscoverPackages(t *testing.T) {
 			}
 			if !slices.Equal(got, tc.wantFiles) || pkgs[0].Changelog != tc.wantChangelog {
 				t.Errorf("files = %v changelog = %q, want %v %q", got, pkgs[0].Changelog, tc.wantFiles, tc.wantChangelog)
-			}
-		})
-	}
-}
-
-func TestDiscoverWorkspaces(t *testing.T) {
-	cases := map[string]struct {
-		files map[string]string
-		want  string
-	}{
-		"deno": {
-			map[string]string{
-				denoJSONName:   denoWorkspaceA,
-				denoMemberJSON: nameVersionA,
-			},
-			kindDeno,
-		},
-		"deno jsonc with comments": {
-			map[string]string{
-				denoJSONCName: "{\n// members\n\"workspace\": [\"./a\", /* x */],\n}\n",
-				memberPkgJSON: nameVersionA,
-			}, kindDeno,
-		},
-		"deno member with deno.json": {
-			map[string]string{
-				denoJSONName:   denoWorkspaceA,
-				denoMemberJSON: nameVersionA,
-			},
-			kindDeno,
-		},
-		"deno member with package.json": {
-			map[string]string{
-				denoJSONName:  `{"workspace":["a"]}`,
-				memberPkgJSON: nameVersionA,
-			},
-			kindDeno,
-		},
-		"deno member by glob": {
-			map[string]string{
-				denoJSONName:        `{"workspace":["pkgs/*"]}`,
-				"pkgs/a/deno.jsonc": nameVersionA,
-			},
-			kindDeno,
-		},
-		"deno object form": {
-			map[string]string{
-				denoJSONName: `{"workspace":{"members":["./a"]}}`, denoMemberJSON: nameVersionA,
-			}, kindDeno,
-		},
-		"deno root with name and version": {map[string]string{denoJSONName: nameVersionA}, kindDeno},
-		"deno.jsonc root with name and version": {
-			map[string]string{denoJSONCName: "{\n// x\n\"name\":\"a\",\"version\":\"1.0.0\",\n}"}, kindDeno,
-		},
-		"deno root with a named package.json": {
-			map[string]string{denoJSONName: `{}`, packageJSONName: nameVersionA}, kindDeno,
-		},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			_, err := discoverPackages(rootOf(tc.files))
-			var d *diag.Error
-			if !errors.As(err, &d) {
-				t.Fatalf("error = %v, want a diagnostic", err)
-			}
-			want := "Package discovery for " + tc.want + " workspaces is not implemented yet (milestone M10)"
-			if d.Error() != want || d.Code() != codeDiscoveryNotImplemented {
-				t.Errorf("error = %q (%s), want %q", d.Error(), d.Code(), want)
 			}
 		})
 	}
