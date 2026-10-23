@@ -1,0 +1,84 @@
+# Deno workspace discovery (spec F20.4): the members of a root deno.jsonc, sorted by directory, with the lockfile
+# and the import edges. Ours; the Deno half of npm_deno_workspaces moved here.
+env REMERIS_FAKE_DATE=2026-01-01
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'feat(@s/a): a feature'
+exec remeris release --dry-run
+rstrip stdout actual.log
+cmp actual.log want.log
+! stderr .
+
+# A member that does not parse is an error.
+cp b/deno.json.broken b/deno.json
+! exec remeris release --dry-run
+cmp stderr broken.log
+
+# A missing member is an error too.
+cp b/deno.json.orig b/deno.json
+cp deno.jsonc.missing deno.jsonc
+! exec remeris release --dry-run
+stderr 'Failed to discover Deno workspace: Could not find config file for workspace member in ''gone/''\.'
+
+-- deno.jsonc --
+{
+  // members: the second one is a glob
+  "workspace": ["b", "pkgs/*"],
+}
+-- deno.jsonc.missing --
+{ "workspace": ["b", "gone"] }
+-- deno.lock --
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@s/a@1": "1.0.0"
+  },
+  "jsr": {
+    "@s/a@1.0.0": {
+      "integrity": "sha256-a"
+    }
+  }
+}
+-- b/deno.json --
+{
+  "name": "@s/b",
+  "version": "2.0.0",
+  "imports": { "a": "jsr:@s/a@^1.0.0" }
+}
+-- b/deno.json.orig --
+{
+  "name": "@s/b",
+  "version": "2.0.0",
+  "imports": { "a": "jsr:@s/a@^1.0.0" }
+}
+-- b/deno.json.broken --
+{ "name":
+-- pkgs/a/deno.json --
+{
+  "name": "@s/a",
+  "version": "1.0.0"
+}
+-- pkgs/c/README.md --
+no config here, so it is no member
+-- broken.log --
+Error: Failed to discover Deno workspace: Could not parse b/deno.json
+-- want.log --
+Would add the following to deno.lock: @s/a = 1.1.0
+Would add the following to pkgs/a/deno.json: version = 1.1.0
+Would add the following to pkgs/a/CHANGELOG.md:
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- a feature
+
+Would add files to git:
+  deno.lock
+  pkgs/a/deno.json
+  pkgs/a/CHANGELOG.md
+Would run git commit -m "chore: prepare releases"
+Would create Git tag @s/a/v1.1.0
+Would run git push
+Would run git push --tags

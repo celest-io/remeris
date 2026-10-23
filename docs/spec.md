@@ -1613,16 +1613,23 @@ string `name`, else `Could not find a name in {path}` (`remeris::workspaces::npm
 - `scopes = [W.name]`.
 
 ### F20.4 Deno workspaces
-Knope uses `deno_config`'s workspace discovery. Simplified version for Go:
-- The root `deno.json` or `deno.jsonc` must exist (the first that parses). It needs no `workspace` array: the
-  `workspace` array (or the `members` array of the object form) lists member dirs, globs allowed, and without it
-  only the root folder is considered. No root Deno config → no packages. A lone root `deno.json(c)` with a `name`
-  and a `version` is one package (the root folder, see the last bullet): `versioned_files = [that config]`,
-  `scopes = [name]`, `changelog = CHANGELOG.md`, and the tag format of a named package (`name/v{version}`, F7.5). The workspace is used only if at least one folder (the root or a
-  member) has a usable config; otherwise discovery falls back to the default package (F20.1).
+Knope uses `deno_config`'s workspace discovery. Simplified version for Go (differences in `testdata/deviations.md`):
+- Only the working directory is looked at: no walk up to a parent workspace, and the `workspaces` of a root
+  `package.json` stay with the npm detector (F20.3).
+- The root `deno.json` or `deno.jsonc` must exist (`deno.json` wins when both do; one that does not parse is an
+  error). It needs no `workspace` array: the `workspace` array (or the `members` array of the object form) lists
+  member dirs, globs (`*`, `?`) and `!` exclusions allowed, and without it only the root folder is considered. No
+  root Deno config → no packages. A lone root `deno.json(c)` with a `name` and a `version` is one package (the root
+  folder, see the last bullet): `versioned_files = [that config]`, `scopes = [name]`, `changelog = CHANGELOG.md`, and
+  the tag format of a named package (`name/v{version}`, F7.5). The workspace is used only if at least one folder (the
+  root or a member) has a usable config; otherwise discovery falls back to the default package (F20.1).
+- Order: the root folder, then the members sorted by directory URL string (`a-b/` before `a/`). A member that is
+  missing, outside the root, the root itself, listed twice, or whose config does not parse, and two `deno.json(c)`
+  with the same `name`, are errors `Failed to discover Deno workspace: …`.
 - For each member folder: if `deno.json(c)` has `name` and `version`, use it (along with any `package.json` next to
   it). Otherwise use `package.json` with `name` and `version`. Otherwise skip the folder.
-- The lockfile is `deno.lock` next to the root config (or the root `lock` setting), only if it exists.
+- The lockfile is `deno.lock` next to the root config (or the root `lock` setting: `false`, a path or `{path}`), only
+  if it exists; a path outside the project is an error.
 - The package for member T: `versioned_files` = `[T.config]`, plus `{lock, dependency: T.name}` if there is a
   lockfile, plus `{D.config, dependency: T.name}` for each other member D that depends on T:
   - D's deno.json imports have a `jsr:` requirement named T.name (T has a deno.json), or an `npm:` requirement (T
