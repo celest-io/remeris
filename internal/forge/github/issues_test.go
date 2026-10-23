@@ -2,7 +2,9 @@ package github_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,90 +12,80 @@ import (
 	"testing"
 
 	"github.com/celest-io/remeris/internal/credentials"
+	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/forge/github"
 )
 
-const issuesPath = "/api/v3/repos/o/r/issues"
-const defaultQuery = "direction=asc&per_page=30&sort=created&state=open"
+const (
+	graphqlPath = "/api/graphql"
+	wantAPICode = "remeris::issues::github::api"
+	firstTitle  = "first"
+	secondTitle = "second"
+	okBody      = `{"data":{"repository":{"issues":{"nodes":[{"number":4,"title":"first"},{"number":9,"title":"second"}]}}}}`
+)
 
-// issuesPage renders count issues numbered from first; every third one is a pull request.
-func issuesPage(first, count int) string {
-	items := make([]string, count)
-	for i := range items {
-		n := first + i
-		pr := ""
-		if i%3 == 2 {
-			pr = `,"pull_request":{"url":"https://example.test/pr"}`
-		}
-		items[i] = fmt.Sprintf(`{"number":%d,"title":"issue %d"%s}`, n, n, pr)
-	}
-	return "[" + strings.Join(items, ",") + "]"
+type graphqlRequest struct {
+	Query     string         `json:"query"`
+	Variables map[string]any `json:"variables"`
 }
 
 func TestListOpenIssues(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
-		labels      []string
-		status      int
-		pages       map[string]string
-		wantQuery   string
-		wantNumbers []int
-		wantCalls   int
-		wantErr     string
+		labels     []string
+		status     int
+		body       string
+		wantLabels any
+		want       []github.Issue
+		wantErr    string
+		wantCode   string
 	}{
-		"pull requests are skipped": {
-			status: http.StatusOK,
-			pages: map[string]string{
-				"": `[{"number":1,"title":"a"},{"number":2,"title":"pr","pull_request":{}},{"number":3,"title":"c"}]`,
-			},
-			wantQuery:   defaultQuery,
-			wantNumbers: []int{1, 3},
-			wantCalls:   1,
+		"issues": {
+			status: http.StatusOK, body: okBody, wantLabels: nil,
+			want: []github.Issue{{Number: 4, Title: firstTitle}, {Number: 9, Title: secondTitle}},
 		},
-		"labels are joined": {
-			labels:      []string{"a", "b"},
-			status:      http.StatusOK,
-			pages:       map[string]string{"": `[]`},
-			wantQuery:   "direction=asc&labels=a%2Cb&per_page=30&sort=created&state=open",
-			wantNumbers: nil,
-			wantCalls:   1,
+		"labels are a variable": {
+			labels: []string{"a", `b") { x } #`}, status: http.StatusOK, body: okBody,
+			wantLabels: []any{"a", `b") { x } #`},
+			want:       []github.Issue{{Number: 4, Title: firstTitle}, {Number: 9, Title: secondTitle}},
 		},
-		"pages until 30": {
-			status: http.StatusOK,
-			pages: map[string]string{
-				"":  issuesPage(1, 30),
-				"2": issuesPage(31, 30),
-				"3": issuesPage(61, 30),
-			},
-			wantQuery: defaultQuery,
-			// 20 issues per page of 30: the third page is needed to reach 30, and it is cut at 30.
-			wantNumbers: append(seq(1, 30, 3), seq(31, 60, 3)...)[:30],
-			wantCalls:   2,
+		"empty labels": {labels: []string{}, status: http.StatusOK, body: okBody, wantLabels: []any{},
+			want: []github.Issue{{Number: 4, Title: firstTitle}, {Number: 9, Title: secondTitle}}},
+		"no issues": {
+			status: http.StatusOK, body: `{"data":{"repository":{"issues":{"nodes":[]}}}}`, wantLabels: nil,
 		},
-		"error": {
-			status:    http.StatusNotFound,
-			pages:     map[string]string{"": `{"message":"Not Found"}`},
-			wantQuery: defaultQuery,
-			wantCalls: 1,
-			wantErr:   "Trouble communicating with GitHub while loading issues",
+		"errors with status 200": {
+			status:     http.StatusOK,
+			body:       `{"data":{"repository":null},"errors":[{"message":"Could not resolve to a Repository"}]}`,
+			wantLabels: nil,
+			wantErr:    "Could not communicate with GitHub while loading issues: Could not resolve to a Repository",
+			wantCode:   wantAPICode,
+		},
+		"status error": {
+			status: http.StatusNotFound, body: `{"message":"Not Found"}`, wantLabels: nil,
+			wantErr:  "Could not communicate with GitHub while loading issues: non-200 OK status code: 404 Not Found",
+			wantCode: wantAPICode,
+		},
+		"bad json": {
+			status: http.StatusOK, body: `<html>`, wantLabels: nil,
+			wantErr:  "Could not communicate with GitHub while loading issues:",
+			wantCode: wantAPICode,
 		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			var mu sync.Mutex
-			var queries []string
-			var srv *httptest.Server
-			srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var paths []string
+			var got graphqlRequest
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				data, _ := io.ReadAll(r.Body)
 				mu.Lock()
-				queries = append(queries, r.URL.Path+"?"+r.URL.Query().Encode())
+				paths = append(paths, r.Method+" "+r.URL.Path)
+				_ = json.Unmarshal(data, &got)
 				mu.Unlock()
-				page := r.URL.Query().Get("page")
-				if next := nextPage(page); next != "" && tc.pages[next] != "" {
-					w.Header().Set("Link", fmt.Sprintf(`<%s%s?page=%s>; rel="next"`, srv.URL, issuesPath, next))
-				}
 				w.WriteHeader(tc.status)
-				_, _ = w.Write([]byte(tc.pages[page]))
+				_, _ = w.Write([]byte(tc.body))
 			}))
 			t.Cleanup(srv.Close)
 			f := github.New(github.Config{Owner: "o", Repo: "r", TrustedAPIURL: srv.URL + "/api/v3/"}, nil,
@@ -103,51 +95,111 @@ func TestListOpenIssues(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got, err := client.ListOpenIssues(context.Background(), tc.labels)
+			issues, err := client.ListOpenIssues(context.Background(), tc.labels)
 
+			if len(paths) != 1 || paths[0] != "POST "+graphqlPath {
+				t.Fatalf("requests = %v, want one POST %s", paths, graphqlPath)
+			}
+			for _, part := range []string{
+				"repository(name: $repo, owner: $owner)", "issues(states: OPEN, first: 30, labels: $labels)",
+				"$labels:[String!]", "$owner:String!", "$repo:String!", "number", "title",
+			} {
+				if !strings.Contains(got.Query, part) {
+					t.Errorf("query %q lacks %q", got.Query, part)
+				}
+			}
+			if strings.Contains(got.Query, "b\") { x }") {
+				t.Errorf("a label reached the query text: %q", got.Query)
+			}
+			if got.Variables["repo"] != "r" || got.Variables["owner"] != "o" {
+				t.Errorf("variables = %v", got.Variables)
+			}
+			if fmt.Sprint(got.Variables["labels"]) != fmt.Sprint(tc.wantLabels) {
+				t.Errorf("labels = %#v, want %#v", got.Variables["labels"], tc.wantLabels)
+			}
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("err = %v, want %q", err, tc.wantErr)
 				}
-			} else if err != nil {
+				if c, ok := err.(diag.Diagnostic); !ok ||
+					c.Code() != tc.wantCode { //nolint:errorlint // the error is a diagnostic itself
+					t.Errorf("error = %#v, want code %q", err, tc.wantCode)
+				}
+				return
+			}
+			if err != nil {
 				t.Fatal(err)
 			}
-			if len(queries) != tc.wantCalls {
-				t.Fatalf("requests = %q, want %d", queries, tc.wantCalls)
-			}
-			if !strings.HasPrefix(queries[0], issuesPath+"?") || !strings.Contains(queries[0], tc.wantQuery) {
-				t.Errorf("first request = %q, want %q", queries[0], tc.wantQuery)
-			}
-			var numbers []int
-			for _, issue := range got {
-				numbers = append(numbers, issue.Number)
-			}
-			if fmt.Sprint(numbers) != fmt.Sprint(tc.wantNumbers) {
-				t.Errorf("numbers = %v, want %v", numbers, tc.wantNumbers)
+			if fmt.Sprint(issues) != fmt.Sprint(tc.want) {
+				t.Errorf("issues = %v, want %v", issues, tc.want)
 			}
 		})
 	}
 }
 
-// nextPage is the page after page ("" is the first).
-func nextPage(page string) string {
-	switch page {
-	case "":
-		return "2"
-	case "2":
-		return "3"
-	default:
-		return ""
+func TestListOpenIssuesEndpoint(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		apiURL   string
+		wantPath string
+	}{
+		"enterprise server":   {apiURL: "/api/v3/", wantPath: "/api/graphql"},
+		"enterprise no slash": {apiURL: "/api/v3", wantPath: "/api/graphql"},
+		"context path":        {apiURL: "/ghe/api/v3/", wantPath: "/ghe/api/graphql"},
+		// go-github appends api/v3/ to a path that lacks it, so this is a context path too.
+		"go-github adds api/v3": {apiURL: "/custom/", wantPath: "/custom/api/graphql"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var path string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				path = r.URL.Path
+				_, _ = w.Write([]byte(okBody))
+			}))
+			t.Cleanup(srv.Close)
+			f := github.New(github.Config{Owner: "o", Repo: "r", TrustedAPIURL: srv.URL + tc.apiURL}, nil,
+				&credentials.Store{Dir: t.TempDir(), Getenv: func(string) string { return "" }})
+			client, err := f.MaybeAuthenticated(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = client.ListOpenIssues(context.Background(), nil)
+
+			if err != nil {
+				t.Fatal(err)
+			}
+			if path != tc.wantPath {
+				t.Errorf("path = %q, want %q", path, tc.wantPath)
+			}
+		})
 	}
 }
 
-// seq lists the issue numbers in [from, to] that issuesPage does not make pull requests (every third is one).
-func seq(from, to, _ int) []int {
-	var out []int
-	for n := from; n <= to; n++ {
-		if (n-from)%3 != 2 {
-			out = append(out, n)
-		}
+func TestListOpenIssuesSendsToken(t *testing.T) {
+	t.Parallel()
+	var auth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte(okBody))
+	}))
+	t.Cleanup(srv.Close)
+	f := github.New(github.Config{Owner: "o", Repo: "r", TrustedAPIURL: srv.URL + "/api/v3/"}, nil,
+		&credentials.Store{Dir: t.TempDir(), Getenv: func(k string) string {
+			if k == credentials.GitHubToken.Env() {
+				return "fake-token"
+			}
+			return ""
+		}})
+	client, err := f.RequireAuthentication(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
-	return out
+	if _, err := client.ListOpenIssues(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if auth != "Bearer fake-token" {
+		t.Errorf("Authorization = %q", auth)
+	}
 }

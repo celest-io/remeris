@@ -15,8 +15,13 @@ import (
 	"github.com/celest-io/remeris/internal/workflow"
 )
 
-const issuesAPI = "/api/v3/repos/o/r/issues"
+const issuesAPI = "/api/graphql"
 const failedInput = "Failed to get user input"
+
+// gqlIssues is the GraphQL response that lists the given JSON nodes.
+func gqlIssues(nodes string) string {
+	return `{"data":{"repository":{"issues":{"nodes":[` + nodes + `]}}}}`
+}
 
 func issuesServer(t *testing.T, status int, body string) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
@@ -89,7 +94,7 @@ func TestSelectGitHubIssueDryRun(t *testing.T) {
 }
 
 func TestSelectGitHubIssueReal(t *testing.T) {
-	const list = `[{"number":4,"title":"first"},{"number":9,"title":"second"}]`
+	list := gqlIssues(`{"number":4,"title":"first"},{"number":9,"title":"second"}`)
 	cases := map[string]struct {
 		status    int
 		body      string
@@ -104,13 +109,13 @@ func TestSelectGitHubIssueReal(t *testing.T) {
 			status: http.StatusOK, body: list, answers: []prompt.Answer{{Message: "Select an Issue", Index: 1}},
 			wantIssue: "9: second", wantLog: `msg="Selected item : 9: second"`, wantAsked: 1,
 		},
-		"no issues": {status: http.StatusOK, body: "[]", wantErr: failedInput},
+		"no issues": {status: http.StatusOK, body: gqlIssues(""), wantErr: failedInput},
 		"no prompter": {
 			status: http.StatusOK, body: list, noPrompt: true, wantErr: failedInput,
 		},
 		"api error": {
-			status: http.StatusNotFound, body: `{"message":"Not Found"}`,
-			wantErr: "Trouble communicating with GitHub while loading issues",
+			status: http.StatusOK, body: `{"errors":[{"message":"boom"}]}`,
+			wantErr: "Could not communicate with GitHub while loading issues: boom",
 		},
 		"prompt fails": {
 			status: http.StatusOK, body: list, answers: []prompt.Answer{{Err: prompt.Error(nil)}},

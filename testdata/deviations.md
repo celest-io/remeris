@@ -295,8 +295,7 @@ Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workfl
 
 | Case | Change | Reason |
 | --- | --- | --- |
-| `labels` with several entries | GitHub lists only the issues that carry all the labels (REST `labels=a,b`). Knope's GraphQL query takes the issues that carry any of them. | The REST issues endpoint has no any-of filter (spec F19.1). |
-| Order of the list | Oldest first, requested with `sort=created&direction=asc`. | The REST default is newest first; Knope's GraphQL list starts with the oldest. This approximates it. |
-| Pull requests | The REST endpoint lists pull requests as issues; they are skipped and further pages are read until 30 issues are collected. | GraphQL `issues` never returns pull requests. |
-| Failure of the request | `Trouble communicating with GitHub while loading issues: ... with body: ...` (the wording of every go-github call). Knope says `Could not communicate with GitHub while loading issues: ...` and has separate texts for malformed JSON and an unexpected response. | One error path for all GitHub calls (`WrapError`); there is no GraphQL response to decode. |
-| Authentication | The GitHub App, `GITHUB_TOKEN`, the stored token, then a prompt, and the configured `api_url` is used. Knope's query always goes to `https://api.github.com/graphql`. | The step shares the client of the other GitHub steps. |
+| Endpoint | Derived from the `api_url`: `https://HOST/api/v3/` -> `https://HOST/api/graphql` (GitHub Enterprise Server), an `api.` host -> `/graphql`. Other shapes fail with `The GitHub API URL has no known GraphQL endpoint`. Knope always posts to `https://api.github.com/graphql`. | Enterprise support, through the same trusted-URL checks as the REST calls. |
+| Authentication | The GitHub App, `GITHUB_TOKEN`, the stored token, then a prompt, sent by the credential guard of the shared client. Knope sends `Authorization: bearer {token}` by hand. | The step shares the client of the other GitHub steps. |
+| Failure of the request | `Could not communicate with GitHub while loading issues: {error}` for every failure: transport, non-200 status, GraphQL `errors` array, malformed JSON. Knope has separate texts for malformed JSON (`Could not deserialize response ...`), I/O and an unexpected response (`Received unexpected data from GitHub: {json}`), and ignores the status and the `errors` array. | One error path; a missing repository arrives as a GraphQL error. |
+| Order | No `orderBy`, as in Knope (GitHub's default order). | Same query. |
