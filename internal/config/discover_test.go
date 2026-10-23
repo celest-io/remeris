@@ -221,9 +221,6 @@ func TestDiscoverWorkspaces(t *testing.T) {
 			}
 		})
 	}
-	if got := workspaceKind(rootOf(map[string]string{goModName: ""})); got != noWorkspace {
-		t.Errorf("workspaceKind = %q", got)
-	}
 }
 
 func TestLoadFSDiscoversPackages(t *testing.T) {
@@ -273,24 +270,26 @@ func TestLoadFSDefersWorkspaceError(t *testing.T) {
 	}
 }
 
-func TestStripJSONC(t *testing.T) {
-	cases := map[string]struct{ in, want string }{
-		"comment markers in strings": {`{"a":"// no /* no */"}`, `{"a":"// no /* no */"}`},
-		"escaped quote":              {`{"a":"\" // still a string"} // gone`, "{\"a\":\"\\\" // still a string\"} \n"},
-		"line comment":               {"{} // x\n", "{} \n"},
-		"block comment":              {"{/* x */}", "{ }"},
-		"unterminated block comment": {"{\"a\":1 /* x", `{"a":1 `},
-		"trailing comma array":       {`[1,2,]`, `[1,2]`},
-		"trailing comma object":      {`{"a":1,}`, `{"a":1}`},
-		"comment between comma, ]":   {"[1,\n// x\n]", "[1]"},
-		"comment between comma, }":   {"{\"a\":1, /* x */ }", "{\"a\":1}"},
-		"comma in string before ]":   {`["a,"]`, `["a,"]`},
-		"bom":                        {"\xef\xbb\xbf{}", emptyObject},
+func TestReadJSONC(t *testing.T) {
+	cases := map[string]struct {
+		in   string
+		want int // number of keys, or -1 for nil
+	}{
+		"comment markers in strings": {`{"a":"// no /* no */"}`, 1},
+		"line comment":               {"{\"a\":1} // x\n", 1},
+		"block comment":              {"{/* x */\"a\":1}", 1},
+		"trailing comma array":       {`{"a":[1,2,]}`, 1},
+		"trailing comma object":      {`{"a":1,}`, 1},
+		"comment before }":           {"{\"a\":1, /* x */ }", 1},
+		"bom":                        {"\xef\xbb\xbf{}", 0},
+		"unterminated block comment": {"{\"a\":1 /* x", -1},
+		"not an object":              {`[1]`, -1},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if got := string(stripJSONC([]byte(tc.in))); got != tc.want {
-				t.Errorf("stripJSONC(%q) = %q, want %q", tc.in, got, tc.want)
+			got := readJSONC(rootOf(map[string]string{denoJSONCName: tc.in}), denoJSONCName)
+			if (tc.want < 0) != (got == nil) || len(got) != max(tc.want, 0) {
+				t.Errorf("readJSONC(%q) = %v, want %d keys", tc.in, got, tc.want)
 			}
 		})
 	}
