@@ -27,6 +27,10 @@ const tempAttempts = 16
 // symbolic link, so two writers cannot both succeed and nobody sees a partial file. On a file system without hard
 // links the file is created exclusively (O_EXCL) and written in place; a failure then removes the partial file.
 //
+// A process killed between creating the temporary file and removing it leaves `.<name>.<random>.tmp` behind (for
+// knope.toml, `.knope.toml.*.tmp`, which shows as untracked in `git status`). On the fallback path a killed process
+// can leave a partial file at path.
+//
 // perm is the mode before the umask is applied, as for os.WriteFile (use 0o666 for a regular file).
 func WriteNew(path string, data []byte, perm fs.FileMode) error {
 	dir, base := filepath.Split(path)

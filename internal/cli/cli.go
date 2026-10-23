@@ -197,7 +197,9 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 			if err := app.LoadConfig(cmd, opts); err != nil {
 				return err
 			}
-			setPrereleaseLabel(cfg, opts.PrereleaseLabel)
+			if !labelAfterSpecialMode(global) {
+				setPrereleaseLabel(cfg, opts.PrereleaseLabel)
+			}
 			if handled, err := runSpecialMode(ctx, global, cfg, opts.OverrideVersion); handled {
 				return err
 			}
@@ -247,6 +249,10 @@ func runSpecialMode(
 	ctx context.Context, global *app.GlobalOptions, cfg *config.Config, overrides []string,
 ) (handled bool, err error) {
 	switch {
+	case global.Generate:
+		return true, generate(global, cfg)
+	case global.Upgrade:
+		return true, notImplemented("--upgrade", "M10")
 	case global.Validate:
 		if err := cfg.DiscoveryError(); err != nil {
 			return true, err
@@ -259,13 +265,13 @@ func runSpecialMode(
 			return true, err
 		}
 		return true, validate(ctx, cfg, state)
-	case global.Generate:
-		return true, generate(global, cfg)
-	case global.Upgrade:
-		return true, notImplemented("--upgrade", "M10")
 	}
 	return false, nil
 }
+
+// labelAfterSpecialMode reports whether the mode ignores --prerelease-label. Knope handles --generate (and --upgrade)
+// before it applies the label, so the label must never reach the file they write; --validate gets it.
+func labelAfterSpecialMode(global *app.GlobalOptions) bool { return global.Generate }
 
 // projectOptions says how the GitHub forge authenticates: with the GitHub App of the global options, if any,
 // else with GITHUB_TOKEN or the stored token, else (when p can ask) with a token typed by the user. The private
