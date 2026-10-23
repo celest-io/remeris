@@ -1,0 +1,13 @@
+# Workspace members are used literally, as in Knope: a glob is a path that cannot be read. The text after the colon
+# is the operating system's, so only the start of the message is compared.
+! exec remeris release --dry-run
+stderr '^Error: Error reading from crates/\*/Cargo\.toml: '
+stderr 'help: Make sure you have permission to read this file\.'
+
+-- Cargo.toml --
+[workspace]
+members = ["crates/*"]
+-- crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "1.0.0"

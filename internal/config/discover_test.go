@@ -145,7 +145,6 @@ func TestDiscoverWorkspaces(t *testing.T) {
 		files map[string]string
 		want  string
 	}{
-		"cargo": {map[string]string{cargoTomlName: cargoMembers}, "Cargo"},
 		kindNPM: {map[string]string{packageJSONName: workspacesA, memberPkgJSON: nameOnlyA}, kindNPM},
 		"deno": {
 			map[string]string{
@@ -203,8 +202,11 @@ func TestDiscoverWorkspaces(t *testing.T) {
 		"deno root with a named package.json": {
 			map[string]string{denoJSONName: `{}`, packageJSONName: nameVersionA}, kindDeno,
 		},
-		"cargo wins over npm": {
-			map[string]string{cargoTomlName: cargoMembers, packageJSONName: workspacesA}, "Cargo",
+		"cargo then npm": {
+			map[string]string{
+				cargoTomlName: cargoMembers, "a/Cargo.toml": "[package]\nname = \"a\"\n",
+				packageJSONName: workspacesA, memberPkgJSON: nameOnlyA,
+			}, kindNPM,
 		},
 	}
 	for name, tc := range cases {
@@ -259,7 +261,7 @@ func TestLoadFSDiscoversPackages(t *testing.T) {
 }
 
 func TestLoadFSDefersWorkspaceError(t *testing.T) {
-	root := rootOf(map[string]string{cargoTomlName: cargoMembers})
+	root := rootOf(map[string]string{packageJSONName: workspacesA, memberPkgJSON: nameOnlyA})
 	cfg, err := LoadFS(filepath.Join(t.TempDir(), "knope.toml"), root)
 	if err != nil {
 		t.Fatalf("loading must succeed so that --help works: %v", err)
