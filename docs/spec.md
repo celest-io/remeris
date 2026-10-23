@@ -1581,7 +1581,8 @@ Run all three detectors and concatenate the results: **Cargo workspace members**
 `changelog = "CHANGELOG.md"` if that file exists. No files at all → no packages.
 
 ### F20.2 Cargo workspace
-Read `./Cargo.toml`. If it has `workspace.members` (an array of **literal** strings, no glob support; a non-string
+Read `./Cargo.toml`; a missing (unreadable) file means no packages, but a file that is not valid TOML is an error
+(`Could not parse TOML in Cargo.toml: {err}`, code `workspace::toml`). If it has `workspace.members` (an array of **literal** strings, no glob support; a non-string
 → `The Cargo workspace members array should contain only strings`):
 - Each member: `{member}/Cargo.toml` must exist, parse, and have `package.name`
   (`Could not find a package.name in {path}`).
@@ -1604,8 +1605,13 @@ readable, parseable `{dir}/package.json`, add a workspace. For each workspace W 
 
 ### F20.4 Deno workspaces
 Knope uses `deno_config`'s workspace discovery. Simplified version for Go:
-- The root `deno.json` or `deno.jsonc` must exist and have a `workspace` array (member dirs, globs allowed).
-  No root Deno config → no packages.
+- The root `deno.json` or `deno.jsonc` must exist (the first that parses). It needs no `workspace` array: the
+  `workspace` array (or the `members` array of the object form) lists member dirs, globs allowed, and without it
+  only the root folder is considered. No root Deno config → no packages. A lone root `deno.json(c)` with a `name`
+  and a `version` is one package (the root folder, see the last bullet): `versioned_files = [that config]`,
+  `scopes = [name]`, `changelog = CHANGELOG.md`, and the tag format of any named package (`name/v{version}`, or
+  `v{version}` when it is the only package). The workspace is used only if at least one folder (the root or a
+  member) has a usable config; otherwise discovery falls back to the default package (F20.1).
 - For each member folder: if `deno.json(c)` has `name` and `version`, use it (along with any `package.json` next to
   it). Otherwise use `package.json` with `name` and `version`. Otherwise skip the folder.
 - The lockfile is `deno.lock` next to the root config (or the root `lock` setting), only if it exists.
