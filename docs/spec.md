@@ -1585,7 +1585,8 @@ Read `./Cargo.toml`; a missing (unreadable) file means no packages, but a file t
 (`Could not parse TOML in Cargo.toml: {err}`, code `workspace::toml`). If it has `workspace.members` (an array of **literal** strings, no glob support; a non-string
 → `The Cargo workspace members array should contain only strings`):
 - `workspace` must be a standard table (an inline `workspace = { ... }` is not a workspace), and `members` an array.
-  An empty array is no workspace.
+  An empty array is no workspace. A member that is empty, absolute or has a `..` component is an error (deviation from
+  Knope); manifests are read only if regular files of at most 8 MiB.
 - Each member: `{member}/Cargo.toml` must exist, parse, and have `package.name`
   (`Could not find a package.name in {path}`).
 - For each member M, the package is named `M.name` with `scopes = [M.name]` and `versioned_files` =
