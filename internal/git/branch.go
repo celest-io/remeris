@@ -18,12 +18,12 @@ func notOnBranchError() error {
 		WithHelp("In order to run this step, you need to be on the very tip of a Git branch.")
 }
 
-// badBranchNameError is Knope's git::bad_branch_name error, returned for a name git would refuse. The name can come
-// from an issue title, so it is quoted.
+// badBranchNameError is Knope's git::bad_branch_name error, returned for a name git would refuse. The message is
+// Knope's; the name can come from an issue title, so the help quotes it.
 func badBranchNameError(name string) error {
-	return diag.Newf("Bad branch name %q", name).
+	return diag.New("Bad branch name").
 		WithCode("remeris::git::bad_branch_name").
-		WithHelp("The branch name was not formatted correctly.")
+		WithHelp(fmt.Sprintf("The branch name was not formatted correctly: %q", name))
 }
 
 // uncommittedChangesError is Knope's git::uncommitted_changes error.

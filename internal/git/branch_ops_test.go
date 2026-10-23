@@ -94,8 +94,19 @@ func TestHasUncommittedChanges(t *testing.T) { //nolint:paralleltest // sets env
 		change func(r *testRepo)
 		want   bool
 	}{
-		"clean":     {change: func(*testRepo) {}},
-		"ignored":   {change: func(r *testRepo) { r.write("ignored.txt", "x") }},
+		"clean":   {change: func(*testRepo) {}},
+		"ignored": {change: func(r *testRepo) { r.write("ignored.txt", "x") }},
+		"ignored by info/exclude": {change: func(r *testRepo) {
+			r.write(".git/info/exclude", "excluded.txt\n")
+			r.write("excluded.txt", "x")
+		}},
+		"ignored by core.excludesFile": {change: func(r *testRepo) {
+			r.write("global-ignore", "global.txt\n")
+			r.git("config", "core.excludesFile", filepath.Join(r.dir, "global-ignore"))
+			r.write("global.txt", "x")
+			r.write("global-ignore", "global.txt\n") // the file itself must be ignored too
+			r.write(".git/info/exclude", "global-ignore\n")
+		}},
 		"modified":  {change: func(r *testRepo) { r.write(fileA, "changed\n") }, want: true},
 		"untracked": {change: func(r *testRepo) { r.write("new.txt", "x") }, want: true},
 		"untracked in a directory": {change: func(r *testRepo) {
@@ -156,13 +167,23 @@ func TestBranchNamesAreNeverOptions(t *testing.T) { //nolint:paralleltest // set
 		if got, err := g.LocalBranches(ctx); err != nil || !slices.Equal(got, []string{branchMain, branchOther}) {
 			t.Fatalf("branches = %v, %v", got, err)
 		}
-		// A name that looks like a shell command is valid and is created literally, never run.
+		// The names above are rejected by checkBranchName, so --end-of-options is only a second guard. A name that
+		// looks like a shell command is a valid ref name: it is created literally and never run.
 		name := "$(touch${IFS}pwned);`touch${IFS}pwned`"
 		if err := g.CreateBranch(ctx, name, branchMain); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := os.Stat(filepath.Join(r.dir, "pwned")); err == nil {
-			t.Fatal("a branch name was run by a shell")
+		if ok, err := g.BranchExists(ctx, name); err != nil || !ok {
+			t.Fatalf("BranchExists(%q) = %t, %v", name, ok, err)
+		}
+		if got, err := g.LocalBranches(ctx); err != nil || !slices.Contains(got, name) {
+			t.Fatalf("branches = %v, %v, want %q in them", got, err, name)
+		}
+		cwd, _ := os.Getwd()
+		for _, dir := range []string{r.dir, cwd} {
+			if _, err := os.Stat(filepath.Join(dir, "pwned")); err == nil {
+				t.Fatalf("a branch name was run by a shell (pwned in %s)", dir)
+			}
 		}
 	})
 }
@@ -224,6 +245,26 @@ func TestSwitchTo(t *testing.T) { //nolint:paralleltest // sets environment vari
 			}
 			if got, err := g.CurrentBranch(ctx); err != nil || got != branchOther {
 				t.Fatalf("CurrentBranch = %q, %v", got, err)
+			}
+		})
+	})
+	t.Run("branch checked out in another worktree", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			other := filepath.Join(t.TempDir(), "wt")
+			r.git("worktree", "add", "--quiet", other, branchOther)
+			err := g.SwitchTo(ctx, branchOther)
+			wantDiagCode(t, err, "remeris::git::command")
+			if got := head(r); got != onMain {
+				t.Fatalf("HEAD moved to %q", got)
+			}
+			// From the linked worktree, main (checked out in the main one) is refused too, and its own branch is not.
+			linked, err := NewGoGit(other)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantDiagCode(t, linked.SwitchTo(ctx, branchMain), "remeris::git::command")
+			if err := linked.SwitchTo(ctx, branchOther); err != nil {
+				t.Fatalf("switching to the current branch: %v", err)
 			}
 		})
 	})

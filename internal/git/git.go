@@ -59,8 +59,9 @@ type Git interface {
 	// ignored files do not.
 	HasUncommittedChanges(ctx context.Context) (bool, error)
 	// SwitchTo checks out the local branch name (spec F19.8). It fails with "Uncommitted changes" when the tree is not
-	// clean, and with "Could not complete checkout" when HEAD moved but the checkout did not finish. It never guesses a
-	// remote branch.
+	// clean, and a branch checked out in another worktree is refused. The "Could not complete checkout" error (HEAD
+	// moved but the checkout did not finish) comes from the go-git backend only; the CLI backend reports git's own
+	// failure as an unknown Git error. It never guesses a remote branch.
 	SwitchTo(ctx context.Context, name string) error
 }
 

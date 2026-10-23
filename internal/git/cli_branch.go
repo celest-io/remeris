@@ -148,12 +148,13 @@ func (c *CLI) CreateBranch(ctx context.Context, name, from string) error {
 // HasUncommittedChanges reports whether the working tree or the index differ from HEAD. Untracked files count and
 // ignored files do not.
 //
-// Command: git status --porcelain -z --untracked-files=all.
+// Command: git --no-optional-locks status --porcelain -z --untracked-files=all (no index refresh, so a read does not
+// take locks).
 func (c *CLI) HasUncommittedChanges(ctx context.Context) (bool, error) {
 	if _, err := c.run(ctx, "", "rev-parse", "--git-dir"); err != nil {
 		return false, fail(err, openRepoError)
 	}
-	out, err := c.run(ctx, "", "status", "--porcelain", "-z", "--untracked-files=all")
+	out, err := c.run(ctx, "", "--no-optional-locks", "status", "--porcelain", "-z", "--untracked-files=all")
 	if err != nil {
 		return false, fail(err, unknownGitError)
 	}

@@ -131,6 +131,11 @@ func (g *GoGit) CreateBranch(ctx context.Context, name, from string) error {
 		return unknownGitError(err)
 	}
 	ref := plumbing.NewHashReference(plumbing.NewBranchReferenceName(name), base.Hash())
+	// Look again just before the write: go-git has no ref lock, so a branch created in between by another process is
+	// still possible (see testdata/deviations.md), but the window is small.
+	if _, err := repo.Storer.Reference(ref.Name()); err == nil {
+		return branchExistsError(name)
+	}
 	if err := repo.Storer.CheckAndSetReference(ref, nil); err != nil {
 		return unknownGitError(err)
 	}
@@ -151,6 +156,9 @@ func (g *GoGit) HasUncommittedChanges(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, openRepoError(err)
 	}
+	// Files ignored by info/exclude and the global ignore file do not count, like git. Known limits of go-git's status
+	// (core.fileMode=false, skip-worktree, submodules) are listed in testdata/deviations.md.
+	wt.Excludes = append(wt.Excludes, excludePatterns(repo)...)
 	status, err := wt.Status()
 	if err != nil {
 		return false, unknownGitError(err)
@@ -166,6 +174,9 @@ func (g *GoGit) SwitchTo(ctx context.Context, name string) error {
 	}
 	repo, err := g.open()
 	if err != nil {
+		return err
+	}
+	if err := checkedOutElsewhere(repo, name); err != nil {
 		return err
 	}
 	wt, err := repo.Worktree()

@@ -303,3 +303,17 @@ Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workfl
 | Authentication | The GitHub App, `GITHUB_TOKEN`, the stored token, then a prompt, sent by the credential guard of the shared client. Knope sends `Authorization: bearer {token}` by hand. | The step shares the client of the other GitHub steps. |
 | Failure of the request | `Could not communicate with GitHub while loading issues: {error}` for every failure: transport, non-200 status, GraphQL `errors` array, malformed JSON. Knope has separate texts for malformed JSON (`Could not deserialize response ...`), I/O and an unexpected response (`Received unexpected data from GitHub: {json}`), and ignores the status and the `errors` array. | One error path; a missing repository arrives as a GraphQL error. |
 | Order | No `orderBy`, as in Knope (GitHub's default order). | Same query. |
+
+## M11 Git branch operations
+
+`LocalBranches`, `BranchExists`, `CreateBranch`, `HasUncommittedChanges` and `SwitchTo` (spec F19.7, F19.8). The git CLI backend is the reference; the go-git fallback (used only when `git` is not on PATH) differs in the cases below.
+
+| Case | Change | Reason |
+| --- | --- | --- |
+| Clean check before creating | `CreateBranch` is called after the clean check of `SwitchTo`; Knope creates the branch first. | Nothing is created when the switch would fail. |
+| Branch names | Names that `git check-ref-format` refuses, that start with `-`, or that are `HEAD` or `@` fail with `Bad branch name` (help: the quoted name) before any git command runs. Knope passes the name to libgit2. | A name from an issue title must never be an option. |
+| go-git: `core.fileMode=false` | Mode-only changes are reported as uncommitted by go-git and ignored by git. | go-git's status compares modes. |
+| go-git: skip-worktree | An index entry marked skip-worktree whose file differs is reported by git as clean, by go-git as dirty or clean depending on its status; not handled. | go-git does not read the flag. |
+| go-git: submodules | Edits inside a submodule's working tree are reported clean by go-git; git reports the submodule dirty. | go-git's status does not descend into submodules. |
+| go-git: branch alias | A branch that is a symbolic ref (`git symbolic-ref refs/heads/alias refs/heads/main`) stores the target, not the alias, in HEAD after `SwitchTo`; git stores the alias. | go-git's checkout resolves the reference. |
+| go-git: races | The branch checks and the write are not atomic: a branch created by another process between the check and `CreateBranch`, or a checkout in another worktree, may be overwritten or missed. git takes the ref lock. | go-git has no ref transaction for these checks. |
