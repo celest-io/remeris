@@ -49,10 +49,19 @@
 // (for example [os.DirFS]); for any other file system there is no identity, and
 // a chain of more than 64 symbolic links is not entered. In both cases a walk
 // that reads more than 1,000,000 directories stops with [ErrTooManyDirectories]
-// and the matches found so far. A pattern with a NUL byte is an error.
+// and no matches. A pattern with a NUL byte, or longer than 4096 bytes, is an
+// error.
 //
 // Matching a name against a pattern takes time proportional to the length of
-// the pattern times the length of the name, whatever the number of stars.
+// the pattern times the length of the name, whatever the number of stars. A
+// walk expands each (path, component) pair once, so repeated `**` components
+// cost a polynomial number of steps; a path that the first release listed more
+// than once (`**/a/**/a` can reach `a/a/a` in several ways) is listed once, at
+// the place of its first occurrence.
+//
+// Symbolic links are followed as in the crate, including links that leave the
+// root of fsys: with [os.DirFS], `**` can match files outside the directory.
+// Callers that must stay inside it have to check the result.
 //
 // Case-insensitive matching, require_literal_separator and
 // require_literal_leading_dot of the crate's glob_with are not offered.
@@ -87,11 +96,30 @@ const (
 	// maxLinkHops is the longest chain of symbolic links to directories entered
 	// when directories have no identity.
 	maxLinkHops = 64
+	// maxPattern is the longest pattern, in bytes.
+	maxPattern = 4096
 )
 
-// ErrTooManyDirectories is returned, with the matches found so far, by a Glob
+// ErrTooManyDirectories is matched, with [errors.Is], by the error of a Glob
 // call that read more than a million directories.
 var ErrTooManyDirectories = errors.New("glob: too many directories")
+
+type tooManyDirsError struct {
+	pattern string
+	limit   int
+}
+
+func (e *tooManyDirsError) Error() string {
+	return fmt.Sprintf("glob: too many directories (more than %d) while expanding %q; use a more specific pattern",
+		e.limit, e.pattern)
+}
+
+func (e *tooManyDirsError) Is(target error) bool { return target == ErrTooManyDirectories }
+
+type seenKey struct {
+	path string
+	idx  int
+}
 
 // dirNode is a directory of the current walk below `**`, linked to its
 // ancestors.
@@ -122,16 +150,31 @@ type walker struct {
 	dirs       int   // directories read so far
 	abort      error // stops the walk
 	noLoop     bool  // test hook: the walk of the first release, with no loop check
+	seen       map[seenKey]struct{}
+	noSeen     bool // test hook: expand an entry as often as it is reached
 }
 
 // Glob returns the paths of fsys that match pattern, in the order described in
 // the package documentation. A *[PatternError] is returned for an invalid
-// pattern, with no results.
+// pattern, with no results. A walk that reads too many directories returns an
+// error matching [ErrTooManyDirectories] and no results.
+//
+// When the error is a *[ReadError] the matches are complete except for the
+// unreadable directories. For any other non-nil error a caller MUST NOT use the
+// matches: there are none.
 func Glob(fsys fs.FS, pattern string) ([]string, error) {
 	return glob(fsys, pattern, &walker{maxDirs: maxDirs})
 }
 
 func glob(fsys fs.FS, pattern string, w *walker) ([]string, error) {
+	if len(pattern) > maxPattern {
+		return nil, fmt.Errorf(
+			"glob: pattern too long (%d bytes, the limit is %d): %w",
+			len(pattern),
+			maxPattern,
+			errors.ErrUnsupported,
+		)
+	}
 	if strings.IndexByte(pattern, 0) >= 0 {
 		return nil, fmt.Errorf("glob: NUL byte in pattern %q: %w", pattern, errors.ErrUnsupported)
 	}
@@ -148,7 +191,11 @@ func glob(fsys fs.FS, pattern string, w *walker) ([]string, error) {
 	if len(w.pats) == 0 {
 		return []string{"."}, nil
 	}
-	return w.run()
+	out, err := w.run()
+	if errors.Is(err, ErrTooManyDirectories) {
+		return nil, &tooManyDirsError{pattern: pattern, limit: w.maxDirs}
+	}
+	return out, err
 }
 
 func (w *walker) parse(pattern string) error {
@@ -179,6 +226,9 @@ func (w *walker) run() ([]string, error) {
 	for len(w.todo) > 0 && w.abort == nil {
 		e := w.todo[len(w.todo)-1]
 		w.todo = w.todo[:len(w.todo)-1]
+		if e.err == nil && !w.noSeen && w.visited(e) {
+			continue
+		}
 		switch {
 		case e.err != nil:
 			if firstErr == nil {
@@ -192,6 +242,20 @@ func (w *walker) run() ([]string, error) {
 		return out, w.abort
 	}
 	return out, firstErr
+}
+
+// visited reports whether e, a path with the component it still has to match,
+// was already expanded, and notes it.
+func (w *walker) visited(e entry) bool {
+	if w.seen == nil {
+		w.seen = make(map[seenKey]struct{})
+	}
+	k := seenKey{e.path, e.idx}
+	if _, ok := w.seen[k]; ok {
+		return true
+	}
+	w.seen[k] = struct{}{}
+	return false
 }
 
 // step advances one entry. It reports whether the entry is a result and

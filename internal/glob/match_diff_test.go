@@ -48,8 +48,21 @@ var (
 		"*",
 		"a*",
 		"[a-b]*",
+		"é",
+		"日",
+		"]",
+		"-",
+		`\`,
+		"A",
+		"!",
+		"[!é]",
+		"[日-é]",
+		"[]]",
+		"[a-]",
+		"[!]]",
+		"[A-Z]",
 	}
-	diffNames = []rune("abc/.")
+	diffNames = []rune(`abcé日]-\AB!/.`)
 )
 
 func randomPattern(r *rand.Rand) string {
@@ -74,8 +87,8 @@ func TestMatchDifferential(t *testing.T) {
 	t.Parallel()
 	const seed = 20260101
 	r := rand.New(rand.NewPCG(seed, seed)) //nolint:gosec // a fixed seed keeps the differential test reproducible
-	compiled, cases := 0, 0
-	for compiled < 3000 {
+	compiled, cases, positive := 0, 0, 0
+	for compiled < 6000 {
 		p, err := compile(randomPattern(r))
 		if err != nil {
 			continue
@@ -84,6 +97,9 @@ func TestMatchDifferential(t *testing.T) {
 		for range 20 {
 			name := randomName(r)
 			cases++
+			if matchTokens(p.tokens, []rune(name)) {
+				positive++
+			}
 			if got, want := matchTokens(p.tokens, []rune(name)), oldMatch(p.tokens, []rune(name)); got != want {
 				t.Fatalf("seed %d: pattern %q name %q: new %v, old %v", seed, p.src, name, got, want)
 			}
@@ -92,7 +108,7 @@ func TestMatchDifferential(t *testing.T) {
 	if cases < 20000 {
 		t.Fatalf("only %d cases", cases)
 	}
-	t.Logf("%d patterns, %d cases", compiled, cases)
+	t.Logf("%d patterns, %d cases, %d matching", compiled, cases, positive)
 }
 
 func FuzzMatchDifferential(f *testing.F) {

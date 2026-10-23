@@ -165,13 +165,14 @@ func TestGlobSymlinkLoopFreeSameAsUnchecked(t *testing.T) {
 			"z":           "other",
 		},
 	)
-	for _, pattern := range []string{globAll, recursive, "**/*", "**/sub", recursiveDir, "*/**/" + pkgJSON, "**/inner/*"} {
+	for _, pattern := range []string{globAll, recursive, "**/*", "**/sub", recursiveDir, "*/**/" + pkgJSON, "**/inner/*",
+		"**/sub/**/" + pkgJSON, "**/real/**/" + pkgJSON, "**/**/" + pkgJSON, "*/**/*/**/" + pkgJSON} {
 		checked := runBounded(t, fsys, pattern, &walker{maxDirs: maxDirs})
-		unchecked := runBounded(t, fsys, pattern, &walker{maxDirs: maxDirs, noLoop: true})
+		unchecked := runBounded(t, fsys, pattern, &walker{maxDirs: maxDirs, noLoop: true, noSeen: true})
 		if checked.err != nil || unchecked.err != nil {
 			t.Fatalf("%q: errors %v, %v", pattern, checked.err, unchecked.err)
 		}
-		if !reflect.DeepEqual(checked.paths, unchecked.paths) {
+		if !reflect.DeepEqual(checked.paths, firstOccurrences(unchecked.paths)) {
 			t.Errorf("%q: checked %q, unchecked %q", pattern, checked.paths, unchecked.paths)
 		}
 		if len(checked.paths) == 0 {
@@ -214,8 +215,8 @@ func TestGlobSymlinkLoopsWithoutIdentity(t *testing.T) {
 		if !errors.Is(got.err, ErrTooManyDirectories) {
 			t.Fatalf("error = %v, want ErrTooManyDirectories", got.err)
 		}
-		if len(got.paths) == 0 {
-			t.Error("the matches found so far are lost")
+		if got.paths != nil {
+			t.Errorf("got partial matches %q with the error", got.paths)
 		}
 	})
 }
@@ -226,6 +227,10 @@ func TestGlobTooManyDirectories(t *testing.T) {
 	got := runBounded(t, fsys, "*/*", &walker{maxDirs: 3})
 	if !errors.Is(got.err, ErrTooManyDirectories) {
 		t.Errorf("error = %v, want ErrTooManyDirectories", got.err)
+	}
+	want := `glob: too many directories (more than 3) while expanding "*/*"; use a more specific pattern`
+	if got.err == nil || got.err.Error() != want {
+		t.Errorf("message = %v, want %q", got.err, want)
 	}
 	got = runBounded(t, fsys, "*/*", &walker{maxDirs: 5})
 	if got.err != nil {
@@ -243,5 +248,58 @@ func TestGlobRejectsNUL(t *testing.T) {
 				t.Errorf("got %q, %v; want an ErrUnsupported error", paths, err)
 			}
 		})
+	}
+}
+
+func firstOccurrences(in []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range in {
+		if !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func TestGlobRepeatedRecursiveWildcards(t *testing.T) {
+	t.Parallel()
+	dir := strings.Repeat("a/", 22) + pkgJSON
+	fsys := linkTree(t, []string{dir}, nil)
+	tests := map[string]struct {
+		pattern string
+		want    int
+	}{
+		"eight a then x": {strings.Repeat("**/a/", 8) + "x", 0},
+		"eight a then a": {strings.Repeat("**/a/", 8) + "a", 1},
+		"then package":   {strings.Repeat("**/a/", 8) + "**/" + pkgJSON, 1},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := runBounded(t, fsys, tc.pattern, &walker{maxDirs: maxDirs})
+			if got.err != nil {
+				t.Fatal(got.err)
+			}
+			if len(got.paths) < tc.want || (tc.want == 0 && len(got.paths) != 0) {
+				t.Errorf("got %d results, want %d: %q", len(got.paths), tc.want, got.paths)
+			}
+			if len(got.paths) != len(firstOccurrences(got.paths)) {
+				t.Errorf("duplicates in %q", got.paths)
+			}
+		})
+	}
+}
+
+func TestGlobRejectsLongPattern(t *testing.T) {
+	t.Parallel()
+	ok := strings.Repeat("a", maxPattern)
+	if _, err := Glob(fstest.MapFS{}, ok); err != nil {
+		t.Errorf("pattern of %d bytes: %v", len(ok), err)
+	}
+	paths, err := Glob(fstest.MapFS{}, ok+"a")
+	if !errors.Is(err, errors.ErrUnsupported) || paths != nil || !strings.Contains(err.Error(), "pattern too long") {
+		t.Errorf("got %q, %v; want a pattern too long error", paths, err)
 	}
 }
