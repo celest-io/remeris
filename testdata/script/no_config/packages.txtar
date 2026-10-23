@@ -1,0 +1,69 @@
+# Ported from knope-dev/knope, crates/knope/tests/no_config/packages (MIT, see testdata/README.md).
+# `release --dry-run` on a repository with every kind of supported metadata file and no knope.toml.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'feat: Existing Feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: Something' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+cmp stdout_actual.log stdout.log
+! stderr .
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- go.mod --
+module github.com/knope-dev/knope
+
+go 1.19
+
+require (
+example.com/othermodule v1.2.3
+example.com/thismodule v1.2.3
+example.com/thatmodule v1.2.3
+)
+
+replace example.com/thatmodule => ../thatmodule
+exclude example.com/thismodule v1.3.0
+-- package.json --
+{
+  "version": "1.0.0"
+}
+-- pyproject.toml --
+[tool.poetry]
+version = "1.0.0"
+-- CHANGELOG.md --
+## 1.0.0
+
+### Features
+
+- Existing feature
+-- stdout.log --
+Would add the following to Cargo.toml: version = 1.1.0
+Would add the following to go.mod: 1.1.0
+Would add the following to package.json: version = 1.1.0
+Would add the following to pyproject.toml: 1.1.0
+Would add the following to CHANGELOG.md:
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- Something
+
+Would add files to git:
+  Cargo.toml
+  go.mod
+  package.json
+  pyproject.toml
+  CHANGELOG.md
+Would run git commit -m "chore: prepare release 1.1.0"
+Would create Git tag v1.1.0
+Would run git push
+Would run git push --tags

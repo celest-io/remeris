@@ -1,0 +1,43 @@
+# Ported from knope-dev/knope, crates/knope/tests/validate/kitchen_sink (MIT, see testdata/README.md).
+# The issue workflows of kitchen_sink: they need the Jira and GitHub issue steps, which come with milestone M11.
+skip 'needs the SelectJiraIssue, TransitionJiraIssue, SelectGitHubIssue and SwitchBranches steps (milestone M11)'
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit'
+exec git tag 1.0.0
+
+! exec remeris --validate
+! stdout .
+cmp stderr stderr.log
+
+-- knope.toml --
+[[workflows]]
+name = "Cannot-SelectJiraIssue-without-Jira-config"
+steps = [{ type = "SelectJiraIssue", status = "open" }]
+
+[[workflows]]
+name = "Cannot-TransitionJiraIssue-without-SelectJiraIssue"
+steps = [{ type = "TransitionJiraIssue", status = "closed" }]
+
+[[workflows]]
+name = "Cannot-SelectGitHubIssue-without-GitHub-config"
+steps = [{ type = "SelectGitHubIssue" }]
+
+[[workflows]]
+name = "Cannot-SwitchBranches-without-first-selecting-an-issue"
+steps = [{ type = "SwitchBranches" }]
+-- stderr.log --
+Error: There are problems with the defined workflows
+  ╰─▶ Problem with workflow Cannot-SelectJiraIssue-without-Jira-config
+      ╰─▶ Jira is not configured
+          help: Jira must be configured in order to select a Jira issue
+  ╰─▶ Problem with workflow Cannot-TransitionJiraIssue-without-SelectJiraIssue
+      ╰─▶ No issue selected
+          help: You must use the SelectJiraIssue step before TransitionJiraIssue in the same workflow
+  ╰─▶ Problem with workflow Cannot-SelectGitHubIssue-without-GitHub-config
+      ╰─▶ GitHub is not configured
+          help: GitHub must be configured in order to use the SelectGitHubIssue step
+  ╰─▶ Problem with workflow Cannot-SwitchBranches-without-first-selecting-an-issue
+      ╰─▶ No issue selected
+          help: Switching branches requires selecting an issue first with SelectGitHubIssue or SelectJiraIssue
