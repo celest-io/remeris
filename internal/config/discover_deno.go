@@ -624,11 +624,6 @@ func (d *denoPackage) dependsOn(target *denoPackage) bool {
 	return denoPackageJSONDependsOn(d, target)
 }
 
-// denoPackageJSONDependsOn reports whether the package.json of dependent depends on target through `file:`,
-// `workspace:`, `npm:@jsr/...` or a plain name. Milestone M10 PR 65b implements it; until then the package.json
-// edges are not found.
-func denoPackageJSONDependsOn(_, _ *denoPackage) bool { return false }
-
 // denoRequirement is a `jsr:` or `npm:` package requirement; only its name matters here.
 type denoRequirement struct {
 	jsr  bool

@@ -1634,7 +1634,7 @@ Knope uses `deno_config`'s workspace discovery. Simplified version for Go (diffe
   lockfile, plus `{D.config, dependency: T.name}` for each other member D that depends on T:
   - D's deno.json imports have a `jsr:` requirement named T.name (T has a deno.json), or an `npm:` requirement (T
     has a package.json).
-  - D's package.json deps: `file:` path resolving to T's dir or config, `npm:@jsr/{scope}__{pkg}` for a JSR T, a
+  - D's package.json deps (`dependencies` and `devDependencies` only; an entry that does not parse is skipped): `file:` path resolving to T's dir or config, `npm:@jsr/{scope}__{pkg}` for a JSR T, a
     plain name equal to T.name (T has a package.json), or `workspace:` with alias == T.name.
 - `changelog = {T dir}/CHANGELOG.md`, `scopes = [T.name]`.
 - The root folder is included too if it has a name and version.
