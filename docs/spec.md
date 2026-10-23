@@ -1609,8 +1609,7 @@ Knope uses `deno_config`'s workspace discovery. Simplified version for Go:
   `workspace` array (or the `members` array of the object form) lists member dirs, globs allowed, and without it
   only the root folder is considered. No root Deno config → no packages. A lone root `deno.json(c)` with a `name`
   and a `version` is one package (the root folder, see the last bullet): `versioned_files = [that config]`,
-  `scopes = [name]`, `changelog = CHANGELOG.md`, and the tag format of any named package (`name/v{version}`, or
-  `v{version}` when it is the only package). The workspace is used only if at least one folder (the root or a
+  `scopes = [name]`, `changelog = CHANGELOG.md`, and the tag format of a named package (`name/v{version}`, F7.5). The workspace is used only if at least one folder (the root or a
   member) has a usable config; otherwise discovery falls back to the default package (F20.1).
 - For each member folder: if `deno.json(c)` has `name` and `version`, use it (along with any `package.json` next to
   it). Otherwise use `package.json` with `name` and `version`. Otherwise skip the folder.
