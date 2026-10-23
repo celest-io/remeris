@@ -1,0 +1,39 @@
+# A root Cargo.toml that does not parse is an error in Knope's package discovery (workspace::toml), reported by a
+# workflow that reads the packages. The message carries Go's TOML error (deviations.md). Like every discovery error
+# it is deferred, so --help and workflows that do not read packages still run.
+exec remeris --help
+stdout 'release +Prepare and create a new release'
+! stderr .
+
+! exec remeris release --dry-run
+stderr 'Error: Could not parse TOML in Cargo.toml: '
+! stderr 'not implemented'
+
+# A knope.toml without packages is discovered the same way, so --validate fails too.
+cp knope.toml.empty knope.toml
+! exec remeris --validate
+stderr 'Could not parse TOML in Cargo.toml'
+
+# A knope.toml that declares the packages needs no discovery, so the broken root file is not read.
+cp knope.toml.declared knope.toml
+exec remeris --dry-run show
+stdout shown
+! stderr .
+
+-- Cargo.toml --
+[package
+name = "broken"
+-- package.json --
+{ "version": "1.0.0" }
+-- knope.toml.empty --
+[changes]
+-- knope.toml.declared --
+[package]
+versioned_files = ["package.json"]
+
+[[workflows]]
+name = "show"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo shown"

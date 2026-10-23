@@ -113,7 +113,6 @@ func TestDiscoverPackages(t *testing.T) {
 			files:     map[string]string{denoJSONName: `{"name": "x", "version": `},
 			wantFiles: []string{denoJSONName},
 		},
-		"broken cargo": {files: map[string]string{cargoTomlName: "[[["}, wantFiles: []string{cargoTomlName}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
