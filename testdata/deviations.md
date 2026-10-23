@@ -254,3 +254,19 @@ Spec F20.4. Knope uses `deno_config` 0.97 (`WorkspaceDirectory::discover`); the 
 | `--dry-run` | Writes nothing. Prints `Would generate a knope.toml file:` and then the file, to stdout (no `Generating a knope.toml file` line), or the same `already exists` error when the path is taken. Knope ignores `--dry-run` here and writes the file. | A dry run must not change the repository (spec F3.1). |
 | Order | A package discovery error is reported first, before any log line, in a real and a dry run. | Knope reports it while loading the configuration. |
 | Mode | The file is created with mode `0666` before the umask, as Knope's `fs::write`. | Parity. |
+
+### --upgrade
+
+`remeris --upgrade` moves `ignore_conventional_commits` from the `PrepareRelease` steps to `[changes]` and regenerates `knope.toml` from `Config.Document()` (Quirk Q9).
+
+| Case | Change | Reason |
+| --- | --- | --- |
+| Warning | After a real upgrade remeris prints one line: `Warning: knope.toml was regenerated: its comments and formatting were not kept.` Knope prints nothing. | The file is regenerated (Q9); the user should know before committing. |
+| `--dry-run` | Writes nothing and prints `Would upgrade knope.toml:` followed by the TOML that would be written, or `Nothing to upgrade`. Knope ignores `--dry-run` here and writes the file. | A dry run must not touch disk. |
+| Nothing to upgrade | The file is not rewritten, not even with identical bytes. | Same as Knope's behaviour in practice; tested byte for byte. |
+| Atomic write | The new file is written to a temporary file in the same directory (mode of the original), synced, and renamed over `knope.toml`; any failure leaves `knope.toml` untouched and removes the temporary file. An empty result for a non-empty file is refused. Knope calls `fs::write`. | An interrupted write must not destroy the configuration. |
+| Symbolic link | A `knope.toml` that is a symbolic link is refused: `knope.toml is a symbolic link, so it was not changed`, with the help `Replace the link by the file, or edit the file it points to.` (code `remeris::upgrade::symlink`). Knope writes through the link. | The link is never followed or replaced. |
+| Prerelease label | `--upgrade` runs on the configuration before `--prerelease-label` (or `REMERIS_PRERELEASE_LABEL`, `KNOPE_PRERELEASE_LABEL`) is applied, so the label never reaches the file. `--generate` is the same. | Knope upgrades first too; the order is fixed in `workflowCommand`. |
+| Dropped settings | Knope's `SimpleConfig` drops `[jira]`, `[release_notes]` and the `api_url`/`upload_url` of `[github]`; remeris keeps them (see the configuration document above). | Rewriting the file must not lose settings. |
+| One package | A single `[packages.foo]` becomes `[package]` and its name is lost, as in Knope. Nothing is printed about it. | Knope's `write_out`. |
+| Discovery error | A deferred package discovery error is reported before anything is written. | The discovered packages are written out, so they must be known. |

@@ -282,13 +282,6 @@ func TestValidate(t *testing.T) {
 	})
 }
 
-func TestUpgradeIsNotImplemented(t *testing.T) {
-	_, err := run(t, loadConfig(t, twoWorkflows), "--upgrade")
-	if err == nil || err.Error() != "--upgrade is not implemented yet (milestone M10)" {
-		t.Errorf("upgrade: %v", err)
-	}
-}
-
 func TestUnavailableSpecialFlagsAreRejected(t *testing.T) {
 	if _, err := run(t, loadConfig(t, twoWorkflows), "--generate"); err == nil {
 		t.Error("--generate must not exist when knope.toml does")

@@ -252,7 +252,7 @@ func runSpecialMode(
 	case global.Generate:
 		return true, generate(global, cfg)
 	case global.Upgrade:
-		return true, notImplemented("--upgrade", "M10")
+		return true, upgrade(global, cfg)
 	case global.Validate:
 		if err := cfg.DiscoveryError(); err != nil {
 			return true, err
@@ -271,7 +271,7 @@ func runSpecialMode(
 
 // labelAfterSpecialMode reports whether the mode ignores --prerelease-label. Knope handles --generate (and --upgrade)
 // before it applies the label, so the label must never reach the file they write; --validate gets it.
-func labelAfterSpecialMode(global *app.GlobalOptions) bool { return global.Generate }
+func labelAfterSpecialMode(global *app.GlobalOptions) bool { return global.Generate || global.Upgrade }
 
 // projectOptions says how the GitHub forge authenticates: with the GitHub App of the global options, if any,
 // else with GITHUB_TOKEN or the stored token, else (when p can ask) with a token typed by the user. The private
