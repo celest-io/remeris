@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -46,9 +47,12 @@ func captureLogs(t *testing.T) *syncBuffer {
 // secrets are the forms of the credential that must never be shown. The email is not a secret by itself, but the
 // blob and the header are.
 var secrets = map[string]string{
-	"token":  testToken,
-	"blob":   testBlob,
-	"header": testAuth,
+	"token":                  testToken,
+	"blob":                   testBlob,
+	"header":                 testAuth,
+	"blob without padding":   strings.TrimRight(testBlob, "="),
+	"escaped blob":           url.QueryEscape(testBlob),
+	"lowercase escaped blob": strings.ReplaceAll(url.QueryEscape(testBlob), "%3D", "%3d"),
 }
 
 func TestCredentialsNeverLeak(t *testing.T) {
@@ -56,7 +60,7 @@ func TestCredentialsNeverLeak(t *testing.T) {
 	closed := newServer(t, replying(http.StatusOK, ""))
 	closedURL := closed.URL
 	closed.Close()
-	echo := testToken + " " + testBlob + " " + testAuth + " " + "tok%2DSENTINEL"
+	echo := testToken + " " + testBlob + " " + testAuth + " " + strings.Join(blobForms(), " ")
 
 	tests := map[string]struct {
 		url       string
@@ -71,7 +75,7 @@ func TestCredentialsNeverLeak(t *testing.T) {
 		"401 that echoes everything": {handler: replying(http.StatusUnauthorized, echo), call: search},
 		"404 on the transitions": {
 			handler: replying(http.StatusNotFound, echo),
-			call:    func(c *Client) error { return c.TransitionIssue(context.Background(), "PRJ-1", "Done") },
+			call:    func(c *Client) error { return c.TransitionIssue(context.Background(), "PRJ-1", statusDone) },
 		},
 		"bad JSON that echoes everything": {handler: replying(http.StatusOK, echo), call: search},
 		"refused redirect whose Location echoes the token": {
@@ -123,7 +127,7 @@ func TestCredentialsNeverLeak(t *testing.T) {
 }
 
 func search(c *Client) error {
-	_, err := c.SearchIssues(context.Background(), "Done")
+	_, err := c.SearchIssues(context.Background(), statusDone)
 	return err
 }
 

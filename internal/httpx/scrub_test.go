@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/celest-io/remeris/internal/diag"
@@ -24,6 +25,8 @@ func TestScrubberString(t *testing.T) {
 		"plain":            {secrets: []string{abc}, in: "x " + abc + " y " + abc, want: "x [REDACTED] y [REDACTED]"},
 		"query escaped":    {secrets: []string{secret}, in: "?t=" + url.QueryEscape(secret), want: "?t=[REDACTED]"},
 		"path escaped":     {secrets: []string{secret}, in: "/" + url.PathEscape(secret) + "/x", want: "/[REDACTED]/x"},
+		"lowercase query":  {secrets: []string{secret}, in: strings.ToLower(url.QueryEscape(secret)), want: "[REDACTED]"},
+		"lowercase path":   {secrets: []string{secret}, in: "/" + strings.ToLower(url.PathEscape(secret)), want: "/[REDACTED]"},
 		"empty secret":     {secrets: []string{""}, in: unchanged, want: unchanged},
 		"no secret":        {in: unchanged, want: unchanged},
 		"longest first":    {secrets: []string{"abc", "abcdef"}, in: "abcdef", want: "[REDACTED]"},

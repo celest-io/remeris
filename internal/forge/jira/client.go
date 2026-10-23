@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/httpx"
@@ -78,7 +79,7 @@ func (c *Client) SearchIssues(ctx context.Context, status string) ([]Issue, erro
 			} `json:"fields"`
 		} `json:"issues"`
 	}
-	if err := c.do(ctx, http.MethodPost, "/rest/api/3/search/jql", body, &resp, activityIssues); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/rest/api/3/search/jql", body, &resp, activityIssues, true); err != nil {
 		return nil, err
 	}
 	issues := make([]Issue, 0, len(resp.Issues))
@@ -97,7 +98,7 @@ func (c *Client) Transitions(ctx context.Context, key string) ([]Transition, err
 	var resp struct {
 		Transitions []Transition `json:"transitions"`
 	}
-	if err := c.do(ctx, http.MethodGet, path, nil, &resp, activityTransitions); err != nil {
+	if err := c.do(ctx, http.MethodGet, path, nil, &resp, activityTransitions, true); err != nil {
 		return nil, err
 	}
 	return resp.Transitions, nil
@@ -128,7 +129,7 @@ func (c *Client) TransitionIssue(ctx context.Context, key, status string) error 
 			WithHelp("The `transition` field in TransitionJiraIssue must correspond to a valid transition in the Jira project")
 	}
 	body := map[string]any{"transition": map[string]string{"id": found.ID}}
-	return c.do(ctx, http.MethodPost, path, body, nil, activityTransition)
+	return c.do(ctx, http.MethodPost, path, body, nil, activityTransition, false)
 }
 
 // transitionsPath is the path of the transitions of an issue. The key is escaped as one path segment, so that it
@@ -140,16 +141,22 @@ func transitionsPath(key string) (string, error) {
 	return "/rest/api/3/issue/" + url.PathEscape(key) + "/transitions", nil
 }
 
-// quoteJQL writes s as a JQL string literal.
+// quoteJQL writes s as a JQL string literal. One pair of matching outer quotes (' or ") is removed first: Knope
+// pastes the value as is, so a configuration written for it may already quote a multi-word status, such as
+// `'In Progress'`.
 func quoteJQL(s string) string {
+	if n := len(s); n >= 2 && (s[0] == '\'' || s[0] == '"') && s[n-1] == s[0] {
+		s = s[1 : n-1]
+	}
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }
 
 // do sends one request and decodes the JSON response into out, which may be nil to ignore the body.
 //
 // path is relative to the site and starts with a slash. body, when not nil, is sent as JSON. activity completes the
-// "while ..." of the errors. Every error is a diagnostic without the credentials in it.
-func (c *Client) do(ctx context.Context, method, path string, body, out any, activity string) error {
+// "while ..." of the errors. retry false sends the request at most once. Every error is a diagnostic without the
+// credentials in it.
+func (c *Client) do(ctx context.Context, method, path string, body, out any, activity string, retry bool) error {
 	var payload io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -157,6 +164,11 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any, act
 			return c.WrapError(activity, err)
 		}
 		payload = bytes.NewReader(data)
+		if !retry {
+			// A body without GetBody makes the retry policy send the request once: applying a transition twice
+			// could run its post functions twice.
+			payload = io.NopCloser(payload)
+		}
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.base+path, payload)
 	if err != nil {
@@ -194,14 +206,20 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any, act
 
 // statusError is the diagnostic for a response that is not a success. Knope never looks at the status.
 func (c *Client) statusError(activity string, resp *http.Response, body []byte) error {
-	if len(body) > maxErrorBody {
-		body = append(body[:maxErrorBody:maxErrorBody], "..."...)
+	// The whole body is scrubbed before it is cut, so that a secret across the cut cannot survive as a prefix.
+	text := c.scrub.String(string(body))
+	if len(text) > maxErrorBody {
+		cut := maxErrorBody
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		text = text[:cut] + "..."
 	}
 	inner, ok := httpx.StatusError(resp)
 	if !ok {
 		inner = "unexpected HTTP status " + resp.Status
 	}
-	d := apiError(activity, inner+" with body: "+string(body))
+	d := apiError(activity, inner+" with body: "+text)
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		d = d.WithHelp("Check the email address and the API token: delete the email and jira_token files in the " +
 			"remeris config directory to be asked for them again.")

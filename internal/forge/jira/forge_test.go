@@ -33,7 +33,7 @@ func TestCredentialsAreAskedEmailFirstThenTokenOnlyOnce(t *testing.T) {
 		} else if c != first {
 			t.Error("the client should be cached")
 		}
-		if _, err := c.SearchIssues(context.Background(), "Done"); err != nil {
+		if _, err := c.SearchIssues(context.Background(), statusDone); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -66,7 +66,7 @@ func TestStoredCredentialsAreNotAskedAgain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.SearchIssues(context.Background(), "Done"); err != nil {
+	if _, err := c.SearchIssues(context.Background(), statusDone); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,7 +117,7 @@ func TestNoEnvironmentOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.SearchIssues(context.Background(), "Done"); err != nil {
+	if _, err := c.SearchIssues(context.Background(), statusDone); err != nil {
 		t.Fatal(err)
 	}
 

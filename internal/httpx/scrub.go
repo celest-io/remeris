@@ -29,7 +29,8 @@ func NewScrubber(secrets ...string) *Scrubber {
 		if secret == "" {
 			continue
 		}
-		for _, form := range []string{secret, url.QueryEscape(secret), url.PathEscape(secret)} {
+		escaped := []string{url.QueryEscape(secret), url.PathEscape(secret)}
+		for _, form := range []string{secret, escaped[0], escaped[1], lowerPercent(escaped[0]), lowerPercent(escaped[1])} {
 			if !slices.Contains(forms, form) {
 				forms = append(forms, form)
 			}
@@ -46,6 +47,20 @@ func NewScrubber(secrets ...string) *Scrubber {
 		pairs = append(pairs, form, Redacted)
 	}
 	return &Scrubber{replacer: strings.NewReplacer(pairs...)}
+}
+
+// lowerPercent writes the hex digits of the percent-escapes of s in lower case (%2f for %2F), a form that servers
+// and proxies produce.
+func lowerPercent(s string) string {
+	b := []byte(s)
+	for i := 0; i+2 < len(b); i++ {
+		if b[i] == '%' {
+			b[i+1] |= 0x20
+			b[i+2] |= 0x20
+			i += 2
+		}
+	}
+	return string(b)
 }
 
 // String returns text with the secrets replaced by [Redacted].

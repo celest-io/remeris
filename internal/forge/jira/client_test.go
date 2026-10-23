@@ -43,7 +43,7 @@ func TestSearchIssues(t *testing.T) {
 	if err := json.Unmarshal([]byte(r.body), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.JQL != `status = "In Progress" AND project = "PRJ"` || len(body.Fields) != 1 || body.Fields[0] != "summary" ||
+	if body.JQL != jqlInProgress || len(body.Fields) != 1 || body.Fields[0] != "summary" ||
 		body.MaxResults != 50 {
 		t.Errorf("body = %+v", body)
 	}
@@ -61,7 +61,7 @@ func TestSearchIssuesEscapesJQL(t *testing.T) {
 			status: `Done\`, project: testProject, want: `status = "Done\\" AND project = "PRJ"`,
 		},
 		"hostile project": {
-			status: "Done", project: `P" OR 1=1 --`, want: `status = "Done" AND project = "P\" OR 1=1 --"`,
+			status: statusDone, project: `P" OR 1=1 --`, want: `status = "Done" AND project = "P\" OR 1=1 --"`,
 		},
 		"empty": {status: "", project: testProject, want: `status = "" AND project = "PRJ"`},
 	}
@@ -93,7 +93,7 @@ func TestContextPathIsKept(t *testing.T) {
 	srv := newServer(t, replying(http.StatusOK, `{"issues":[]}`))
 	c := newClient(t, srv.URL+"/jira//")
 
-	if _, err := c.SearchIssues(context.Background(), "Done"); err != nil {
+	if _, err := c.SearchIssues(context.Background(), statusDone); err != nil {
 		t.Fatal(err)
 	}
 
@@ -112,7 +112,7 @@ func TestTransitionIssue(t *testing.T) {
 	})
 	c := newClient(t, srv.URL)
 
-	if err := c.TransitionIssue(context.Background(), "PRJ-7", "Done"); err != nil {
+	if err := c.TransitionIssue(context.Background(), "PRJ-7", statusDone); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,7 +157,7 @@ func TestTransitionsListsThem(t *testing.T) {
 
 	got, err := c.Transitions(context.Background(), "PRJ-7")
 
-	if err != nil || len(got) != 2 || got[1] != (Transition{ID: "31", Name: "Done"}) {
+	if err != nil || len(got) != 2 || got[1] != (Transition{ID: "31", Name: statusDone}) {
 		t.Errorf("transitions = %+v, err = %v", got, err)
 	}
 }
@@ -198,7 +198,7 @@ func TestInvalidIssueKeys(t *testing.T) {
 	srv := newServer(t, replying(http.StatusOK, `{"transitions":[]}`))
 	c := newClient(t, srv.URL)
 	for _, key := range []string{"", ".", ".."} {
-		err := c.TransitionIssue(context.Background(), key, "Done")
+		err := c.TransitionIssue(context.Background(), key, statusDone)
 
 		if err == nil || codeOf(t, err) != "remeris::jira::invalid_issue_key" {
 			t.Errorf("key %q: err = %v", key, err)
@@ -242,7 +242,7 @@ func TestStatusIsChecked(t *testing.T) {
 			srv := newServer(t, replying(tc.status, tc.body))
 			c := newClient(t, srv.URL)
 
-			_, err := c.SearchIssues(context.Background(), "Done")
+			_, err := c.SearchIssues(context.Background(), statusDone)
 
 			if err == nil {
 				t.Fatal(errNoIssue)
@@ -274,7 +274,7 @@ func TestTransitionStatusErrorsKeepKnopesActivity(t *testing.T) {
 	})
 	c := newClient(t, srv.URL)
 
-	err := c.TransitionIssue(context.Background(), "PRJ-7", "Done")
+	err := c.TransitionIssue(context.Background(), "PRJ-7", statusDone)
 	if err == nil || !strings.HasPrefix(err.Error(), "Problem communicating with Jira while transitioning issue: ") {
 		t.Errorf("err = %v", err)
 	}
@@ -290,7 +290,7 @@ func TestBadJSON(t *testing.T) {
 	srv := newServer(t, replying(http.StatusOK, `<html>`))
 	c := newClient(t, srv.URL)
 
-	_, err := c.SearchIssues(context.Background(), "Done")
+	_, err := c.SearchIssues(context.Background(), statusDone)
 
 	if err == nil || !strings.HasPrefix(err.Error(), "Could not deserialize response from Jira into JSON: ") ||
 		codeOf(t, err) != "remeris::jira::deserialize" {
@@ -302,7 +302,7 @@ func TestLongErrorBodyIsCut(t *testing.T) {
 	srv := newServer(t, replying(http.StatusBadRequest, strings.Repeat("x", 10_000)))
 	c := newClient(t, srv.URL)
 
-	_, err := c.SearchIssues(context.Background(), "Done")
+	_, err := c.SearchIssues(context.Background(), statusDone)
 
 	if err == nil || len(err.Error()) > 3_000 || !strings.HasSuffix(err.Error(), "...") {
 		t.Errorf("error of %d bytes", len(err.Error()))
@@ -318,7 +318,7 @@ func TestResponseSizeIsLimited(t *testing.T) {
 	})
 	c := newClient(t, srv.URL)
 
-	_, err := c.SearchIssues(context.Background(), "Done")
+	_, err := c.SearchIssues(context.Background(), statusDone)
 
 	if err == nil || !strings.Contains(err.Error(), "the response is larger than 32 MiB") {
 		t.Errorf("err = %v", err)
@@ -331,7 +331,7 @@ func TestContextCancellationIsReported(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := c.SearchIssues(ctx, "Done")
+	_, err := c.SearchIssues(ctx, statusDone)
 
 	if err == nil || !strings.HasPrefix(err.Error(), "Problem communicating with Jira while querying for issues: ") {
 		t.Errorf("err = %v", err)

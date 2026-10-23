@@ -26,6 +26,11 @@ const (
 	codeInsecureURL = "remeris::jira::insecure_url"
 )
 
+const (
+	statusDone    = "Done"
+	jqlInProgress = `status = "In Progress" AND project = "PRJ"`
+)
+
 // seen is one request as the server got it.
 type seen struct {
 	method, uri, auth, contentType, body string

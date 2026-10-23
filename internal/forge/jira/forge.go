@@ -8,7 +8,7 @@
 //     port or goes from https to http, and never sends the credential to another origin;
 //   - the credential is added by a RoundTripper under the retry policy, only for requests to the origin of the URL;
 //     it never goes in a URL;
-//   - the email, the token and the Basic blob are replaced by a placeholder in every error;
+//   - the token and the Basic blob (in its base64 forms) are replaced by a placeholder in every error;
 //   - values written into the JQL and the path are quoted and escaped, the status of every response is checked and
 //     the size of a response is limited.
 //
@@ -112,7 +112,12 @@ func (f *Forge) RequireAuthentication(ctx context.Context) (*Client, error) {
 		return nil, err
 	}
 	slog.DebugContext(ctx, "Using the Jira token")
-	blob := base64.StdEncoding.EncodeToString([]byte(email + ":" + token))
+	pair := []byte(email + ":" + token)
+	blob := base64.StdEncoding.EncodeToString(pair)
+	// The forms a server or a proxy may echo the blob in.
+	rawBlob := base64.RawStdEncoding.EncodeToString(pair)
+	urlBlob := base64.URLEncoding.EncodeToString(pair)
+	rawURLBlob := base64.RawURLEncoding.EncodeToString(pair)
 
 	transport := http.DefaultTransport
 	guard := httpx.NewGuard(transport, nil)
@@ -128,7 +133,7 @@ func (f *Forge) RequireAuthentication(ctx context.Context) (*Client, error) {
 	f.client = &Client{
 		cfg:   f.cfg,
 		base:  base,
-		scrub: httpx.NewScrubber(token, blob),
+		scrub: httpx.NewScrubber(token, blob, rawBlob, urlBlob, rawURLBlob),
 		http:  &http.Client{Transport: retry, CheckRedirect: urlPolicy.CheckRedirect},
 	}
 	return f.client, nil
