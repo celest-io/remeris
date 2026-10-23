@@ -38,7 +38,7 @@ func TestPatternMatches(t *testing.T) {
 			yes:     []string{"some/needle.txt", "some/one/needle.txt", "some/one/two/needle.txt", "some/other/needle.txt"},
 			no:      []string{"some/other/notthis.txt"},
 		},
-		"recursive alone": {pattern: "**", yes: []string{"abcde", "", ".asdf", "/x/.asdf"}},
+		"recursive alone": {pattern: recursive, yes: []string{"abcde", "", ".asdf", "/x/.asdf"}},
 		"recursive collapsed": {
 			pattern: "some/**/**/needle.txt",
 			yes:     []string{"some/needle.txt", "some/one/needle.txt", "some/one/two/needle.txt", "some/other/needle.txt"},
