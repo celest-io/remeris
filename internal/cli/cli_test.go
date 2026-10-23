@@ -282,12 +282,8 @@ func TestValidate(t *testing.T) {
 	})
 }
 
-func TestGenerateAndUpgradeAreNotImplemented(t *testing.T) {
-	_, err := run(t, config.Default(), "--generate")
-	if err == nil || err.Error() != "--generate is not implemented yet (milestone M10)" {
-		t.Errorf("generate: %v", err)
-	}
-	_, err = run(t, loadConfig(t, twoWorkflows), "--upgrade")
+func TestUpgradeIsNotImplemented(t *testing.T) {
+	_, err := run(t, loadConfig(t, twoWorkflows), "--upgrade")
 	if err == nil || err.Error() != "--upgrade is not implemented yet (milestone M10)" {
 		t.Errorf("upgrade: %v", err)
 	}

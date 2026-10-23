@@ -245,3 +245,12 @@ Spec F20.4. Knope uses `deno_config` 0.97 (`WorkspaceDirectory::discover`); the 
 | Template `variables` | A `CreatePullRequest` title or body without a `variables` key is written with the default variables (`"$version" = "Version"`, `"$changelog" = "ChangelogEntry"`), as Knope does. A `Command` without `variables` stays without. | Knope's `Template` always holds a map; loaded again, both mean the same. |
 | One named package | Written as `[packages.<name>]`; `[package]` is only for the unnamed default package. Knope writes a lone package as `[package]` whatever its name, so it loads back as the default package: its release tags change from `name/vX` to `vX`, the next changelog takes the whole history and `Release` tags `vX`. With two or more packages, the default package is called `default`. | The document must keep the tag identity of the package. |
 | An all-table `versioned_files` | Written as `[[package.versioned_files]]` sections, not inline tables, because the toml crate prints an array of only tables that way (no Knope golden covers it; `internal/tomlwrite` implements the rule). | Byte parity with `toml::to_string`. |
+
+### --generate
+
+| Case | Change | Reason |
+| --- | --- | --- |
+| Existing path | `remeris --generate` fails with `knope.toml already exists` (help: `Remove or rename it to generate a new one. remeris never overwrites a configuration file.`, code `remeris::generate::exists`, exit 1) whenever the path exists: a file that cannot be read, a directory, a symbolic link (dangling or not, never followed). Knope overwrites the path whenever reading it failed, for any reason. A knope.toml that can be read (even an invalid one) removes the flag, as in Knope. | `--generate` must not destroy a file the user did not mean to lose. The file is created exclusively and atomically (`fsx.WriteNew`: temporary file, then hard link; exclusive create where links are unsupported), so a concurrent file is never replaced either. |
+| `--dry-run` | Writes nothing. Prints `Would generate a knope.toml file:` and then the file, to stdout (no `Generating a knope.toml file` line), or the same `already exists` error when the path is taken. Knope ignores `--dry-run` here and writes the file. | A dry run must not change the repository (spec F3.1). |
+| Order | A package discovery error is reported first, before any log line, in a real and a dry run. | Knope reports it while loading the configuration. |
+| Mode | The file is created with mode `0666` before the umask, as Knope's `fs::write`. | Parity. |

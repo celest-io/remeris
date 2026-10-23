@@ -440,7 +440,7 @@ remeris --help | --version
 | --- | --- | --- |
 | `--dry-run` (global) | always | Run the workflow in DryRun mode. |
 | `-v`, `--verbose` (global) | always | Log level DEBUG instead of INFO. |
-| `--generate` | **no** `knope.toml` | Log `Generating a knope.toml file`, write the generated config (F20), exit. |
+| `--generate` | **no** `knope.toml` | Log `Generating a knope.toml file`, write the generated config (F20.7), exit. Never overwrites; with `--dry-run` it prints the file instead. |
 | `--upgrade` | `knope.toml` exists | F21 |
 | `--validate` | `knope.toml` exists | F21. All log output is suppressed while validating. |
 | `--override-version` (workflow flag) | workflow has `BumpVersion` or `PrepareRelease` **and** ≥1 package | With 1 package: single `<version>`, parsed with F1. With ≥2 packages: repeatable `name=version`. Unknown names → error `Unknown package(s) to override: a, b`. Bad format → `package override should be formatted like package_name=version`. |
@@ -1678,6 +1678,14 @@ that contain `"` use literal single quotes (`'git commit -m "..."'`). Empty or f
 (`allow_empty`, `ignore_conventional_commits`, `shell`, `prerelease_label`, empty `versioned_files`,
 `extra_changelog_sections`). A step table is `[[workflows.steps]]` with `type = "…"` first. A blank line separates
 tables. The file ends with a single `\n`.
+
+The mode (`internal/cli/generate.go`): a package discovery error aborts first, then `Generating a knope.toml file` is
+logged, then the document of the configuration that was already loaded is written to `knope.toml` in the working
+directory. **Remeris never overwrites** (Knope overwrites whenever it could not read the file): if the path exists in any
+form, a directory or a symbolic link included, the error is `knope.toml already exists` (`remeris::generate::exists`).
+The file is created with `fsx.WriteNew` (temporary file, then hard link, so it appears whole or not at all). With
+`--dry-run` nothing is written (Knope ignores the flag here): `Would generate a knope.toml file:` and the file are
+printed, or the same error if the path exists. See testdata/deviations.md.
 
 ---
 

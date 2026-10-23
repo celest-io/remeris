@@ -260,7 +260,7 @@ func runSpecialMode(
 		}
 		return true, validate(ctx, cfg, state)
 	case global.Generate:
-		return true, notImplemented("--generate", "M10")
+		return true, generate(global, cfg)
 	case global.Upgrade:
 		return true, notImplemented("--upgrade", "M10")
 	}
