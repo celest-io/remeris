@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/cargo/workspace/full (MIT, see testdata/README.md).
-skip 'needs package discovery (milestone M10)'
 
 exec git init --initial-branch=main
 exec git config user.email fake@remeris.dev
