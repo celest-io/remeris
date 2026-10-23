@@ -32,8 +32,24 @@ func oldMatch(tokens []token, s []rune) bool {
 }
 
 var (
-	diffPieces = []string{"a", "b", "c", "?", "*", "[a-c]", "[!a]", "[b]", "**", "**/", "/", ".", "*", "a*", "[a-b]*"}
-	diffNames  = []rune("abc/.")
+	diffPieces = []string{
+		"a",
+		"b",
+		"c",
+		"?",
+		"*",
+		"[a-c]",
+		"[!a]",
+		"[b]",
+		recursive,
+		recursiveDir,
+		"/",
+		".",
+		"*",
+		"a*",
+		"[a-b]*",
+	}
+	diffNames = []rune("abc/.")
 )
 
 func randomPattern(r *rand.Rand) string {
@@ -57,7 +73,7 @@ func randomName(r *rand.Rand) string {
 func TestMatchDifferential(t *testing.T) {
 	t.Parallel()
 	const seed = 20260101
-	r := rand.New(rand.NewPCG(seed, seed))
+	r := rand.New(rand.NewPCG(seed, seed)) //nolint:gosec // a fixed seed keeps the differential test reproducible
 	compiled, cases := 0, 0
 	for compiled < 3000 {
 		p, err := compile(randomPattern(r))
