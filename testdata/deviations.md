@@ -242,7 +242,7 @@ Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workfl
 | --- | --- | --- |
 | `--validate` (or `--upgrade`) without a `knope.toml` | Not a flag, as in Knope (`ConfigSource::Default` defines only `--generate`): `unexpected argument '--validate' found`, with the help `To pass '--validate' as a value, use '-- --validate'.`. Exit code 1; clap exits with 2 and prints a usage block. The same text is used for every unknown flag, of the root and of a workflow. | urfave/cli's own message (`flag provided but not defined: -validate`, plus a usage dump) is replaced by clap's wording. |
 | An unknown workflow name with `--validate`, `--generate` or `--upgrade` | `No workflow named {name}`, before the mode runs. | clap rejects an unknown subcommand before it looks at any flag. Its text differs (`unrecognized subcommand`) and its exit code is 2. |
-| Steps of milestone M11 (`SelectGitHubIssue`, `SelectGiteaIssue`, `SelectJiraIssue`, `TransitionJiraIssue`, `SwitchBranches`, `RebaseBranch`) | Fail in a dry run with `Step X is not implemented yet (milestone M11)`, so `--validate` reports a workflow that uses them even when Knope would pass it. | The steps have no implementation yet; passing them would hide that. `validate/kitchen_sink_issues` is skipped until they exist. |
+| Steps of milestone M11 (`SelectGiteaIssue`, `SelectJiraIssue`, `TransitionJiraIssue`, `SwitchBranches`, `RebaseBranch`) | Fail in a dry run with `Step X is not implemented yet (milestone M11)`, so `--validate` reports a workflow that uses them even when Knope would pass it. | The steps have no implementation yet; passing them would hide that. `validate/kitchen_sink_issues` is skipped until they exist. |
 | Exit code and rendering | Exit code 1 for every error. The related errors are printed as `╰─▶` lines by `internal/diag`, without miette's `Error:` blocks, codes and URLs. | Spec F3.3, D4. |
 
 ## M10 --generate and --upgrade
@@ -290,3 +290,13 @@ Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workfl
 | Read-only file | A `knope.toml` without the owner write bit is refused (`knope.toml is read-only, so it was not changed`, code `remeris::upgrade::read_only`). A rename would replace it silently; Knope's `fs::write` fails with `EACCES`. | Same outcome as Knope. |
 | Not preserved | Only the permission bits are copied (not setuid, setgid or sticky); ACLs and extended attributes are lost; a hard link to the file keeps the old content; a read-only target on Windows is refused only if the attribute maps to the mode. The owner and group are restored on Unix when the process may (errors ignored, not tested). A crash between creating the temporary file and the rename leaves `.knope.toml.*.tmp` in the directory (untracked in Git). | Consequences of replacing the file instead of writing into it. |
 | Frozen at upgrade time | The forge detected from the remote and, in a hybrid file, the discovered packages are written into the file, so a later change of layout needs a manual edit. `--upgrade` never writes the default workflows: a file with no `PrepareRelease` flag to move is `Nothing to upgrade`. | Quirk Q9. |
+
+## M11 SelectGitHubIssue
+
+| Case | Change | Reason |
+| --- | --- | --- |
+| `labels` with several entries | GitHub lists only the issues that carry all the labels (REST `labels=a,b`). Knope's GraphQL query takes the issues that carry any of them. | The REST issues endpoint has no any-of filter (spec F19.1). |
+| Order of the list | Oldest first, requested with `sort=created&direction=asc`. | The REST default is newest first; Knope's GraphQL list starts with the oldest. This approximates it. |
+| Pull requests | The REST endpoint lists pull requests as issues; they are skipped and further pages are read until 30 issues are collected. | GraphQL `issues` never returns pull requests. |
+| Failure of the request | `Trouble communicating with GitHub while loading issues: ... with body: ...` (the wording of every go-github call). Knope says `Could not communicate with GitHub while loading issues: ...` and has separate texts for malformed JSON and an unexpected response. | One error path for all GitHub calls (`WrapError`); there is no GraphQL response to decode. |
+| Authentication | The GitHub App, `GITHUB_TOKEN`, the stored token, then a prompt, and the configured `api_url` is used. Knope's query always goes to `https://api.github.com/graphql`. | The step shares the client of the other GitHub steps. |

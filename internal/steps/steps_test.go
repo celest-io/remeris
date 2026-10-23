@@ -144,7 +144,6 @@ func TestUnimplementedSteps(t *testing.T) {
 	}{
 		"SelectJiraIssue":     {&SelectJiraIssue{}, milestone11},
 		"TransitionJiraIssue": {&TransitionJiraIssue{}, milestone11},
-		"SelectGitHubIssue":   {&SelectGitHubIssue{}, milestone11},
 		"SelectGiteaIssue":    {&SelectGiteaIssue{}, milestone11},
 		"SwitchBranches":      {&SwitchBranches{}, milestone11},
 		"RebaseBranch":        {&RebaseBranch{}, milestone11},

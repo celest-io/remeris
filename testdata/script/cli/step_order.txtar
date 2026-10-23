@@ -19,4 +19,5 @@ type = "Command"
 command = "touch third"
 -- stderr.log --
 Error: Problem with workflow run
-  ╰─▶ Step SelectGitHubIssue is not implemented yet (milestone M11)
+  ╰─▶ GitHub is not configured
+      help: GitHub must be configured in order to use the SelectGitHubIssue step
