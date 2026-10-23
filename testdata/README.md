@@ -56,7 +56,8 @@ are © Triax Technologies and Dylan Anthony, used under the MIT License:
 A ported script starts with a comment naming its Knope source directory. Unit tests under `pkg/` also reuse a few
 Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/testdata/` (from
 `prepare_release/{npm,multiple_packages,tauri_conf_json}`) and `pkg/versioning/versionedfile/testdata/deno_json/` (from
-`prepare_release/deno`); they carry the same credit.
+`prepare_release/deno`) and `internal/tomlwrite/testdata/` (from `generate/*` and `upgrade/ignore_conventional_commits`); they
+carry the same credit.
 
 ### Conversion rules
 
