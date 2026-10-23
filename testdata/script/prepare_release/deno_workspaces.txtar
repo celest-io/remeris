@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/deno/workspaces (MIT, see testdata/README.md).
-skip 'needs package discovery (milestone M10)'
 
 exec git init --initial-branch=main
 exec git config user.email fake@remeris.dev
@@ -14,10 +13,8 @@ exec remeris release
 ! stderr .
 cmp deno.lock out/deno.lock
 cmp deno.json deno.json.orig
-exec sh -c 'printf %s "$(cat out/first/deno.json)" > first/deno.json.want'
-cmp first/deno.json first/deno.json.want
-exec sh -c 'printf %s "$(cat out/second/deno.json)" > second/deno.json.want'
-cmp second/deno.json second/deno.json.want
+cmp first/deno.json out/first/deno.json
+cmp second/deno.json out/second/deno.json
 
 -- deno.json --
 {

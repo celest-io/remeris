@@ -1,0 +1,47 @@
+# The members of a Deno workspace are released in directory-URL order, not in the order of `workspace`: "a-b/" sorts
+# before "a/" because "-" sorts before "/" (deno_config keeps them in a BTreeMap). Ours.
+env REMERIS_FAKE_DATE=2026-01-01
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'feat(@s/a): a feature'
+exec git commit --allow-empty -m 'fix(@s/ab): a fix'
+exec remeris release --dry-run
+rstrip stdout actual.log
+cmp actual.log want.log
+! stderr .
+
+-- deno.json --
+{ "workspace": ["a", "a-b"] }
+-- a/deno.json --
+{ "name": "@s/a", "version": "1.0.0" }
+-- a-b/deno.json --
+{ "name": "@s/ab", "version": "2.0.0" }
+-- want.log --
+Would add the following to a-b/deno.json: version = 2.0.1
+Would add the following to a/deno.json: version = 1.1.0
+Would add the following to a-b/CHANGELOG.md:
+## 2.0.1 (2026-01-01)
+
+### Fixes
+
+- a fix
+
+Would add the following to a/CHANGELOG.md:
+## 1.1.0 (2026-01-01)
+
+### Features
+
+- a feature
+
+Would add files to git:
+  a-b/deno.json
+  a/deno.json
+  a-b/CHANGELOG.md
+  a/CHANGELOG.md
+Would run git commit -m "chore: prepare releases"
+Would create Git tag @s/ab/v2.0.1
+Would create Git tag @s/a/v1.1.0
+Would run git push
+Would run git push --tags

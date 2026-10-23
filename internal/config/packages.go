@@ -47,6 +47,11 @@ type osRoot struct{}
 func (osRoot) Open(name string) (fs.File, error)     { return os.Open(filepath.FromSlash(name)) }
 func (osRoot) Stat(name string) (fs.FileInfo, error) { return os.Stat(filepath.FromSlash(name)) }
 
+// Lstat and ReadLink make osRoot an fs.ReadLinkFS, so fs.Lstat sees symbolic links (the Deno discovery does not
+// descend into a linked directory).
+func (osRoot) Lstat(name string) (fs.FileInfo, error) { return os.Lstat(filepath.FromSlash(name)) }
+func (osRoot) ReadLink(name string) (string, error)   { return os.Readlink(filepath.FromSlash(name)) }
+
 // validatePackages checks `package` and `packages` in the order of spec F2.2 and builds the PackageConfigs.
 func validatePackages(
 	r *raw, index *tomlIndex, src string, root fs.StatFS, ordered []NamedPackage,

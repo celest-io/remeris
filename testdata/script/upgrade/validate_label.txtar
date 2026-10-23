@@ -1,0 +1,28 @@
+# --upgrade wins over --validate (Knope checks it first), and the label of the workflow never reaches the file.
+
+exec remeris --validate --upgrade prepare-release --prerelease-label rc
+! grep prerelease_label knope.toml
+cmp knope.toml out.toml
+
+-- knope.toml --
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+-- out.toml --
+[changes]
+ignore_conventional_commits = true
+
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"

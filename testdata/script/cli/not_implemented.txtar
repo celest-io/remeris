@@ -7,15 +7,12 @@ cmp stderr release.log
 ! exec remeris --dry-run release
 cmp stderr release.log
 
-# Steps before it still run, and --generate and --upgrade say when they will exist.
+# Steps before it still run, and --generate says when it will exist.
 exec remeris --dry-run before
 cmp stdout before.log
 
-! exec remeris --upgrade
-cmp stderr upgrade.log
-
 ! exec remeris --generate
-stderr 'unknown flag|not defined|flag provided but not defined'
+stderr 'unexpected argument ''--generate'' found'
 
 -- knope.toml --
 [[workflows]]
@@ -30,5 +27,3 @@ Error: Problem with workflow release
   ╰─▶ Step SelectGitHubIssue is not implemented yet (milestone M11)
 -- before.log --
 Would run echo first
--- upgrade.log --
-Error: --upgrade is not implemented yet (milestone M10)

@@ -1,0 +1,37 @@
+# Not a Knope fixture. Outside a Git repository there is no remote to read, which is no error (as in Knope): the
+# file has no forge.
+exec remeris --generate
+cmp stdout generate.log
+! stderr .
+cmp knope.toml no-forge.toml
+-- generate.log --
+Generating a knope.toml file
+-- no-forge.toml --
+[[workflows]]
+name = "release"
+help_text = "Prepare and create a new release (update changelog, bump version, create release)"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = 'git commit -m "chore: prepare release $version"'
+
+[[workflows.steps]]
+type = "Release"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push --tags"
+
+[[workflows]]
+name = "document-change"
+help_text = "Create a new change file to be included in the next release"
+
+[[workflows.steps]]
+type = "CreateChangeFile"

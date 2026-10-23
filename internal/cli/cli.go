@@ -92,7 +92,12 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 			}
 			return ctx, global.ValidateGitHubApp(os.Getenv)
 		},
+		OnUsageError: usageError,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			// clap rejects a name that is no workflow before it looks at any flag, so --validate does not hide it.
+			if specialModeGiven(global) && cmd.Args().Present() {
+				return diag.Newf("No workflow named %s", cmd.Args().First())
+			}
 			if handled, err := runSpecialMode(ctx, global, cfg, nil); handled {
 				return err
 			}
@@ -186,9 +191,10 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 	}
 
 	return &cli.Command{
-		Name:  w.Name,
-		Usage: w.HelpText,
-		Flags: flags,
+		Name:         w.Name,
+		Usage:        w.HelpText,
+		Flags:        flags,
+		OnUsageError: usageError,
 		// A comma is not a separator: "a=2.0.0,b=3.0.0" is one (invalid) value, as in Knope.
 		DisableSliceFlagSeparator: true,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -197,7 +203,9 @@ func workflowCommand(cfg *config.Config, global *app.GlobalOptions, w workflow.W
 			if err := app.LoadConfig(cmd, opts); err != nil {
 				return err
 			}
-			setPrereleaseLabel(cfg, opts.PrereleaseLabel)
+			if !labelAfterSpecialMode(global) {
+				setPrereleaseLabel(cfg, opts.PrereleaseLabel)
+			}
 			if handled, err := runSpecialMode(ctx, global, cfg, opts.OverrideVersion); handled {
 				return err
 			}
@@ -247,6 +255,10 @@ func runSpecialMode(
 	ctx context.Context, global *app.GlobalOptions, cfg *config.Config, overrides []string,
 ) (handled bool, err error) {
 	switch {
+	case global.Generate:
+		return true, generate(global, cfg)
+	case global.Upgrade:
+		return true, upgrade(global, cfg)
 	case global.Validate:
 		if err := cfg.DiscoveryError(); err != nil {
 			return true, err
@@ -259,13 +271,13 @@ func runSpecialMode(
 			return true, err
 		}
 		return true, validate(ctx, cfg, state)
-	case global.Generate:
-		return true, notImplemented("--generate", "M10")
-	case global.Upgrade:
-		return true, notImplemented("--upgrade", "M10")
 	}
 	return false, nil
 }
+
+// labelAfterSpecialMode reports whether the mode ignores --prerelease-label. Knope handles --generate (and --upgrade)
+// before it applies the label, so the label must never reach the file they write; --validate gets it.
+func labelAfterSpecialMode(global *app.GlobalOptions) bool { return global.Generate || global.Upgrade }
 
 // projectOptions says how the GitHub forge authenticates: with the GitHub App of the global options, if any,
 // else with GITHUB_TOKEN or the stored token, else (when p can ask) with a token typed by the user. The private
@@ -290,11 +302,6 @@ func projectOptions(global *app.GlobalOptions, p prompt.Prompter) project.Option
 		}
 	}
 	return opts
-}
-
-func notImplemented(what, milestone string) error {
-	return diag.Newf("%s is not implemented yet (milestone %s)", what, milestone).
-		WithCode(name + "::not_implemented")
 }
 
 // validate runs every workflow as a dry run, each on its own copy of the state, and reports all the problems at

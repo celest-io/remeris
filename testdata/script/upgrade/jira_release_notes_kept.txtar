@@ -1,0 +1,44 @@
+# Knope's serializer drops [jira] and [release_notes]; remeris keeps them (deviations.md).
+
+exec remeris --upgrade
+cmp knope.toml out.toml
+
+-- knope.toml --
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+
+[jira]
+url = "https://example.atlassian.net"
+project = "PROJ"
+
+[release_notes]
+change_templates = ["### $summary", "#### $summary\n\n$details"]
+-- out.toml --
+[changes]
+ignore_conventional_commits = true
+
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[jira]
+url = "https://example.atlassian.net"
+project = "PROJ"
+
+[release_notes]
+change_templates = ["### $summary", """
+#### $summary
+
+$details"""]

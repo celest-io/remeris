@@ -1,0 +1,80 @@
+# Deno workspace discovery (spec F20.4): the package.json of a member depends on the released member through a plain
+# name, an npm alias to a JSR package, `workspace:` and `file:`; each dependent's manifest is edited when it is the
+# member's config. peerDependencies are not read, and a plain name needs a package.json next to the released member's
+# config (b below depends by name on a, which has a deno.json only, so it is no dependent). Ours.
+env REMERIS_FAKE_DATE=2026-01-01
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'feat(@s/a)!: a breaking feature'
+exec remeris release --dry-run
+rstrip stdout actual.log
+cmp actual.log want.log
+! stderr .
+
+# A package.json that does not parse is an error, even though the dependent is not a package.
+cp e/package.json.broken e/package.json
+! exec remeris release --dry-run
+cmp stderr broken.log
+
+-- deno.json --
+{ "workspace": ["a", "b", "c", "d", "e", "f"] }
+-- a/deno.json --
+{ "name": "@s/a", "version": "1.0.0" }
+-- b/package.json --
+{
+  "name": "@s/b",
+  "version": "2.0.0",
+  "dependencies": { "@s/a": "^1.0.0" }
+}
+-- c/package.json --
+{
+  "name": "@s/c",
+  "version": "3.0.0",
+  "devDependencies": { "@s/a": "npm:@jsr/s__a@^1.0.0" }
+}
+-- d/package.json --
+{
+  "name": "@s/d",
+  "version": "4.0.0",
+  "dependencies": { "@s/a": "workspace:^1.0.0" }
+}
+-- e/package.json --
+{
+  "name": "@s/e",
+  "version": "5.0.0",
+  "dependencies": { "@s/a": "file:../a" }
+}
+-- e/package.json.broken --
+{ "dependencies":
+-- f/package.json --
+{
+  "name": "@s/f",
+  "version": "6.0.0",
+  "peerDependencies": { "@s/a": "^1.0.0" }
+}
+-- broken.log --
+Error: Failed to discover Deno workspace: Could not parse "e/package.json"
+-- want.log --
+Would add the following to a/deno.json: version = 2.0.0
+Would add the following to c/package.json: @s/a = 2.0.0
+Would add the following to d/package.json: @s/a = workspace:^2.0.0
+Would add the following to e/package.json: @s/a = 2.0.0
+Would add the following to a/CHANGELOG.md:
+## 2.0.0 (2026-01-01)
+
+### Breaking Changes
+
+- a breaking feature
+
+Would add files to git:
+  a/deno.json
+  c/package.json
+  d/package.json
+  e/package.json
+  a/CHANGELOG.md
+Would run git commit -m "chore: prepare releases"
+Would create Git tag @s/a/v2.0.0
+Would run git push
+Would run git push --tags

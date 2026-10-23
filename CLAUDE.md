@@ -112,10 +112,10 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 
 ## Code layout
 
-Milestones M0 to M5 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
+Milestones M0 to M10 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
 `PrepareRelease` steps, with the SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod,
 regex), packages, Git tags and staging, conventional commits, change files, changelogs, prompts and the `Version`
-and `ChangelogEntry` variables. `Release` publishes on GitHub and Gitea (GitHub first, each package in turn). Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; the other forge steps, workspace discovery (a workspace root is an error until M10), `--generate` and `--upgrade` come later (see spec section 1).
+and `ChangelogEntry` variables. `Release` publishes on GitHub and Gitea (GitHub first, each package in turn). Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; the issue steps (Jira, GitHub and Gitea issues, `SwitchBranches`, `RebaseBranch`, `SelectIssueFromBranch`) come with M11 (see spec section 1). Without packages in `knope.toml`, the root package and the Cargo, npm and Deno workspace members are discovered; `--generate` writes a `knope.toml` for them and `--validate` dry-runs every workflow (both are modes of the root command, available only when their precondition on `knope.toml` holds).
 
 ```
 cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests
@@ -125,12 +125,13 @@ internal/cli/       root command, one subcommand per workflow, logging, --valida
 internal/config/    Knope configuration (knope.toml) loading: koanf + a go-toml unstable index for key order and spans;
                     discover.go runs the detectors (one file each: discover_cargo.go, discover_npm.go, discover_deno.go,
                     shared JSON helpers in discover_json.go) and falls back to the root package when none is declared
-                    (workspace roots are an M10 error until their detector is built)
+                    (a failure is kept and raised only by a workflow that reads the packages)
 internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
 internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines
 internal/fsx/       dry-run aware file writes
 internal/glob/      Glob(fs.FS, pattern) with the semantics of Rust's glob crate (`**`, brackets, no backslash escape)
+internal/tomlwrite/ TOML writer that prints like Rust's toml::to_string (toml_writer string rules, section layout); for --generate and --upgrade. Pure, stdlib only
 internal/git/       Git access: the Git interface, the git CLI backend, the go-git fallback, Open picks one
 internal/project/   reads the packages, versioned files and Git tags into a workflow.State
 internal/httpx/     HTTP behaviour (F15.1): User-Agent, retrying RoundTripper with Retry-After and rate-limit warnings, ApiRequestError diagnostics, the credential host Guard and URLPolicy shared by the forges

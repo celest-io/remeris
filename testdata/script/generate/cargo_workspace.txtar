@@ -1,0 +1,68 @@
+# Ported from knope-dev/knope, crates/knope/tests/generate/cargo_workspace (MIT, see testdata/README.md).
+# Each member of a Cargo workspace becomes a package named after its crate, with its scope; the dependency of one on
+# the other is a versioned file of the dependency.
+exec git init --initial-branch=main
+exec remeris --generate
+cmp stdout generate.log
+! stderr .
+cmp knope.toml want.toml
+
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git commit --allow-empty -m 'feat: first'
+exec remeris --validate
+! stdout .
+! stderr .
+-- Cargo.toml --
+[workspace]
+members = ["first", "second"]
+-- first/Cargo.toml --
+[package]
+name = "first-package"
+version = "1.0.0"
+
+[dependencies]
+second-package = { path = "../second", version = "0.1.0" }
+-- second/Cargo.toml --
+[package]
+name = "second-package"
+version = "0.1.0"
+-- generate.log --
+Generating a knope.toml file
+-- want.toml --
+[packages.first-package]
+versioned_files = ["first/Cargo.toml"]
+scopes = ["first-package"]
+
+[packages.second-package]
+versioned_files = [{ path = "first/Cargo.toml", dependency = "second-package" }, "second/Cargo.toml"]
+scopes = ["second-package"]
+
+[[workflows]]
+name = "release"
+help_text = "Prepare and create a new release (update changelog, bump version, create release)"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = 'git commit -m "chore: prepare releases"'
+
+[[workflows.steps]]
+type = "Release"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push --tags"
+
+[[workflows]]
+name = "document-change"
+help_text = "Create a new change file to be included in the next release"
+
+[[workflows.steps]]
+type = "CreateChangeFile"

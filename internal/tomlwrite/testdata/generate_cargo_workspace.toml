@@ -1,0 +1,36 @@
+[packages.first-package]
+versioned_files = ["first/Cargo.toml"]
+scopes = ["first-package"]
+
+[packages.second-package]
+versioned_files = [{ path = "first/Cargo.toml", dependency = "second-package" }, "second/Cargo.toml"]
+scopes = ["second-package"]
+
+[[workflows]]
+name = "release"
+help_text = "Prepare and create a new release (update changelog, bump version, create release)"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = 'git commit -m "chore: prepare releases"'
+
+[[workflows.steps]]
+type = "Release"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push --tags"
+
+[[workflows]]
+name = "document-change"
+help_text = "Create a new change file to be included in the next release"
+
+[[workflows.steps]]
+type = "CreateChangeFile"

@@ -1,0 +1,53 @@
+# Ported from knope-dev/knope, crates/knope/tests/generate/github (MIT, see testdata/README.md): https_remote and
+# ssh_remote. A GitHub remote adds [github] and puts the push before the Release step.
+exec git init --initial-branch=main
+exec git remote add origin https://github.com/knope-dev/knope.git
+exec remeris --generate
+cmp stdout generate.log
+! stderr .
+cmp knope.toml want.toml
+
+exec remeris --help
+stdout 'release +Prepare and create a new release'
+stdout 'document-change'
+stdout '--validate'
+! stdout '--generate'
+
+# The SSH form of the remote gives the same file.
+rm knope.toml
+exec git remote set-url origin git@github.com:knope-dev/knope.git
+exec remeris --generate
+cmp stdout generate.log
+! stderr .
+cmp knope.toml want.toml
+-- generate.log --
+Generating a knope.toml file
+-- want.toml --
+[[workflows]]
+name = "release"
+help_text = "Prepare and create a new release (update changelog, bump version, create release)"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = 'git commit -m "chore: prepare release $version"'
+
+[[workflows.steps]]
+type = "Command"
+command = "git push"
+
+[[workflows.steps]]
+type = "Release"
+
+[[workflows]]
+name = "document-change"
+help_text = "Create a new change file to be included in the next release"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
+
+[github]
+owner = "knope-dev"
+repo = "knope"

@@ -1,0 +1,26 @@
+# Ported from knope-dev/knope, crates/knope/tests/upgrade/nothing (MIT, see testdata/README.md).
+# Nothing to upgrade: the file is not rewritten, not even with the same bytes.
+
+cp knope.toml before.toml
+exec remeris --upgrade
+cmp stdout stdout.log
+! stderr .
+cmp knope.toml before.toml
+cmp knope.toml original.toml
+
+-- knope.toml --
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "No-op"
+steps = []
+-- original.toml --
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "No-op"
+steps = []
+-- stdout.log --
+Nothing to upgrade

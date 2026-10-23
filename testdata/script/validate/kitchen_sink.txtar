@@ -1,0 +1,42 @@
+# Ported from knope-dev/knope, crates/knope/tests/validate/kitchen_sink (MIT, see testdata/README.md).
+# --validate with many problems reports every failing workflow, in declaration order. Only the workflows that do
+# not need the issue steps (milestone M11) are here; kitchen_sink_issues holds the others. The names are
+# renamed as testdata/deviations.md says. "Cannot release without PrepareRelease" is not an error in a dry run.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit'
+exec git tag 1.0.0
+
+! exec remeris --validate
+! stdout .
+cmp stderr stderr.log
+
+-- knope.toml --
+[[workflows]]
+name = "Cannot-use-Version-variable-when-no-metadata-file-is-found"
+
+[[workflows.steps]]
+type = "Command"
+command = "echo version"
+variables = { version = "Version" }
+
+[[workflows]]
+name = "Cannot-release-without-PrepareRelease"
+
+[[workflows.steps]]
+type = "Release"
+
+[[workflows]]
+name = "Cannot-PrepareRelease-with-no-configured-packages"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+-- stderr.log --
+Error: There are problems with the defined workflows
+  ╰─▶ Problem with workflow Cannot-use-Version-variable-when-no-metadata-file-is-found
+      ╰─▶ No packages to operate on
+          help: There must be at least one package for remeris to work with, no supported package files were found in this directory.
+  ╰─▶ Problem with workflow Cannot-PrepareRelease-with-no-configured-packages
+      ╰─▶ No packages to operate on
+          help: There must be at least one package for remeris to work with, no supported package files were found in this directory.

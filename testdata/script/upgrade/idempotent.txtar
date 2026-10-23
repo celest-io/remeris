@@ -1,0 +1,32 @@
+# Upgrading twice: the second run has nothing to do and leaves the file as the first wrote it.
+
+exec remeris --upgrade
+cmp knope.toml out.toml
+cp knope.toml first.toml
+exec remeris --upgrade
+stdout '^Nothing to upgrade$'
+! stderr .
+cmp knope.toml first.toml
+
+-- knope.toml --
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+-- out.toml --
+[changes]
+ignore_conventional_commits = true
+
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"

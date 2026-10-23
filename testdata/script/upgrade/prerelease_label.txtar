@@ -1,0 +1,29 @@
+# --prerelease-label (and its environment variables) apply to the run, never to the file: Knope upgrades first.
+
+env KNOPE_PRERELEASE_LABEL=rc
+exec remeris --upgrade
+! grep prerelease_label knope.toml
+cmp knope.toml out.toml
+
+-- knope.toml --
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+-- out.toml --
+[changes]
+ignore_conventional_commits = true
+
+[package]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"

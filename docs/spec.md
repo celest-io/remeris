@@ -440,7 +440,7 @@ remeris --help | --version
 | --- | --- | --- |
 | `--dry-run` (global) | always | Run the workflow in DryRun mode. |
 | `-v`, `--verbose` (global) | always | Log level DEBUG instead of INFO. |
-| `--generate` | **no** `knope.toml` | Log `Generating a knope.toml file`, write the generated config (F20), exit. |
+| `--generate` | **no** `knope.toml` | Log `Generating a knope.toml file`, write the generated config (F20.7), exit. Never overwrites; with `--dry-run` it prints the file instead. |
 | `--upgrade` | `knope.toml` exists | F21 |
 | `--validate` | `knope.toml` exists | F21. All log output is suppressed while validating. |
 | `--override-version` (workflow flag) | workflow has `BumpVersion` or `PrepareRelease` **and** ≥1 package | With 1 package: single `<version>`, parsed with F1. With ≥2 packages: repeatable `name=version`. Unknown names → error `Unknown package(s) to override: a, b`. Bad format → `package override should be formatted like package_name=version`. |
@@ -448,7 +448,7 @@ remeris --help | --version
 
 - Each workflow is a subcommand, and `help_text` is its description.
 - No subcommand (and no `--validate`) → error `No workflow selected. Run 'remeris --help' for a list of options.`
-- Unknown workflow names are rejected by the CLI parser. Knope also has a fallback `No workflow named {name}`.
+- Unknown workflow names are rejected by the CLI parser. Knope also has a fallback `No workflow named {name}`. Remeris gives that error for the name, before any mode flag (`--validate nosuch` fails). A flag that is not defined (`--validate` without a `knope.toml`) is `unexpected argument '--validate' found`, as clap says it.
 - `--help` on the root lists workflows. `<workflow> --help` shows the flags for that workflow.
 
 **urfave/cli v3 + koanf: the readykit pattern (decision D9).** Reuse the structure of
@@ -1613,21 +1613,28 @@ string `name`, else `Could not find a name in {path}` (`remeris::workspaces::npm
 - `scopes = [W.name]`.
 
 ### F20.4 Deno workspaces
-Knope uses `deno_config`'s workspace discovery. Simplified version for Go:
-- The root `deno.json` or `deno.jsonc` must exist (the first that parses). It needs no `workspace` array: the
-  `workspace` array (or the `members` array of the object form) lists member dirs, globs allowed, and without it
-  only the root folder is considered. No root Deno config → no packages. A lone root `deno.json(c)` with a `name`
-  and a `version` is one package (the root folder, see the last bullet): `versioned_files = [that config]`,
-  `scopes = [name]`, `changelog = CHANGELOG.md`, and the tag format of a named package (`name/v{version}`, F7.5). The workspace is used only if at least one folder (the root or a
-  member) has a usable config; otherwise discovery falls back to the default package (F20.1).
+Knope uses `deno_config`'s workspace discovery. Simplified version for Go (differences in `testdata/deviations.md`):
+- Only the working directory is looked at: no walk up to a parent workspace, and the `workspaces` of a root
+  `package.json` stay with the npm detector (F20.3).
+- The root `deno.json` or `deno.jsonc` must exist (`deno.json` wins when both do; one that does not parse is an
+  error). It needs no `workspace` array: the `workspace` array (or the `members` array of the object form) lists
+  member dirs, globs (`*`, `?`) and `!` exclusions allowed, and without it only the root folder is considered. No
+  root Deno config → no packages. A lone root `deno.json(c)` with a `name` and a `version` is one package (the root
+  folder, see the last bullet): `versioned_files = [that config]`, `scopes = [name]`, `changelog = CHANGELOG.md`, and
+  the tag format of a named package (`name/v{version}`, F7.5). The workspace is used only if at least one folder (the
+  root or a member) has a usable config; otherwise discovery falls back to the default package (F20.1).
+- Order: the root folder, then the members sorted by directory URL string (`a-b/` before `a/`). A member that is
+  missing, outside the root, the root itself, listed twice, or whose config does not parse, and two `deno.json(c)`
+  with the same `name`, are errors `Failed to discover Deno workspace: …`.
 - For each member folder: if `deno.json(c)` has `name` and `version`, use it (along with any `package.json` next to
   it). Otherwise use `package.json` with `name` and `version`. Otherwise skip the folder.
-- The lockfile is `deno.lock` next to the root config (or the root `lock` setting), only if it exists.
+- The lockfile is `deno.lock` next to the root config (or the root `lock` setting: `false`, a path or `{path}`), only
+  if it exists; a path outside the project is an error.
 - The package for member T: `versioned_files` = `[T.config]`, plus `{lock, dependency: T.name}` if there is a
   lockfile, plus `{D.config, dependency: T.name}` for each other member D that depends on T:
   - D's deno.json imports have a `jsr:` requirement named T.name (T has a deno.json), or an `npm:` requirement (T
     has a package.json).
-  - D's package.json deps: `file:` path resolving to T's dir or config, `npm:@jsr/{scope}__{pkg}` for a JSR T, a
+  - D's package.json deps (`dependencies` and `devDependencies` only; an entry that does not parse is skipped): `file:` path resolving to T's dir or config, `npm:@jsr/{scope}__{pkg}` for a JSR T, a
     plain name equal to T.name (T has a package.json), or `workspace:` with alias == T.name.
 - `changelog = {T dir}/CHANGELOG.md`, `scopes = [T.name]`.
 - The root folder is included too if it has a name and version.
@@ -1657,16 +1664,28 @@ First remote URL:
 Serialise:
 ```
 [changes]            (only when ignore_conventional_commits = true)
-[package] or [packages.<name>]   (package when <2 packages)
+[package] or [packages.<name>]   (package for the one unnamed default package; a named package is always [packages.<name>], unlike Knope)
 [[workflows]] ...
 [github] / [gitea]   (when set)
+[jira] / [release_notes]   (remeris only, when set: Knope's writer drops them)
 ```
-Formatting must match the golden files in `tests/generate/*/out/knope.toml`. Details: inline arrays on one line,
-versioned files as bare strings, or inline tables `{ path = "...", dependency = "..." }` / `{ path, regex }`. Strings
+`Config.Document()` (`internal/config/document.go`) builds this with `internal/tomlwrite`. Formatting must match the
+golden files in `tests/generate/*/out/knope.toml`. Details: inline arrays on one line, versioned files as bare strings,
+or `{ path = "...", dependency = "..." }` / `{ path, regex }` tables, which are written inline when the array also holds
+a bare path and as `[[package.versioned_files]]` sections when every entry is a table; a single regex is a plain
+string. Template variables of `CreatePullRequest` are always written (the defaults when the key was absent). Strings
 that contain `"` use literal single quotes (`'git commit -m "..."'`). Empty or false optional fields are omitted
 (`allow_empty`, `ignore_conventional_commits`, `shell`, `prerelease_label`, empty `versioned_files`,
 `extra_changelog_sections`). A step table is `[[workflows.steps]]` with `type = "…"` first. A blank line separates
 tables. The file ends with a single `\n`.
+
+The mode (`internal/cli/generate.go`): a package discovery error aborts first, then `Generating a knope.toml file` is
+logged, then the document of the configuration that was already loaded is written to `knope.toml` in the working
+directory. **Remeris never overwrites** (Knope overwrites whenever it could not read the file): if the path exists in any
+form, a directory or a symbolic link included, the error is `knope.toml already exists` (`remeris::generate::exists`).
+The file is created with `fsx.WriteNew` (temporary file, then hard link, so it appears whole or not at all). With
+`--dry-run` nothing is written (Knope ignores the flag here): `Would generate a knope.toml file:` and the file are
+printed, or the same error if the path exists. See testdata/deviations.md.
 
 ---
 
@@ -1678,7 +1697,9 @@ tables. The file ends with a single `\n`.
   workflows that were auto-detected in Hybrid mode get written out). Otherwise log `Nothing to upgrade`.
 - `--validate`: build the state and run **every** workflow in **dry-run** mode with logs suppressed. Collect the
   errors (`There are problems with the defined workflows`, one related error per workflow `Problem with workflow {name}`).
-  Exit 0 if there are none. Config load errors (F2.2) are reported before validation starts.
+  Exit 0 if there are none. Config load errors (F2.2) and package errors are reported before validation starts;
+  `--override-version` and `--prerelease-label` are applied first. A dry run reads no credentials and never prompts.
+  The issue steps (M11) fail in a dry run until they are built.
 
 Fixtures: `tests/upgrade/*`, `tests/validate/*`.
 

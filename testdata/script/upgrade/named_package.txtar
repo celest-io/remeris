@@ -1,0 +1,29 @@
+# A lone [packages.foo] stays [packages.foo]: renaming it to [package] would change its tag history.
+
+exec remeris --upgrade
+cmp knope.toml out.toml
+exec ls -a
+! stdout '^\.knope\.toml\.'
+
+-- knope.toml --
+[packages.foo]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+ignore_conventional_commits = true
+-- out.toml --
+[changes]
+ignore_conventional_commits = true
+
+[packages.foo]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "PrepareRelease"

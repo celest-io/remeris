@@ -1,0 +1,22 @@
+# Ported from knope-dev/knope, crates/knope/tests/no_config/github (ssh_remote) (MIT, see testdata/README.md).
+# `release --dry-run` with no knope.toml and a GitHub remote (scp style, ssh). [COMMIT] is the HEAD commit, matched as 40 hex digits.
+env REMERIS_FAKE_DATE=2026-01-01
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git remote add origin git@github.com:knope-dev/knope.git
+exec git add .
+exec git commit -m 'feat: Existing Feature' --author 'Knope <knope@example.com>'
+exec git tag v1.0.0
+exec git commit --allow-empty -m 'feat: Something' --author 'Knope <knope@example.com>'
+
+exec remeris release --dry-run
+rstrip stdout stdout_actual.log
+grep '(?s)\AWould add the following to Cargo\.toml: version = 1\.1\.0\nWould add files to git:\n  Cargo\.toml\nWould run git commit -m "chore: prepare release 1\.1\.0"\nWould run git push\nWould create a release on GitHub with name 1\.1\.0 \(2026-01-01\) and tag v1\.1\.0 at commit [0-9a-f]{40} and body:\n## Features\n\n- Something\n\z' stdout_actual.log
+! stderr .
+
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"

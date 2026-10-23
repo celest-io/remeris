@@ -1,0 +1,44 @@
+# Ported from knope-dev/knope, crates/knope/tests/generate/no_remote (MIT, see testdata/README.md).
+# --generate writes the default configuration to knope.toml. What it wrote loads again: the flag is gone and --validate exists.
+exec git init --initial-branch=main
+exec remeris --generate
+cmp stdout generate.log
+! stderr .
+cmp knope.toml want.toml
+
+exec remeris --help
+stdout 'release +Prepare and create a new release'
+stdout 'document-change'
+stdout '--validate'
+! stdout '--generate'
+-- generate.log --
+Generating a knope.toml file
+-- want.toml --
+[[workflows]]
+name = "release"
+help_text = "Prepare and create a new release (update changelog, bump version, create release)"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = 'git commit -m "chore: prepare release $version"'
+
+[[workflows.steps]]
+type = "Release"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push --tags"
+
+[[workflows]]
+name = "document-change"
+help_text = "Create a new change file to be included in the next release"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
