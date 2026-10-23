@@ -326,7 +326,7 @@ func TestPatternAllowed(t *testing.T) {
 		"plain on windows":     {pattern: "packages/*", windows: true, want: true},
 		"dot slash":            {pattern: "./packages/a", want: true},
 		"dots in a name":       {pattern: "a..b/*", want: true},
-		"empty":                {pattern: "", want: true},
+		"empty pattern":        {pattern: "", want: true},
 		"parent":               {pattern: "../a"},
 		"inner parent":         {pattern: "a/../b"},
 		"only parent":          {pattern: ".."},

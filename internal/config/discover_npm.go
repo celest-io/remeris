@@ -140,7 +140,8 @@ func npmPackage(workspaces []npmWorkspace, names []string, i int, lock bool) (Pa
 		}
 	}
 	for j, other := range workspaces {
-		if j != i && (hasNPMDependency(other.doc, "dependencies", name) || hasNPMDependency(other.doc, "devDependencies", name)) {
+		if j != i &&
+			(hasNPMDependency(other.doc, "dependencies", name) || hasNPMDependency(other.doc, "devDependencies", name)) {
 			if err := add(other.file, &name); err != nil {
 				return PackageConfig{}, err
 			}
