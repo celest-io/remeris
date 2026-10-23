@@ -9,21 +9,26 @@ import (
 	"github.com/celest-io/remeris/internal/diag"
 )
 
+const (
+	abc       = "abc"
+	unchanged = "unchanged"
+)
+
 func TestScrubberString(t *testing.T) {
-	const secret = "s3cr3t/+ blob="
+	const secret = "s3cr3t/+ blob=" //nolint:gosec // G101: a sentinel, not a credential
 	tests := map[string]struct {
 		secrets []string
 		in      string
 		want    string
 	}{
-		"plain":            {secrets: []string{"abc"}, in: "x abc y abc", want: "x [REDACTED] y [REDACTED]"},
+		"plain":            {secrets: []string{abc}, in: "x " + abc + " y " + abc, want: "x [REDACTED] y [REDACTED]"},
 		"query escaped":    {secrets: []string{secret}, in: "?t=" + url.QueryEscape(secret), want: "?t=[REDACTED]"},
 		"path escaped":     {secrets: []string{secret}, in: "/" + url.PathEscape(secret) + "/x", want: "/[REDACTED]/x"},
-		"empty secret":     {secrets: []string{""}, in: "unchanged", want: "unchanged"},
-		"no secret":        {in: "unchanged", want: "unchanged"},
+		"empty secret":     {secrets: []string{""}, in: unchanged, want: unchanged},
+		"no secret":        {in: unchanged, want: unchanged},
 		"longest first":    {secrets: []string{"abc", "abcdef"}, in: "abcdef", want: "[REDACTED]"},
 		"several secrets":  {secrets: []string{"one", "two"}, in: "one two", want: "[REDACTED] [REDACTED]"},
-		"secret not found": {secrets: []string{"abc"}, in: "xyz", want: "xyz"},
+		"secret not found": {secrets: []string{abc}, in: "xyz", want: "xyz"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
