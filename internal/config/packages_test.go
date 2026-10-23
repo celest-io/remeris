@@ -29,6 +29,7 @@ func loadIn(t *testing.T, content string, files ...string) (*Config, error) {
 		root[f] = &fstest.MapFile{}
 	}
 	path := filepath.Join(t.TempDir(), "knope.toml")
+	//nolint:gosec // the path is in t.TempDir(); the fuzz test passes fuzzed text as content, which gosec follows into the path
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
