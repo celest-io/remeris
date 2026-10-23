@@ -148,29 +148,56 @@ func inSet(set []span, c rune) bool {
 // matches reports whether s matches the whole pattern, with the crate's default
 // options: case sensitive, * and ? also match /, dotfiles are not special.
 func (p *pattern) matches(s string) bool {
-	return matchFrom(p.tokens, []rune(s))
+	return matchTokens(p.tokens, []rune(s))
 }
 
-func matchFrom(tokens []token, s []rune) bool {
-	for ti, t := range tokens {
-		if t.kind == tokSeq || t.kind == tokRecursive {
-			for i := 0; i <= len(s); i++ {
-				// ** only resumes at the start, after a separator, or at the end.
-				if t.kind == tokRecursive && i > 0 && i < len(s) && s[i-1] != '/' {
-					continue
-				}
-				if matchFrom(tokens[ti+1:], s[i:]) {
-					return true
-				}
+// matchTokens decides whether tokens match all of s. The crate backtracks and
+// cuts the search with its EntirePatternDoesntMatch result; this is a
+// breadth-first walk over the tokens instead: cur[i] says that the tokens read
+// so far can consume exactly s[:i]. Each token turns cur into the next set in
+// one pass, so the cost is O(len(tokens) * len(s)) time and O(len(s)) space
+// whatever the number of stars, and the answer is the one of the backtracking
+// matcher. Names and patterns come from untrusted repositories, so a pattern
+// such as `*a*a*a*a*b` must not take exponential time.
+func matchTokens(tokens []token, s []rune) bool {
+	n := len(s)
+	cur := make([]bool, n+1)
+	next := make([]bool, n+1)
+	cur[0] = true
+	for _, t := range tokens {
+		clear(next)
+		alive := false
+		switch t.kind {
+		case tokSeq:
+			seen := false
+			for i := 0; i <= n; i++ {
+				seen = seen || cur[i]
+				next[i] = seen
 			}
+		case tokRecursive:
+			// ** matches nothing anywhere, or something up to just after a separator or the end.
+			seen := false
+			for i := 0; i <= n; i++ {
+				next[i] = cur[i] || (seen && (i == n || s[i-1] == '/'))
+				seen = seen || cur[i]
+			}
+		default:
+			for i := 0; i < n; i++ {
+				next[i+1] = cur[i] && t.matchesRune(s[i])
+			}
+		}
+		for _, ok := range next {
+			if ok {
+				alive = true
+				break
+			}
+		}
+		if !alive {
 			return false
 		}
-		if len(s) == 0 || !t.matchesRune(s[0]) {
-			return false
-		}
-		s = s[1:]
+		cur, next = next, cur
 	}
-	return len(s) == 0
+	return cur[n]
 }
 
 func (t token) matchesRune(c rune) bool {
