@@ -298,11 +298,6 @@ func projectOptions(global *app.GlobalOptions, p prompt.Prompter) project.Option
 	return opts
 }
 
-func notImplemented(what, milestone string) error {
-	return diag.Newf("%s is not implemented yet (milestone %s)", what, milestone).
-		WithCode(name + "::not_implemented")
-}
-
 // validate runs every workflow as a dry run, each on its own copy of the state, and reports all the problems at
 // once (spec F21).
 func validate(ctx context.Context, cfg *config.Config, state workflow.State) error {

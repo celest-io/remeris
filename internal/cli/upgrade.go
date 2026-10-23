@@ -19,6 +19,9 @@ const (
 	wouldUpgrade     = "Would upgrade " + config.KnopeFile + ":"
 	codeUpgradeLink  = name + "::upgrade::symlink"
 	codeUpgradeWrite = name + "::upgrade::write"
+
+	codeUpgradeUnknown = name + "::upgrade::unknown_key"
+	codeUpgradeRO      = name + "::upgrade::read_only"
 )
 
 // upgradePath is the file --upgrade rewrites. The tests point it at a temporary file.
@@ -55,6 +58,13 @@ func upgrade(global *app.GlobalOptions, cfg *config.Config) error {
 		slog.Info(nothingToUpgrade)
 		return nil
 	}
+	// The rewrite keeps only what remeris reads: refuse before the file is lost, not warn after.
+	if keys := cfg.UnknownKeys(); len(keys) > 0 {
+		return diag.Newf("%s has keys that --upgrade would drop: %s", config.KnopeFile, strings.Join(keys, ", ")).
+			WithCode(codeUpgradeUnknown).
+			WithHelp("Remove them, or edit the file by hand: --upgrade regenerates the whole file and only keeps " +
+				"the settings remeris understands.")
+	}
 	doc, err := cfg.Document()
 	if err != nil {
 		return err
@@ -81,6 +91,10 @@ func upgradeError(err error) error {
 		return diag.Newf("%s is a symbolic link, so it was not changed", config.KnopeFile).
 			WithCode(codeUpgradeLink).
 			WithHelp("Replace the link by the file, or edit the file it points to.")
+	case errors.Is(err, fsx.ErrReadOnly):
+		return diag.Newf("%s is read-only, so it was not changed", config.KnopeFile).
+			WithCode(codeUpgradeRO).
+			WithHelp("Make the file writable and run the command again.")
 	case errors.Is(err, fsx.ErrEmpty):
 		return diag.Newf("Refusing to replace %s with an empty file", config.KnopeFile).
 			WithCode(codeUpgradeWrite).

@@ -134,3 +134,40 @@ func TestReplaceFileCleansUpWhenTheDirectoryIsNotWritable(t *testing.T) {
 	}
 	assertOnly(t, path, original)
 }
+
+func TestReplaceFileCleansUpWhenWritingOrSyncingFails(t *testing.T) {
+	failure := errors.New("disk full")
+	cases := map[string]func(t *testing.T){
+		"write": func(t *testing.T) {
+			old := writeData
+			writeData = func(*os.File, []byte) error { return failure }
+			t.Cleanup(func() { writeData = old })
+		},
+		"sync": func(t *testing.T) {
+			old := syncFile
+			syncFile = func(*os.File) error { return failure }
+			t.Cleanup(func() { syncFile = old })
+		},
+	}
+	for name, inject := range cases {
+		t.Run(name, func(t *testing.T) {
+			path := writeOriginal(t, 0o644)
+			inject(t)
+			if err := ReplaceFile(path, []byte("new\n")); !errors.Is(err, failure) {
+				t.Fatalf("err = %v, want the injected failure", err)
+			}
+			assertOnly(t, path, original)
+		})
+	}
+}
+
+func TestReplaceFileRefusesAReadOnlyFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes read-only files")
+	}
+	path := writeOriginal(t, 0o444)
+	if err := ReplaceFile(path, []byte("new\n")); !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("err = %v, want ErrReadOnly", err)
+	}
+	assertOnly(t, path, original)
+}
