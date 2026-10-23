@@ -3,15 +3,11 @@ package config
 import (
 	"io/fs"
 
-	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
-const (
-	codeDiscoveryNotImplemented = "remeris::discovery_not_implemented"
-	defaultChangelog            = "CHANGELOG.md"
-)
+const defaultChangelog = "CHANGELOG.md"
 
 // A detector finds the packages of one kind of workspace at the root of root (Knope's cargo_workspace_members,
 // npm_workspaces and deno_workspaces). It returns no packages and no error when the root is not such a workspace, or
@@ -20,15 +16,9 @@ const (
 //
 // A detector reads the file system only through root, and does not touch the other detectors' files.
 //
-// To implement a detector, a milestone M10 PR replaces the body of its own function and edits nothing else in this
-// package:
-//   - cargoWorkspace in discover_cargo.go, npmWorkspaces in discover_npm.go, denoWorkspace in discover_deno.go;
-//   - tests in discover_<kind>_test.go next to it (the framework tests of discover_test.go stay untouched), and the
-//     golden scripts testdata/script/discovery/<kind>_*.txtar;
-//   - shared helpers (readJSON, readJSONC) are in discover_json.go; a new helper used by one kind stays in its file.
-//
-// The stubs return the M10 error (errDiscoveryNotImplemented) for a root that looks like a workspace of their kind;
-// a built detector drops that call, and the helper that decided it (isCargoWorkspace and so on) once unused.
+// Each detector lives in its own file (cargoWorkspace in discover_cargo.go, npmWorkspaces in discover_npm.go,
+// denoWorkspace in discover_deno.go) with its tests in discover_<kind>_test.go and its golden scripts in
+// testdata/script/discovery/<kind>_*.txtar. Shared helpers are in discover_json.go and discover_read.go.
 type detector func(root fs.StatFS) ([]PackageConfig, error)
 
 // detectors run in Knope's order: Cargo, npm, Deno. The results are concatenated.
@@ -74,12 +64,4 @@ func defaultPackage(root fs.StatFS) []PackageConfig {
 		pkg.Changelog = defaultChangelog
 	}
 	return []PackageConfig{pkg}
-}
-
-// errDiscoveryNotImplemented is the error of the detectors that are not built yet (milestone M10): releasing a
-// workspace root as one package would be wrong, since Knope releases the members.
-func errDiscoveryNotImplemented(kind string) error {
-	return diag.Newf("Package discovery for %s workspaces is not implemented yet (milestone M10)", kind).
-		WithCode(codeDiscoveryNotImplemented).
-		WithHelp("Declare the packages in " + KnopeFile + ", or wait for milestone M10.")
 }

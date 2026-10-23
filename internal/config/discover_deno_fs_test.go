@@ -11,6 +11,9 @@ import (
 	"github.com/celest-io/remeris/internal/diag"
 )
 
+// jsonNull is the JSON document `null`, a valid but empty configuration for Deno.
+const jsonNull = "null"
+
 const (
 	fsRootWS   = `{"workspace":["a","b"]}`
 	fsNameA    = `{"name":"@s/a","version":"1.0.0"}`
@@ -102,9 +105,9 @@ func TestDenoMembersOnDisk(t *testing.T) {
 			},
 		},
 		"null is the default configuration": {
-			files: map[string]string{denoJSONFile: dtWsA, dtADeno: "null"},
+			files: map[string]string{denoJSONFile: dtWsA, dtADeno: jsonNull},
 		},
-		"null root": {files: map[string]string{denoJSONFile: "null"}},
+		"null root": {files: map[string]string{denoJSONFile: jsonNull}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -126,7 +129,7 @@ func TestDenoMembersOnDisk(t *testing.T) {
 			}
 			var got []string
 			for _, p := range pkgs {
-				got = append(got, summary(p))
+				got = append(got, denoSummary(p))
 			}
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("packages =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(tc.want, "\n"))

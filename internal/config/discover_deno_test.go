@@ -35,7 +35,7 @@ const (
 )
 
 // summary renders a package as `name changelog scopes: file[@dependency] ...`.
-func summary(p PackageConfig) string {
+func denoSummary(p PackageConfig) string {
 	var files []string
 	for _, f := range p.VersionedFiles {
 		s := f.Path
@@ -271,7 +271,7 @@ func TestDenoWorkspace(t *testing.T) {
 			}
 			var got []string
 			for _, p := range pkgs {
-				got = append(got, summary(p))
+				got = append(got, denoSummary(p))
 			}
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("packages =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(tc.want, "\n"))
@@ -430,12 +430,12 @@ func TestDenoWorkspaceOtherDetectorsFiles(t *testing.T) {
 func TestDenoFallsBackToDefaultPackage(t *testing.T) {
 	// A root deno.json with no usable folder finds no Deno packages: the default package takes over.
 	pkgs, err := discoverPackages(rootOf(map[string]string{dtRoot: dtWsA, dtADeno: emptyObject}))
-	if err != nil || len(pkgs) != 1 || summary(pkgs[0]) != "default  : deno.json" {
+	if err != nil || len(pkgs) != 1 || denoSummary(pkgs[0]) != "default  : deno.json" {
 		t.Errorf("packages = %v, %v", pkgs, err)
 	}
 	// A root with a name and a version is one Deno package, and the default package is not added.
 	pkgs, err = discoverPackages(rootOf(map[string]string{dtRoot: dtA, "package.json": dtB}))
-	if err != nil || len(pkgs) != 1 || summary(pkgs[0]) != dtRootA {
+	if err != nil || len(pkgs) != 1 || denoSummary(pkgs[0]) != dtRootA {
 		t.Errorf("packages = %v, %v", pkgs, err)
 	}
 }
