@@ -32,11 +32,14 @@ func (c *Config) Document() (*tomlwrite.Doc, error) {
 	}
 	doc := tomlwrite.NewDoc()
 
-	if c.Changes != nil && c.Changes.IgnoreConventionalCommits {
-		// Knope also writes ignore_conventional_merge_commits when it is set; the configuration model has no such
-		// key yet, so there is nothing to write for it.
+	if c.Changes != nil && (c.Changes.IgnoreConventionalCommits || c.Changes.IgnoreConventionalMergeCommits) {
 		changes := tomlwrite.NewTable()
-		changes.Set("ignore_conventional_commits", tomlwrite.Bool(true))
+		if c.Changes.IgnoreConventionalCommits {
+			changes.Set("ignore_conventional_commits", tomlwrite.Bool(true))
+		}
+		if c.Changes.IgnoreConventionalMergeCommits {
+			changes.Set("ignore_conventional_merge_commits", tomlwrite.Bool(true))
+		}
 		doc.Set("changes", changes)
 	}
 

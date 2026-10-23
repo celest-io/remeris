@@ -71,7 +71,7 @@ func (s *pullsServer) forge(t *testing.T, token string) *github.Forge {
 func hashedCommits(hashes ...string) []git.Commit {
 	out := make([]git.Commit, len(hashes))
 	for i, h := range hashes {
-		out[i] = git.Commit{Message: "feat: Change " + h, Info: &git.CommitInfo{Hash: h, AuthorName: "Ann"}}
+		out[i] = git.Commit{Message: "feat: Change " + h, Info: &git.CommitInfo{Hash: h, AuthorName: authorAnn}}
 	}
 	return out
 }

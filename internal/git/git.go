@@ -61,7 +61,13 @@ type Commit struct {
 	Message string
 	// Info is nil when the author name is not valid UTF-8, like Knope's commit info, which is then None.
 	Info *CommitInfo
+	// Parents is the number of parents of the commit. More than one is a merge commit, like Knope's
+	// commit.parent_count() > 1 (the message is not looked at).
+	Parents int
 }
+
+// IsMerge reports whether the commit has more than one parent.
+func (c Commit) IsMerge() bool { return c.Parents > 1 }
 
 // CommitInfo identifies a commit and its author (spec F12.3).
 type CommitInfo struct {

@@ -536,6 +536,14 @@ func TestDocumentSectionsAndForges(t *testing.T) {
 			cfg:  &Config{Changes: &Changes{IgnoreConventionalCommits: true}, Packages: nil, packages: []PackageConfig{{}}},
 			want: emptyWorkflows + "\n[changes]\nignore_conventional_commits = true\n\n[package]\n",
 		},
+		"merge commits alone": {
+			cfg:  &Config{Changes: &Changes{IgnoreConventionalMergeCommits: true}},
+			want: emptyWorkflows + "\n[changes]\nignore_conventional_merge_commits = true\n",
+		},
+		"both changes settings": {
+			cfg:  &Config{Changes: &Changes{IgnoreConventionalCommits: true, IgnoreConventionalMergeCommits: true}},
+			want: emptyWorkflows + "\n[changes]\nignore_conventional_commits = true\nignore_conventional_merge_commits = true\n",
+		},
 		"github only": {
 			cfg:  &Config{GitHub: &GitHub{Owner: "o", Repo: "r"}},
 			want: emptyWorkflows + "\n[github]\nowner = \"o\"\nrepo = \"r\"\n",

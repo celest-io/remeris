@@ -242,7 +242,9 @@ func (c *CLI) CommitMessagesAfterTag(ctx context.Context, tag *string) ([]Commit
 	commits := make([]Commit, 0, len(raws))
 	for _, raw := range raws {
 		if utf8.ValidString(raw.message) {
-			commits = append(commits, Commit{Message: raw.message, Info: commitInfoFor(raw.hash, raw.author)})
+			commits = append(commits, Commit{
+				Message: raw.message, Info: commitInfoFor(raw.hash, raw.author), Parents: raw.parents,
+			})
 		}
 	}
 	return commits, nil
@@ -251,6 +253,7 @@ func (c *CLI) CommitMessagesAfterTag(ctx context.Context, tag *string) ([]Commit
 // rawCommit is a commit as stored: the message and author name are the stored bytes, not re-encoded.
 type rawCommit struct {
 	hash, author, message string
+	parents               int
 }
 
 // rawCommits reads the commit objects of hashes with git cat-file --batch, in the order given.
@@ -288,7 +291,8 @@ func parseRawCommit(hash, content string) rawCommit {
 		if rest, ok := strings.CutPrefix(line, "author "); ok {
 			name, _, _ := strings.Cut(rest, "<")
 			raw.author = strings.TrimSpace(name)
-			break
+		} else if strings.HasPrefix(line, "parent ") {
+			raw.parents++
 		}
 	}
 	return raw

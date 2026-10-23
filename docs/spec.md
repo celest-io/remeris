@@ -329,6 +329,7 @@ Sources: `crates/knope/src/config/{mod,toml,package}.rs`, `crates/knope-config/s
 ```toml
 [changes]                    # optional
 ignore_conventional_commits = false
+ignore_conventional_merge_commits = false   # skip merge commits (more than one parent) when reading commits
 
 [release_notes]              # optional
 change_templates = ["..."]   # array of strings (F12.3)
@@ -989,7 +990,8 @@ Result: tags **newest first**. `git log --format=%H` from HEAD, joined with `git
 ### F9.2 `CommitMessagesAfterTag(tag)`
 - If the tag is given and exists: collect **all ancestors** of the tag's commit (including it) into an exclude set.
   If it is missing, log at debug and use all commits.
-- Walk from HEAD. Keep the commits not in the exclude set. Record the full message and `GitInfo{hash: first 7 hex chars, author name}`.
+- Walk from HEAD. Keep the commits not in the exclude set. Record the full message, the number of parents and
+  `GitInfo{hash: first 7 hex chars, author name}`. A commit with more than one parent is a merge commit (F13.1).
 - **Reverse** the list so it is oldest first.
 - Equivalent to `git log --reverse <tag>..HEAD`.
 
@@ -1238,7 +1240,9 @@ if REAL run && !allow_empty && len(PendingActions)==0 → error "No packages are
 ### F13.1 `gatherChanges(pkg)`
 - `ignore` = step `ignore_conventional_commits` (log the deprecation **warning** when it is set) OR
   `[changes].ignore_conventional_commits`.
-- commits = ignore ? none : `CommitMessagesAfterTag(lastStableTag(pkg))` (F9.2).
+- commits = ignore ? none : `CommitMessagesAfterTag(lastStableTag(pkg))` (F9.2). With `[changes].ignore_conventional_merge_commits`,
+  the commits with more than one parent are dropped from that list, whatever their message says (Knope: `commit.parent_count() > 1`);
+  the commits they merge in still count.
 - Change files for this package (sorted by id), each with GitInfo (F11.2).
 - Result = commit changes (F10.2) followed by change-file changes (F11.2).
 - Implement both as `changes.Source` values (Phase 2 hook, E3), run in that fixed order in Phase 1.

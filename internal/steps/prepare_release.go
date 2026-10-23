@@ -191,9 +191,13 @@ func commitsSinceLastStable(
 	if err != nil {
 		return nil, err
 	}
-	out := make([]conventional.CommitMessage, len(found))
-	for i, c := range found {
-		out[i] = conventional.CommitMessage{Message: c.Message, Info: gitInfo(c.Info)}
+	out := make([]conventional.CommitMessage, 0, len(found))
+	for _, c := range found {
+		// Knope drops a commit with more than one parent, whatever its message says.
+		if state.IgnoreConventionalMergeCommits && c.IsMerge() {
+			continue
+		}
+		out = append(out, conventional.CommitMessage{Message: c.Message, Info: gitInfo(c.Info)})
 	}
 	return out, nil
 }

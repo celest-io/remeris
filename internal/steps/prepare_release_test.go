@@ -26,6 +26,10 @@ const (
 	summaryLine   = "- $summary"
 	patchNote     = "---\ndefault: patch\n---\n\n# A note\n"
 	v200          = "2.0.0"
+	v130          = "1.3.0"
+	v124          = "1.2.4"
+	authorAnn     = "Ann"
+	hashAbc       = "abc1234"
 )
 
 // recordingGit serves canned commits and records what steps ask of it.
@@ -78,7 +82,7 @@ func (*recordingGit) FirstRemoteURL(context.Context) (string, bool) { return "",
 func commits(messages ...string) []git.Commit {
 	out := make([]git.Commit, len(messages))
 	for i, m := range messages {
-		out[i] = git.Commit{Message: m, Info: &git.CommitInfo{Hash: "abc1234", AuthorName: "Ann"}}
+		out[i] = git.Commit{Message: m, Info: &git.CommitInfo{Hash: hashAbc, AuthorName: authorAnn}}
 	}
 	return out
 }
@@ -134,11 +138,11 @@ func TestPrepareReleaseGatherChanges(t *testing.T) {
 		wantFile   string // version in Cargo.toml after the run
 	}{
 		"all commits without a tag": {
-			commits: []string{featCommit}, wantCommit: true, wantFile: "1.3.0",
+			commits: []string{featCommit}, wantCommit: true, wantFile: v130,
 		},
 		"commits since the last stable tag, not the pre-release one": {
 			tags: []string{"v1.3.0-rc.1", tagV123}, commits: []string{fixCommit},
-			wantCommit: true, wantTag: tagV123, wantFile: "1.2.4",
+			wantCommit: true, wantTag: tagV123, wantFile: v124,
 		},
 		"step ignores commits": {
 			step: steps.PrepareRelease{IgnoreConventionalCommits: true}, commits: []string{featCommit},
@@ -169,6 +173,56 @@ func TestPrepareReleaseGatherChanges(t *testing.T) {
 			}
 			if tc.wantCommit && (g.tagArg == nil) != (tc.wantTag == "") || g.tagArg != nil && *g.tagArg != tc.wantTag {
 				t.Errorf("tag = %v, want %q", g.tagArg, tc.wantTag)
+			}
+			got, err := os.ReadFile(cargoFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != cargo(tc.wantFile) {
+				t.Errorf("Cargo.toml = %q, want version %s", got, tc.wantFile)
+			}
+		})
+	}
+}
+
+func TestPrepareReleaseIgnoreMergeCommits(t *testing.T) {
+	merge := func(msg string) git.Commit {
+		return git.Commit{Message: msg, Info: &git.CommitInfo{Hash: hashAbc, AuthorName: authorAnn}, Parents: 2}
+	}
+	plain := func(msg string) git.Commit {
+		return git.Commit{Message: msg, Info: &git.CommitInfo{Hash: hashAbc, AuthorName: authorAnn}, Parents: 1}
+	}
+	cases := map[string]struct {
+		ignore   bool
+		commits  []git.Commit
+		wantFile string
+	}{
+		"conventional merge commit counts by default": {
+			commits: []git.Commit{merge(featCommit)}, wantFile: v130,
+		},
+		"conventional merge commit is ignored when set": {
+			ignore: true, commits: []git.Commit{merge(featCommit)}, wantFile: v123,
+		},
+		"commits merged in still count": {
+			ignore: true, commits: []git.Commit{plain(fixCommit), merge(featCommit)}, wantFile: v124,
+		},
+		"non-merge commit that says Merge is not ignored": {
+			ignore: true, commits: []git.Commit{plain("feat: Merge the two")}, wantFile: v130,
+		},
+		"non-merge conventional commit is kept when set": {
+			ignore: true, commits: []git.Commit{plain(featCommit)}, wantFile: v130,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			prepareDir(t, nil)
+			state := stateFor(t, nil, cargo(v123), "")
+			state.Git = &recordingGit{commits: tc.commits}
+			state.IgnoreConventionalMergeCommits = tc.ignore
+			step := steps.PrepareRelease{AllowEmpty: true}
+
+			if _, err := runPrepare(t, &step, state, false); err != nil {
+				t.Fatal(err)
 			}
 			got, err := os.ReadFile(cargoFile)
 			if err != nil {

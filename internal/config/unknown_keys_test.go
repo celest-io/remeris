@@ -46,9 +46,8 @@ repo = "r"
 change_templates = ["x"]
 `,
 		},
-		"merge commits key": {
+		"merge commits key is known": {
 			toml: "[changes]\nignore_conventional_commits = true\nignore_conventional_merge_commits = true\n",
-			want: []string{"changes.ignore_conventional_merge_commits"},
 		},
 		"top level, declaration order": {
 			toml: "zeta = 1\n[changes]\n[alpha]\nx = 1\n",
