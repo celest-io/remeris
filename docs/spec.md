@@ -1667,9 +1667,13 @@ Serialise:
 [package] or [packages.<name>]   (package when <2 packages)
 [[workflows]] ...
 [github] / [gitea]   (when set)
+[jira] / [release_notes]   (remeris only, when set: Knope's writer drops them)
 ```
-Formatting must match the golden files in `tests/generate/*/out/knope.toml`. Details: inline arrays on one line,
-versioned files as bare strings, or inline tables `{ path = "...", dependency = "..." }` / `{ path, regex }`. Strings
+`Config.Document()` (`internal/config/document.go`) builds this with `internal/tomlwrite`. Formatting must match the
+golden files in `tests/generate/*/out/knope.toml`. Details: inline arrays on one line, versioned files as bare strings,
+or `{ path = "...", dependency = "..." }` / `{ path, regex }` tables, which are written inline when the array also holds
+a bare path and as `[[package.versioned_files]]` sections when every entry is a table; a single regex is a plain
+string. Template variables of `CreatePullRequest` are always written (the defaults when the key was absent). Strings
 that contain `"` use literal single quotes (`'git commit -m "..."'`). Empty or false optional fields are omitted
 (`allow_empty`, `ignore_conventional_commits`, `shell`, `prerelease_label`, empty `versioned_files`,
 `extra_changelog_sections`). A step table is `[[workflows.steps]]` with `type = "…"` first. A blank line separates

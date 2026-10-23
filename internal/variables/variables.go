@@ -40,6 +40,10 @@ var defaults = []Entry{
 	{Key: "$changelog", Variable: ChangelogEntry},
 }
 
+// DefaultEntries returns a copy of the variables that apply to a template with no `variables` key: `$version` and
+// `$changelog`. Knope writes them out when it prints a template, and so does `--generate`.
+func DefaultEntries() []Entry { return append([]Entry(nil), defaults...) }
+
 // Template is text with keys to replace. Variables is kept in declaration order, which is the
 // replacement order.
 //

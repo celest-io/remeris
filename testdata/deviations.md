@@ -228,3 +228,20 @@ Spec F20.4. Knope uses `deno_config` 0.97 (`WorkspaceDirectory::discover`); the 
 | Typed fields | As in `deno_config`, a `name` or `version` that is not a string (or null), and a `lock.path` that is not a string, make the file not parse (`Could not parse "{path}"`). A `deno.json(c)` that holds `null` is the default configuration. | Parity with serde. |
 | Edges from `package.json` | Read from `dependencies` and `devDependencies` only, as `deno_package_json` 0.49 resolves them (strings and numbers; other values are dropped). The entry is parsed like `PackageJsonDepValue::parse`: `file:`, `jsr:`, `npm:`, `workspace:` or a plain requirement on the key, any other scheme is skipped. A requirement is skipped when it does not parse, and remeris checks that with its own reduction of the npm range grammar (`validNPMVersionReq`): a single range that is neither a valid tag nor a range of the grammar is skipped, `||` alternatives always parse, numbers are not range checked. `file:` paths are resolved logically against the dependent's directory below the project root and compared with the directory or config file of the released member; a path that climbs above the root or starts with `/` never matches, where Knope resolves against the absolute directory (so `../<root name>/b` would match there). A `npm:` value is cut at its last `@` without checking for a sub-path (`npm:b/sub` names `b/sub`, which matches nothing). The file listed is the dependent's config (its `deno.json(c)` when it has one), so a dependent with a `deno.json` is listed but its `package.json` is not edited by the release. | Port of `package_json_dep_matches`; no file system access, `internal/config` cannot import `pkg/versioning/internal/denosemver`. |
 | Empty `name` | A `name` or `version` that is the empty string does not make a package. Knope accepts the empty name. | An empty package name cannot be released. |
+
+## M10 --generate and --upgrade
+
+### Configuration document
+
+`Config.Document()` maps the loaded configuration to the TOML that `--generate` and `--upgrade` write (spec F20.7, F21).
+
+| Case | Change | Reason |
+| --- | --- | --- |
+| `[release_notes]` | Written when the configuration has it, with its `change_templates`. Knope's `SimpleConfig` has no such field, so `--upgrade` silently drops a user's templates. | Rewriting the file must not lose settings. |
+| `[jira]` | Written when set, after `[gitea]`. Knope's `SimpleConfig` drops it. | Same. |
+| `[github]` `api_url`, `upload_url` | Written when set (remeris keys; Knope has no slot for them). | Same. |
+| `shell = false` | Left out. Knope stores `Option<bool>` and keeps an explicit `false`; the configuration here is a `bool`, which cannot tell it from no key. The two run the same way. | The step model has no tri-state. |
+| `ignore_conventional_merge_commits` | Not written: `[changes]` has no such key in remeris yet. Knope writes it (and `[changes]`) when it is true. Add it here when the key is added to the model. | Gap in the configuration model. |
+| Template `variables` | A `CreatePullRequest` title or body without a `variables` key is written with the default variables (`"$version" = "Version"`, `"$changelog" = "ChangelogEntry"`), as Knope does. A `Command` without `variables` stays without. | Knope's `Template` always holds a map; loaded again, both mean the same. |
+| `[package]` for one package | The package is written as `[package]` whatever its name, and loads back as the default package. With two or more packages, the default package is called `default`. | Knope's `write_out`. |
+| An all-table `versioned_files` | Written as `[[package.versioned_files]]` sections, not inline tables, because the toml crate prints an array of only tables that way (no Knope golden covers it; `internal/tomlwrite` implements the rule). | Byte parity with `toml::to_string`. |
