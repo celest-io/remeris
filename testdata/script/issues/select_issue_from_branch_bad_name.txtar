@@ -1,0 +1,28 @@
+# A branch name without an issue number fails with Knope's message and help (code remeris::git::bad_branch_name).
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit'
+
+! exec remeris select
+! stdout .
+cmp stderr bad_name.err
+
+# The dry run does not look at the branch, so it passes.
+exec remeris --dry-run select
+stdout 'Would attempt to parse current branch name to select current issue'
+
+# A number too big for a 64-bit usize is not a number.
+exec git switch -c 18446744073709551616-x
+! exec remeris select
+stderr 'Bad branch name'
+
+-- knope.toml --
+[[workflows]]
+name = "select"
+[[workflows.steps]]
+type = "SelectIssueFromBranch"
+-- bad_name.err --
+Error: Problem with workflow select
+  ╰─▶ Bad branch name
+      help: The branch name was not formatted correctly.

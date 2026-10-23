@@ -1,0 +1,25 @@
+# SelectIssueFromBranch in a dry run reads no branch and selects a fake issue, so IssueBranch has a value for the
+# steps after it. There is no Git repository here: nothing opens one.
+[windows] skip 'uses a POSIX echo'
+
+exec remeris --dry-run select
+cmp stdout dry_run.log
+! stderr .
+
+# --validate dry-runs the same workflow.
+exec remeris --validate
+! stdout .
+! stderr .
+
+-- knope.toml --
+[[workflows]]
+name = "select"
+[[workflows.steps]]
+type = "SelectIssueFromBranch"
+[[workflows.steps]]
+type = "Command"
+command = "echo $branch"
+variables = { "$branch" = "IssueBranch" }
+-- dry_run.log --
+Would attempt to parse current branch name to select current issue
+Would run echo 123-fake-issue

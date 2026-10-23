@@ -1,0 +1,44 @@
+# SelectIssueFromBranch parses the short name of the current branch (Quirk Q3: Knope parsed the full ref, so a branch
+# like "123-x" never matched). The workflow has no package, so the step opens the repository itself.
+[windows] skip 'uses a POSIX echo'
+
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git commit --allow-empty -m 'Initial commit'
+
+# A Jira-style branch.
+exec git switch -c ABC-12-Fix-The-Thing
+exec remeris select
+cmp stdout jira.log
+! stderr .
+
+# A GitHub-style branch. The number is printed back, so leading zeros go.
+exec git switch -c 007-Add-Support
+exec remeris select
+cmp stdout github.log
+! stderr .
+
+# The branch name may hold slashes.
+exec git switch -c 42-fix/it
+exec remeris select
+cmp stdout slash.log
+
+-- knope.toml --
+[[workflows]]
+name = "select"
+[[workflows.steps]]
+type = "SelectIssueFromBranch"
+[[workflows.steps]]
+type = "Command"
+command = "echo $branch"
+variables = { "$branch" = "IssueBranch" }
+-- jira.log --
+Auto-selecting issue ABC-12 from ref ABC-12-Fix-The-Thing
+ABC-12-fix-the-thing
+-- github.log --
+Auto-selecting issue 7 from ref 007-Add-Support
+7-add-support
+-- slash.log --
+Auto-selecting issue 42 from ref 42-fix/it
+42-fix/it

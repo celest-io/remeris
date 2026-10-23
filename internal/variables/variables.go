@@ -103,7 +103,7 @@ type PackageScope struct{}
 // Version needs exactly one package and is that package's latest version (spec F4.4). A nil scope means the
 // single-package rules; a scope is the hook for per-package variables (Phase 2). ChangelogEntry applies the same
 // package rules, then is the notes of the first pending CreateRelease or the changelog entry of the latest version.
-// There is no selected issue yet.
+// IssueBranch is the branch name of the selected issue.
 func Resolve(state workflow.State, v Variable, _ *PackageScope) (string, error) {
 	switch v {
 	case Version:
@@ -119,9 +119,13 @@ func Resolve(state workflow.State, v Variable, _ *PackageScope) (string, error) 
 	case ChangelogEntry:
 		return changelogEntry(state)
 	case IssueBranch:
-		return "", diag.New("No issue selected").
-			WithCode("remeris::no_issue_selected").
-			WithHelp("You must select an issue with a Select*Issue step before using the IssueBranch variable.")
+		if state.Issue == nil {
+			return "", diag.New("No issue selected").
+				WithCode("remeris::variables::no_issue_selected").
+				WithHelp("The IssueBranch command variable requires selecting an issue first with " +
+					"SelectGitHubIssue or SelectJiraIssue")
+		}
+		return state.Issue.BranchName(), nil
 	}
 	return "", diag.Newf("Unknown variable %q", string(v))
 }

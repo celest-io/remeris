@@ -155,3 +155,27 @@ func TestDescribe(t *testing.T) {
 		})
 	}
 }
+
+func TestIssueStringAndBranchName(t *testing.T) {
+	cases := map[string]struct {
+		issue      Issue
+		wantString string
+		wantBranch string
+	}{
+		"knope test":  {Issue{"FLOW-5", "A test issue"}, "FLOW-5: A test issue", "FLOW-5-a-test-issue"},
+		"github":      {Issue{"123", "Test issue"}, "123: Test issue", "123-test-issue"},
+		"ascii only":  {Issue{"7", "ÀB É"}, "7: ÀB É", "7-Àb-É"},
+		"only spaces": {Issue{"7", "a\tb  c/D"}, "7: a\tb  c/D", "7-a\tb--c/d"},
+		"key is kept": {Issue{"ABC-1", ""}, "ABC-1: ", "ABC-1-"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := tc.issue.String(); got != tc.wantString {
+				t.Errorf("String() = %q, want %q", got, tc.wantString)
+			}
+			if got := tc.issue.BranchName(); got != tc.wantBranch {
+				t.Errorf("BranchName() = %q, want %q", got, tc.wantBranch)
+			}
+		})
+	}
+}

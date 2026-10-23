@@ -40,8 +40,12 @@ func TestResolve(t *testing.T) {
 			msgNoPackages,
 			"There must be at least one package for remeris",
 		},
-		"issue branch": {IssueBranch, msgNoIssue, "select an issue"},
-		"unknown":      {"Nope", `Unknown variable "Nope"`, ""},
+		"issue branch": {
+			IssueBranch,
+			msgNoIssue,
+			"The IssueBranch command variable requires selecting an issue first with SelectGitHubIssue or SelectJiraIssue",
+		},
+		"unknown": {"Nope", `Unknown variable "Nope"`, ""},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -56,6 +60,37 @@ func TestResolve(t *testing.T) {
 				t.Errorf("help = %v, want it to contain %q", err, tc.wantHelp)
 			}
 		})
+	}
+}
+
+func TestResolveIssueBranch(t *testing.T) {
+	cases := map[string]struct {
+		issue workflow.Issue
+		want  string
+	}{
+		"github":       {workflow.Issue{Key: "123", Summary: "Test issue"}, "123-test-issue"},
+		"jira":         {workflow.Issue{Key: "FLOW-5", Summary: "A test issue"}, "FLOW-5-a-test-issue"},
+		"non ascii":    {workflow.Issue{Key: "1", Summary: "ÉCOLE Ab/c"}, "1-École-ab/c"},
+		"other spaces": {workflow.Issue{Key: "2", Summary: "a\tB  c"}, "2-a\tb--c"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := Resolve(workflow.State{Issue: &tc.issue}, IssueBranch, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Errorf("IssueBranch = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveIssueBranchCode(t *testing.T) {
+	_, err := Resolve(workflow.State{}, IssueBranch, nil)
+	d, ok := err.(diag.Diagnostic)
+	if !ok || d.Code() != "remeris::variables::no_issue_selected" {
+		t.Errorf("err = %#v", err)
 	}
 }
 

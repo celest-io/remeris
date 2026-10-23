@@ -6,7 +6,6 @@ import (
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/forge/gitea"
-	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/variables"
 	"github.com/celest-io/remeris/internal/workflow"
 )
@@ -84,16 +83,11 @@ func (s *CreatePullRequest) Run(
 	return rt, nil
 }
 
-// currentBranch is the short name of the branch HEAD points to (Quirk Q3). Like Knope, it opens the repository
-// itself when the state has none.
+// currentBranch is the short name of the branch HEAD points to (Quirk Q3).
 func currentBranch(ctx context.Context, state *workflow.State) (string, error) {
-	g := state.Git
-	if g == nil {
-		var err error
-		if g, err = git.Open(ctx, "."); err != nil {
-			return "", err
-		}
-		state.Git = g
+	g, err := ensureGit(ctx, state)
+	if err != nil {
+		return "", err
 	}
 	return g.CurrentBranch(ctx)
 }
