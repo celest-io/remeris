@@ -8,11 +8,6 @@ stdout '--generate'
 ! stdout '--validate'
 ! stdout '--upgrade'
 
-# --generate exists only here, and is not built yet.
-! exec remeris --generate
-! stdout .
-cmp stderr generate.log
-
 # --validate and --upgrade do not exist without a knope.toml.
 ! exec remeris --validate
 stderr 'flag provided but not defined: -validate'
@@ -28,8 +23,11 @@ exec remeris release --help
 stdout '--prerelease-label'
 ! stdout '--override-version'
 
--- generate.log --
-Error: --generate is not implemented yet (milestone M10)
+# --generate exists only here (the generate suite covers it). Once the file is there, the flag is gone.
+exec remeris --generate
+exists knope.toml
+! exec remeris --generate
+stderr 'flag provided but not defined: -generate'
 -- release.log --
 Error: Problem with workflow release
   ╰─▶ No packages to operate on

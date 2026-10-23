@@ -1,0 +1,69 @@
+# Ported from knope-dev/knope, crates/knope/tests/generate/packages_with_changelog (MIT, see testdata/README.md).
+# An existing CHANGELOG.md (here an empty one) becomes the changelog of the package.
+exec git init --initial-branch=main
+exec remeris --generate
+cmp stdout generate.log
+! stderr .
+cmp knope.toml want.toml
+
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git commit --allow-empty -m 'feat: first'
+exec remeris --validate
+! stdout .
+! stderr .
+-- CHANGELOG.md --
+-- Cargo.toml --
+[package]
+name = "default"
+version = "1.0.0"
+-- package.json --
+{
+  "version": "1.0.0"
+}
+-- pyproject.toml --
+[tool.poetry]
+version = "1.0.0"
+-- generate.log --
+Generating a knope.toml file
+-- want.toml --
+[package]
+versioned_files = ["Cargo.toml", "package.json", "pyproject.toml"]
+changelog = "CHANGELOG.md"
+
+[[workflows]]
+name = "release"
+help_text = "Prepare and create a new release (update changelog, bump version, create release)"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = 'git commit -m "chore: prepare release $version"'
+
+[[workflows.steps]]
+type = "Release"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push"
+
+[[workflows.steps]]
+type = "Command"
+command = "git push --tags"
+
+[[workflows]]
+name = "document-change"
+help_text = "Create a new change file to be included in the next release"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
+
+[[workflows]]
+name = "get-version"
+help_text = "Get the current version of the project"
+
+[[workflows.steps]]
+type = "Command"
+command = 'echo "$version"'

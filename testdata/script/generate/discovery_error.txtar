@@ -1,0 +1,15 @@
+# Not a Knope fixture. A package that cannot be discovered aborts --generate before it logs or writes anything,
+# in a real run and in a dry run alike (Knope reports it while it loads the configuration).
+exec git init --initial-branch=main
+! exec remeris --generate
+! stdout .
+stderr 'Cargo\.toml'
+! exists knope.toml
+
+! exec remeris --dry-run --generate
+! stdout .
+stderr 'Cargo\.toml'
+! exists knope.toml
+-- Cargo.toml --
+[package
+name = "broken"
