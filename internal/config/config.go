@@ -61,6 +61,8 @@ type Config struct {
 
 type Changes struct {
 	IgnoreConventionalCommits bool `toml:"ignore_conventional_commits"`
+	// IgnoreConventionalMergeCommits skips the commits with more than one parent when reading conventional commits.
+	IgnoreConventionalMergeCommits bool `toml:"ignore_conventional_merge_commits"`
 }
 
 type ReleaseNotes struct {

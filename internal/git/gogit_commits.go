@@ -42,7 +42,9 @@ func (g *GoGit) CommitMessagesAfterTag(ctx context.Context, tag *string) ([]Comm
 	err = walkFromHead(ctx, repo, head.Hash(), func(c *object.Commit) {
 		// Knope skips a commit whose message is not valid UTF-8.
 		if !exclude[c.Hash] && utf8.ValidString(c.Message) {
-			commits = append(commits, Commit{Message: c.Message, Info: commitInfoFor(c.Hash.String(), c.Author.Name)})
+			commits = append(commits, Commit{
+				Message: c.Message, Info: commitInfoFor(c.Hash.String(), c.Author.Name), Parents: c.NumParents(),
+			})
 		}
 	})
 	if err != nil {

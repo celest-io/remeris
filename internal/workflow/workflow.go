@@ -43,6 +43,9 @@ type State struct {
 	Prompter prompt.Prompter
 	// IgnoreConventionalCommits is the `ignore_conventional_commits` setting of `[changes]`.
 	IgnoreConventionalCommits bool
+	// IgnoreConventionalMergeCommits is the `ignore_conventional_merge_commits` setting of `[changes]`: commits with
+	// more than one parent are not read as conventional commits.
+	IgnoreConventionalMergeCommits bool
 	// GitHub is the GitHub forge, or nil when the configuration has no `[github]` table. It builds its client on
 	// demand and caches it; a step must not ask for the client in a dry run. Clones of the state share it.
 	GitHub *github.Forge

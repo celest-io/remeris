@@ -79,7 +79,12 @@ func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State
 			l.ChangeTemplates = append(l.ChangeTemplates, releasenotes.ChangeTemplate(t))
 		}
 	}
-	return l.State(ctx, cfg.PackageConfigs(), ignore)
+	state, err := l.State(ctx, cfg.PackageConfigs(), ignore)
+	if err != nil {
+		return state, err
+	}
+	state.IgnoreConventionalMergeCommits = cfg.Changes != nil && cfg.Changes.IgnoreConventionalMergeCommits
+	return state, nil
 }
 
 // State loads the packages, their versioned files and the Git tags. Git is only opened, and tags only read,

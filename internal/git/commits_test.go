@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +16,8 @@ const (
 	authorUnicode = "Zoë Müller 日本"
 	msgOne        = "one\n"
 	msgTwo        = "two\n"
+	msgSide       = "side\n"
+	msgMerge      = "merge\n"
 )
 
 // commitFiles writes files (an empty content removes the file), stages everything and commits with the
@@ -107,13 +110,13 @@ func runCommitsAfterTagContract(t *testing.T, open func(t *testing.T, dir string
 		"merge brings commits from both sides": {
 			setup: mergeHistory,
 			tag:   ptr(tagV1),
-			want:  []commitWant{{"side\n", authorTest}, {msgTwo, authorTest}, {"merge\n", authorTest}},
+			want:  []commitWant{{msgSide, authorTest}, {msgTwo, authorTest}, {msgMerge, authorTest}},
 		},
 		"commits behind the tag on another branch are excluded": {
 			setup: func(r *testRepo) {
 				plain(r, "base\n")
 				r.git("checkout", "--quiet", "-b", "side")
-				plain(r, "side\n")
+				plain(r, msgSide)
 				r.git("checkout", "--quiet", "main")
 				plain(r, msgTwo)
 				r.git("merge", "--quiet", "--no-ff", "-m", "merge", "side")
@@ -274,13 +277,13 @@ func runFirstCommitsContract(t *testing.T, open func(t *testing.T, dir string) G
 			setup: func(r *testRepo) {
 				r.commitFiles("base\n", authorTest, map[string]string{fileB: "1"})
 				r.git("checkout", "--quiet", "-b", "side")
-				r.commitFiles("side\n", authorUnicode, map[string]string{fileA: "1"})
+				r.commitFiles(msgSide, authorUnicode, map[string]string{fileA: "1"})
 				r.git("checkout", "--quiet", "main")
 				r.commitFiles(msgTwo, authorTest, map[string]string{fileC: "1"})
 				r.git("merge", "--quiet", "--no-ff", "-m", "merge", "side")
 			},
 			paths: []string{fileA, fileC},
-			want:  map[string]string{fileA: "side\n", fileC: msgTwo},
+			want:  map[string]string{fileA: msgSide, fileC: msgTwo},
 		},
 		"author name that is not UTF-8 is not found and ends the search": {
 			setup: func(r *testRepo) {
@@ -344,14 +347,66 @@ func openGoGit(t *testing.T, dir string) Git {
 	return g
 }
 
+// runParentsContract checks Commit.Parents: a merge commit has two parents, a fast-forward adds none, and the
+// message is not looked at.
+func runParentsContract(t *testing.T, open func(t *testing.T, dir string) Git) {
+	t.Helper()
+	tests := map[string]struct {
+		setup func(r *testRepo)
+		want  map[string]int // message -> parents
+	}{
+		"merge commit has two parents": {
+			setup: mergeHistory,
+			want:  map[string]int{msgOne: 0, msgSide: 1, msgTwo: 1, msgMerge: 2},
+		},
+		"fast-forward is not a merge": {
+			setup: func(r *testRepo) {
+				r.commit("one")
+				r.git("checkout", "--quiet", "-b", "side")
+				r.commit("side")
+				r.git("checkout", "--quiet", "main")
+				r.git("merge", "--quiet", "--ff-only", "side")
+			},
+			want: map[string]int{msgOne: 0, msgSide: 1},
+		},
+		"message starting with Merge does not make a merge": {
+			setup: func(r *testRepo) { r.commit("one"); r.commit("Merge branch 'x'") },
+			want:  map[string]int{"one\n": 0, "Merge branch 'x'\n": 1},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r := newTestRepo(t, true)
+			tt.setup(r)
+			got, err := open(t, r.dir).CommitMessagesAfterTag(context.Background(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			parents := map[string]int{}
+			for _, c := range got {
+				parents[c.Message] = c.Parents
+				if c.IsMerge() != (c.Parents > 1) {
+					t.Errorf("IsMerge() of %q = %v with %d parents", c.Message, c.IsMerge(), c.Parents)
+				}
+			}
+			if !maps.Equal(parents, tt.want) {
+				t.Fatalf("parents = %v, want %v", parents, tt.want)
+			}
+		})
+	}
+}
+
 func TestCLICommits(t *testing.T) {
 	t.Parallel()
+	runParentsContract(t, openGit)
 	runCommitsAfterTagContract(t, openGit)
 	runFirstCommitsContract(t, openGit)
 }
 
 func TestGoGitCommits(t *testing.T) {
 	t.Parallel()
+	runParentsContract(t, openGoGit)
 	runCommitsAfterTagContract(t, openGoGit)
 	runFirstCommitsContract(t, openGoGit)
 }

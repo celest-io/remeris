@@ -703,6 +703,50 @@ func TestInvalidStepsAndVariables(t *testing.T) {
 	}
 }
 
+func TestChangesIgnoreConventionalMergeCommits(t *testing.T) {
+	cases := map[string]struct {
+		toml        string
+		wantIgnore  bool
+		wantMerges  bool
+		wantErrPart string
+	}{
+		"absent":               {toml: "[package]\nname = \"x\"\n"},
+		"empty changes":        {toml: "[changes]\n"},
+		"true":                 {toml: "[changes]\nignore_conventional_merge_commits = true\n", wantMerges: true},
+		"false":                {toml: "[changes]\nignore_conventional_merge_commits = false\n"},
+		"independent of other": {toml: "[changes]\nignore_conventional_commits = true\n", wantIgnore: true},
+		"both": {
+			toml:       "[changes]\nignore_conventional_commits = true\nignore_conventional_merge_commits = true\n",
+			wantIgnore: true, wantMerges: true,
+		},
+		"wrong type": {
+			toml:        "[changes]\nignore_conventional_merge_commits = \"yes\"\n",
+			wantErrPart: "Invalid configuration in knope.toml",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg, err := load(t, tc.toml)
+			if tc.wantErrPart != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErrPart) {
+					t.Fatalf("err = %v, want it to contain %q", err, tc.wantErrPart)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got Changes
+			if cfg.Changes != nil {
+				got = *cfg.Changes
+			}
+			if got.IgnoreConventionalCommits != tc.wantIgnore || got.IgnoreConventionalMergeCommits != tc.wantMerges {
+				t.Errorf("changes = %+v", got)
+			}
+		})
+	}
+}
+
 func TestBumpVersionLabelOnlyForPre(t *testing.T) {
 	cfg := mustLoad(
 		t,

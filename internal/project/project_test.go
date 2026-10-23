@@ -218,6 +218,35 @@ func TestState(t *testing.T) {
 	}
 }
 
+func TestLoadCarriesChangesSettings(t *testing.T) {
+	cases := map[string]struct {
+		changes    *config.Changes
+		wantIgnore bool
+		wantMerges bool
+	}{
+		"no changes table":  {},
+		"merge commits":     {changes: &config.Changes{IgnoreConventionalMergeCommits: true}, wantMerges: true},
+		"commits only":      {changes: &config.Changes{IgnoreConventionalCommits: true}, wantIgnore: true},
+		"explicit defaults": {changes: &config.Changes{}},
+		"both": {
+			changes:    &config.Changes{IgnoreConventionalCommits: true, IgnoreConventionalMergeCommits: true},
+			wantIgnore: true, wantMerges: true,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			state, err := Load(context.Background(), &config.Config{Changes: tc.changes}, Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.IgnoreConventionalCommits != tc.wantIgnore || state.IgnoreConventionalMergeCommits != tc.wantMerges {
+				t.Errorf("state = %t, %t; want %t, %t",
+					state.IgnoreConventionalCommits, state.IgnoreConventionalMergeCommits, tc.wantIgnore, tc.wantMerges)
+			}
+		})
+	}
+}
+
 func TestStateInvalidUTF8(t *testing.T) {
 	t.Parallel()
 	l := Loader{
