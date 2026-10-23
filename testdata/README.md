@@ -135,8 +135,8 @@ Every case that Knope's `mod.rs` files declare is ported. These scripts are skip
 | `go_modules/major_version_directories` | Ported but skipped: it checks `--verbose` output (as `verbose`). `go_modules_major_version_directories_quiet.txtar` (ours) checks the same files and module tags without `--verbose`. |
 | `allow_empty` | Ported: `script/prepare_release/allow_empty.txtar`. Knope's `[..]` wildcard for the commit hash is a regular expression. |
 | `cargo/workspace/{full,no_lock}` | Ported: `script/prepare_release/cargo_workspace_{full,no_lock}.txtar` (Cargo workspace discovery, F20.2). |
-| `deno/*` | Skipped: need workspace discovery (M10), and `deno.lock` (M9). |
 | `npm/workspaces` | Ported: `script/prepare_release/npm_workspaces.txtar`. |
+| `deno/{workspaces,file_priority}` | Ported: `script/prepare_release/deno_workspaces.txtar` and `deno_file_priority.txtar` (Deno workspace discovery, M10). `script/discovery/deno_workspace.txtar` is ours. |
 | `pubspec_yaml` | Ported: `script/prepare_release/pubspec_yaml.txtar`. |
 | `verbose` | Skipped: remeris does not print five of Knope's `--verbose` debug lines yet (see `deviations.md`). |
 | `custom_change_entries/with_fallback`, `go_modules/major_versions/failed_v2` | Not ported: Knope's `mod.rs` does not declare them. |
