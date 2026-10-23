@@ -789,7 +789,7 @@ func fullConfig(t *testing.T, hostile string) (*Config, []string) {
 				&steps.SelectGiteaIssue{Labels: []string{"x"}}, &steps.SelectGiteaIssue{},
 				&steps.SelectIssueFromBranch{}, &steps.SwitchBranches{}, &steps.RebaseBranch{To: mainBranch},
 			}},
-			{Name: "empty"},
+			{Name: "no-steps"},
 		},
 	}
 	return cfg, files
@@ -869,7 +869,7 @@ func roundTrip(t *testing.T, cfg *Config, files []string) (first, second string,
 func TestDocumentRoundTrip(t *testing.T) {
 	t.Parallel()
 	hostiles := map[string]string{
-		"plain":      "plain",
+		"plaintext":  "plaintext",
 		"quotes":     `"double" and 'single' and ''' and """`,
 		"brackets":   "] [[x]] [y] }{ = # not a comment",
 		"newlines":   "line one\nline two\r\nthree",
