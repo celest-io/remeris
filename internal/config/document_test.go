@@ -14,6 +14,8 @@ import (
 	"github.com/celest-io/remeris/internal/variables"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
+	"github.com/celest-io/remeris/pkg/versioning/action"
+	"github.com/celest-io/remeris/pkg/versioning/semver"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
@@ -206,9 +208,9 @@ func TestDocumentPackageNaming(t *testing.T) {
 			packages: []PackageConfig{pkg(versioning.DefaultName())},
 			want:     emptyWorkflows + "\n[package]\nchangelog = \"CHANGELOG.md\"\n",
 		},
-		"one custom package is still [package]": {
+		"one custom package keeps its name": {
 			packages: []PackageConfig{pkg(versioning.CustomName("solo"))},
-			want:     emptyWorkflows + "\n[package]\nchangelog = \"CHANGELOG.md\"\n",
+			want:     emptyWorkflows + "\n[packages.solo]\nchangelog = \"CHANGELOG.md\"\n",
 		},
 		"two packages": {
 			packages: []PackageConfig{pkg(versioning.CustomName("a")), pkg(versioning.CustomName("b"))},
@@ -804,9 +806,6 @@ func normalized(cfg *Config) *Config {
 		if out.packages[i].VersionedFiles == nil { // the loader returns an empty list, not nil
 			out.packages[i].VersionedFiles = []versionedfile.Config{}
 		}
-		if len(out.packages) == 1 { // `[package]` is the default package, whatever the name was
-			out.packages[i].Name = versioning.DefaultName()
-		}
 	}
 	out.Workflows = nil
 	for _, wf := range cfg.Workflows {
@@ -988,4 +987,49 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 			t.Errorf("not stable: %v\nfirst:\n%s\nsecond:\n%s", err, b, b2)
 		}
 	})
+}
+
+// TestDocumentKeepsTagIdentity checks that a package keeps the tag its releases get: `[package]` is the default
+// package (`v1.2.3`), `[packages.x]` is `x/v1.2.3`, so a lone named package must not be written as `[package]`.
+func TestDocumentKeepsTagIdentity(t *testing.T) {
+	t.Parallel()
+	named := func(names ...string) []PackageConfig {
+		var out []PackageConfig
+		for _, n := range names {
+			out = append(out, PackageConfig{Name: versioning.CustomName(n)})
+		}
+		return out
+	}
+	cases := map[string]struct {
+		packages []PackageConfig
+		want     []string
+	}{
+		"unnamed default":   {[]PackageConfig{{Name: versioning.DefaultName()}}, []string{"v1.2.3"}},
+		"one named":         {named("foo"), []string{"foo/v1.2.3"}},
+		"two named":         {named("a", "b"), []string{"a/v1.2.3", "b/v1.2.3"}},
+		"scoped":            {named("@scope/x"), []string{"@scope/x/v1.2.3"}},
+		"keyword":           {named("true"), []string{"true/v1.2.3"}},
+		"dotted and quoted": {named(`a.b"c`), []string{`a.b"c/v1.2.3`}},
+	}
+	version, err := semver.Parse("1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			cfg := &Config{packages: tc.packages, Workflows: DefaultWorkflows(false, len(tc.packages))}
+			loaded, err := loadIn(t, encodeConfig(t, cfg))
+			if err != nil {
+				t.Fatal(rendered(err))
+			}
+			var got []string
+			for _, p := range loaded.PackageConfigs() {
+				got = append(got, action.ReleaseTag(version, p.Name.Custom()))
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("tags = %v, want %v", got, tc.want)
+			}
+		})
+	}
 }

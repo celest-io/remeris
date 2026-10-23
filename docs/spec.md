@@ -1664,7 +1664,7 @@ First remote URL:
 Serialise:
 ```
 [changes]            (only when ignore_conventional_commits = true)
-[package] or [packages.<name>]   (package when <2 packages)
+[package] or [packages.<name>]   (package for the one unnamed default package; a named package is always [packages.<name>], unlike Knope)
 [[workflows]] ...
 [github] / [gitea]   (when set)
 [jira] / [release_notes]   (remeris only, when set: Knope's writer drops them)

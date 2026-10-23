@@ -84,13 +84,14 @@ func (c *Config) Document() (*tomlwrite.Doc, error) {
 	return doc, nil
 }
 
-// setPackages writes `[package]` for fewer than two packages and `[packages.<name>]` for two or more, as Knope's
-// write_out does. No package at all writes neither.
+// setPackages writes `[package]` for the one unnamed default package and `[packages.<name>]` for every named package
+// and for two or more packages. No package at all writes neither. Knope writes a lone named package as `[package]`,
+// which loads back as the default package: its tags change from `name/vX` to `vX`. Remeris keeps the name.
 func (c *Config) setPackages(doc *tomlwrite.Doc) error {
 	switch pkgs := c.packages; {
 	case len(pkgs) == 0:
 		return nil
-	case len(pkgs) == 1:
+	case len(pkgs) == 1 && pkgs[0].Name.Custom() == nil:
 		doc.Set("package", packageTable(pkgs[0]))
 	default:
 		table := tomlwrite.NewTable()
