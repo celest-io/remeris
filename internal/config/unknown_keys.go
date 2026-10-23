@@ -50,7 +50,9 @@ var (
 	}
 
 	topSchema = &schema{keys: map[string]*schema{
-		"changes":       {keys: map[string]*schema{"ignore_conventional_commits": leaf}},
+		"changes": {
+			keys: map[string]*schema{"ignore_conventional_commits": leaf, "ignore_conventional_merge_commits": leaf},
+		},
 		"release_notes": {keys: map[string]*schema{"change_templates": leaf}},
 		"package":       packageSchema,
 		"packages":      {each: packageSchema},

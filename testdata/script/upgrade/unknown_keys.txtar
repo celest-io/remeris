@@ -1,10 +1,10 @@
-# The rewrite keeps only the settings remeris reads. A key it would drop (here one that a later version reads) makes
+# The rewrite keeps only the settings remeris reads. A key it would drop (here two keys remeris does not know) makes
 # --upgrade refuse before the file is touched; the same in a dry run.
 
 cp knope.toml before.toml
 ! exec remeris --upgrade
 ! stdout .
-stderr 'knope.toml has keys that --upgrade would drop: changes.ignore_conventional_merge_commits, package.bogus'
+stderr 'knope.toml has keys that --upgrade would drop: changes.future_option, package.bogus'
 stderr 'Remove them, or edit the file by hand'
 cmp knope.toml before.toml
 exec ls -a
@@ -22,7 +22,7 @@ cmp knope.toml nothing.toml
 
 -- knope.toml --
 [changes]
-ignore_conventional_merge_commits = true
+future_option = true
 
 [package]
 bogus = 1

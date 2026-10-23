@@ -42,10 +42,10 @@ func TestUpgradeDryRunKeepsBytesAndModTime(t *testing.T) {
 }
 
 func TestUpgradeRefusesKeysItWouldDrop(t *testing.T) {
-	const content = "[changes]\nignore_conventional_merge_commits = true\n\n[package]\nbogus = 1\n\n" +
+	const content = "[changes]\nfuture_option = true\n\n[package]\nbogus = 1\n\n" +
 		"[[workflows]]\nname = \"prepare\"\n\n[[workflows.steps]]\ntype = \"PrepareRelease\"\n" +
 		"ignore_conventional_commits = true\n"
-	const want = "knope.toml has keys that --upgrade would drop: changes.ignore_conventional_merge_commits, package.bogus"
+	const want = "knope.toml has keys that --upgrade would drop: changes.future_option, package.bogus"
 	for _, args := range [][]string{{upgradeArg}, {"--dry-run", upgradeArg}} {
 		cfg, path := upgradeFixture(t, content)
 		_, err := run(t, cfg, args...)
