@@ -1,31 +1,52 @@
-# A Cargo workspace root is Cargo workspace discovery (milestone M10): it is an error, not a single package
-# (spec F20.1). The error is reported when the project is loaded, so --help still works.
+# A Cargo workspace root is discovered as one package per member (spec F20.2). The packages are found when the
+# project is loaded, so --help and --validate see them: two packages means no get-version workflow.
 exec remeris --help
 stdout 'release +Prepare and create a new release'
 stdout 'document-change'
 ! stdout 'get-version'
 ! stderr .
 
-! exec remeris release --dry-run
-cmp stderr workspace.log
+# The release dry run shows the discovered files: first depends on second, so it is versioned in first/Cargo.toml.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'Initial commit'
+exec git tag first-package/v1.0.0
+exec git tag second-package/v1.0.0
+exec git commit --allow-empty -m 'feat(second-package): A feature'
+exec remeris release --dry-run
+stdout 'Would add the following to first/Cargo.toml: second-package.version = 1.1.0'
+stdout 'Would add the following to second/Cargo.toml: version = 1.1.0'
+stdout 'Would add files to git:\n  first/Cargo.toml\n  second/Cargo.toml'
+! stderr .
 
-# A knope.toml without packages is discovered the same way, so --validate fails too.
+# A knope.toml without packages is discovered the same way.
 cp knope.toml.empty knope.toml
-! exec remeris --validate
-stderr 'Package discovery for Cargo workspaces is not implemented yet'
+exec remeris --validate
+! stdout .
+! stderr .
 
-# A knope.toml that declares the packages needs no discovery.
+# A knope.toml that declares the packages needs no discovery: a broken member is not read.
 cp knope.toml.declared knope.toml
+cp Cargo.toml.broken Cargo.toml
 exec remeris --dry-run show
 stdout shown
 ! stderr .
 
 -- Cargo.toml --
 [workspace]
-members = ["first"]
+members = ["first", "second"]
 -- first/Cargo.toml --
 [package]
 name = "first-package"
+version = "1.0.0"
+
+[dependencies]
+second-package = "1.0.0"
+-- second/Cargo.toml --
+[package]
+name = "second-package"
 version = "1.0.0"
 -- knope.toml.empty --
 [changes]
@@ -39,6 +60,6 @@ name = "show"
 [[workflows.steps]]
 type = "Command"
 command = "echo shown"
--- workspace.log --
-Error: Package discovery for Cargo workspaces is not implemented yet (milestone M10)
-  help: Declare the packages in knope.toml, or wait for milestone M10.
+-- Cargo.toml.broken --
+[workspace]
+members = ["missing"]

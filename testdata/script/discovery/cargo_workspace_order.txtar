@@ -1,0 +1,62 @@
+# The files of a discovered package follow the member order, not the package's own file first: the middle package is
+# versioned in a (which depends on it), its own manifest, c (a dev-dependency), the root (a workspace dependency)
+# and Cargo.lock last (Go test TestCargoThreeMembersOrder pins that list). The output order is the order in which
+# the files first appear over all packages, so Cargo.lock comes right after a/Cargo.toml, as in Knope's fixtures.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'Initial commit'
+exec git tag middle/v1.0.0
+exec git commit --allow-empty -m 'feat(middle): A feature'
+
+exec remeris release --dry-run
+cmp stdout expected.log
+! stderr .
+
+-- Cargo.toml --
+[workspace]
+members = ["a", "middle", "c"]
+
+[workspace.dependencies]
+middle = "1.0.0"
+-- Cargo.lock --
+version = 3
+
+[[package]]
+name = "middle"
+version = "1.0.0"
+-- a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+
+[dependencies]
+middle = "1.0.0"
+-- middle/Cargo.toml --
+[package]
+name = "middle"
+version = "1.0.0"
+-- c/Cargo.toml --
+[package]
+name = "c"
+version = "0.1.0"
+
+[dev-dependencies]
+middle = "1.0.0"
+-- expected.log --
+Would add the following to a/Cargo.toml: middle.version = 1.1.0
+Would add the following to Cargo.lock: middle = 1.1.0
+Would add the following to middle/Cargo.toml: version = 1.1.0
+Would add the following to c/Cargo.toml: middle.version = 1.1.0
+Would add the following to Cargo.toml: middle.version = 1.1.0
+Would add files to git:
+  a/Cargo.toml
+  Cargo.lock
+  middle/Cargo.toml
+  c/Cargo.toml
+  Cargo.toml
+Would run git commit -m "chore: prepare releases"
+Would create Git tag middle/v1.1.0
+Would run git push
+Would run git push --tags

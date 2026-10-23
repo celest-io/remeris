@@ -123,7 +123,9 @@ internal/diag/      Diagnostic interface and the renderer for errors (message, h
 internal/app/       GlobalOptions, WorkflowOptions and the generic LoadConfig[T]
 internal/cli/       root command, one subcommand per workflow, logging, --validate
 internal/config/    Knope configuration (knope.toml) loading: koanf + a go-toml unstable index for key order and spans;
-                    discover.go finds the root package when none is declared (workspace roots are an M10 error)
+                    discover.go runs the detectors (one file each: discover_cargo.go, discover_npm.go, discover_deno.go,
+                    shared JSON helpers in discover_json.go) and falls back to the root package when none is declared
+                    (workspace roots are an M10 error until their detector is built)
 internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
 internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines

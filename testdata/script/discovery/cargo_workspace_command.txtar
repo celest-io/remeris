@@ -1,16 +1,16 @@
-# A Cargo workspace root only fails the workflows that read the packages. A Command step that does not use $version
-# or $changelog runs as it did before package discovery existed.
+# A broken Cargo workspace only fails the workflows that read the packages. A Command step that does not use $version
+# or $changelog runs as it did before package discovery existed, and the error is the one of the member.
 exec remeris show
 stdout '^shown$'
 ! stderr .
 
 # $version needs the packages, so it reports the discovery error.
 ! exec remeris version
-stderr 'Package discovery for Cargo workspaces is not implemented yet'
+stderr 'Error reading from missing/Cargo.toml: '
 
 # So does any of the steps that work on packages.
 ! exec remeris prepare
-stderr 'Package discovery for Cargo workspaces is not implemented yet'
+stderr 'Error reading from missing/Cargo.toml: '
 
 # Without variables, $version is plain text.
 exec remeris plain
@@ -18,7 +18,7 @@ stdout '^\$version$'
 
 -- Cargo.toml --
 [workspace]
-members = ["first"]
+members = ["first", "missing"]
 -- first/Cargo.toml --
 [package]
 name = "first-package"
