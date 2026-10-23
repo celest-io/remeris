@@ -164,7 +164,7 @@ func TestGoldenFromKnope(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := tc.doc.String(); got != string(want) {
+			if got := encodeDoc(t, tc.doc); got != string(want) {
 				t.Errorf("%s differs\n--- got ---\n%s\n--- want ---\n%s", tc.file, got, want)
 			}
 		})

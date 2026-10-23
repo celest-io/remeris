@@ -235,7 +235,7 @@ func TestLayout(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if got := tc.doc.String(); got != tc.want {
+			if got := encodeDoc(t, tc.doc); got != tc.want {
 				t.Errorf("String()\n got: %q\nwant: %q", got, tc.want)
 			}
 		})
@@ -254,7 +254,7 @@ func TestEndsWithOneNewline(t *testing.T) {
 	for name, d := range docs {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := d.String()
+			got := encodeDoc(t, d)
 			if !strings.HasSuffix(got, "\n") || strings.HasSuffix(got, "\n\n") || strings.HasPrefix(got, "\n") {
 				t.Errorf("String() = %q, want one final line feed and no leading one", got)
 			}
@@ -271,9 +271,9 @@ func TestStableOrder(t *testing.T) {
 		}
 		return d
 	}
-	want := build().String()
+	want := encodeDoc(t, build())
 	for range 50 {
-		if got := build().String(); got != want {
+		if got := encodeDoc(t, build()); got != want {
 			t.Fatalf("output changed between runs:\n%s\n---\n%s", got, want)
 		}
 	}
@@ -307,6 +307,16 @@ func TestAccessors(t *testing.T) {
 	}
 }
 
+// encodeDoc encodes d and fails the test on an error.
+func encodeDoc(t *testing.T, d *tomlwrite.Doc) string {
+	t.Helper()
+	b, err := d.Encode()
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	return string(b)
+}
+
 func TestWriteTo(t *testing.T) {
 	t.Parallel()
 	d := doc("a", tbl("k", tomlwrite.String("v")))
@@ -315,7 +325,7 @@ func TestWriteTo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sb.String() != d.String() || n != int64(sb.Len()) {
-		t.Errorf("WriteTo wrote %q (%d bytes), want %q", sb.String(), n, d.String())
+	if sb.String() != encodeDoc(t, d) || n != int64(sb.Len()) {
+		t.Errorf("WriteTo wrote %q (%d bytes), want %q", sb.String(), n, encodeDoc(t, d))
 	}
 }

@@ -3,10 +3,14 @@
 // Knope: quoting, inline tables, blank lines and key order.
 //
 // It is not a marshaller. The caller builds a document from a few value kinds, in the order the keys must appear,
-// and [Doc.String] prints it. Nothing is read through reflection and no map is iterated, so the output is
+// and [Doc.Encode] prints it. Nothing is read through reflection and no map is iterated, so the output is
 // deterministic. Package names and other text come from files the user does not control, so every string and key
 // goes through the encoders in encode.go, which quote and escape as toml_writer does; the text of the document is
 // never built any other way, and a hostile string can only ever be data.
+//
+// Every string, key and package name put in a document comes from a manifest or a file the user does not control.
+// Always build documents with the types of this package and never concatenate TOML text yourself, not even a header
+// or a key: the encoders are the only code that knows how to quote.
 //
 // The layout follows the document serialiser of the toml crate:
 //
@@ -25,10 +29,22 @@
 package tomlwrite
 
 import (
+	"errors"
 	"io"
 	"strconv"
 	"strings"
 )
+
+// maxDepth is how deep tables, inline tables and arrays may nest. A real knope.toml is a handful of levels deep;
+// the limit turns a document that contains itself into an error instead of a stack overflow.
+const maxDepth = 256
+
+// ErrTooDeep is returned when a document nests more than 256 levels, which includes a document that contains itself.
+var ErrTooDeep = errors.New("tomlwrite: document is nested too deeply")
+
+// errUnknownValue is returned for a Value this package does not know. The interface is sealed, so it should not
+// happen; it is an error, never empty text, so that no invalid TOML can be written.
+var errUnknownValue = errors.New("tomlwrite: unknown value type")
 
 // Value is a TOML value: [String], [Bool], [Int], *[Array], *[Table] or *[InlineTable].
 type Value interface {
@@ -172,40 +188,46 @@ func (a *Array) Len() int { return len(a.items) }
 // Items returns a copy of the elements.
 func (a *Array) Items() []Value { return append([]Value(nil), a.items...) }
 
-// Doc is a TOML document: the table at the root, and the one the encoder starts from.
+// Doc is a TOML document. It is not a [Value]: it cannot be put inside another document.
 type Doc struct {
-	Table
+	root Table
 }
 
 // NewDoc returns an empty document.
 func NewDoc() *Doc { return &Doc{} }
 
-// String returns the document as TOML. If a string or a key in it is not valid UTF-8 it returns "": use
-// [Doc.Encode] to see the error.
-func (d *Doc) String() string {
-	s, err := d.Encode()
-	if err != nil {
-		return ""
-	}
-	return s
-}
+// Set stores v under key at the top level, as [Table.Set] does.
+func (d *Doc) Set(key string, v Value) { d.root.Set(key, v) }
 
-// Encode returns the document as TOML. The error is [ErrInvalidUTF8] when a string or a key is not valid UTF-8.
-func (d *Doc) Encode() (string, error) {
+// Get returns the value stored under key at the top level.
+func (d *Doc) Get(key string) (Value, bool) { return d.root.Get(key) }
+
+// Len returns the number of top-level keys.
+func (d *Doc) Len() int { return d.root.Len() }
+
+// Entries returns a copy of the top-level keys and values, in order.
+func (d *Doc) Entries() []Entry { return d.root.Entries() }
+
+// Encode returns the document as TOML. The error is [ErrInvalidUTF8] when a string or a key is not valid UTF-8 and
+// [ErrTooDeep] when it nests more than 256 levels; the bytes are then nil.
+//
+// An empty document encodes to no bytes and a nil error. A caller that replaces a file (`--generate`, `--upgrade`)
+// must refuse to replace a non-empty file with empty output, and must check the error before it writes anything.
+func (d *Doc) Encode() ([]byte, error) {
 	w := &writer{}
-	if err := w.table(&d.Table, nil, false); err != nil {
-		return "", err
+	if err := w.table(&d.root, nil, false, 0); err != nil {
+		return nil, err
 	}
-	return w.String(), nil
+	return []byte(w.String()), nil
 }
 
 // WriteTo writes the document to out. It writes nothing when the document cannot be encoded.
 func (d *Doc) WriteTo(out io.Writer) (int64, error) {
-	s, err := d.Encode()
+	b, err := d.Encode()
 	if err != nil {
 		return 0, err
 	}
-	n, err := io.WriteString(out, s)
+	n, err := out.Write(b)
 	return int64(n), err
 }
 
@@ -267,7 +289,10 @@ func (w *writer) String() string {
 }
 
 // table adds the section for t, found at path (encoded keys), and the sections below it.
-func (w *writer) table(t *Table, path []string, array bool) error {
+func (w *writer) table(t *Table, path []string, array bool, depth int) error {
+	if depth > maxDepth {
+		return ErrTooDeep
+	}
 	sec := &section{path: path, array: array}
 	w.sections = append(w.sections, sec) // reserves the position before the children
 	for _, entry := range t.list {
@@ -279,26 +304,28 @@ func (w *writer) table(t *Table, path []string, array bool) error {
 		switch v := entry.Value.(type) {
 		case *Table:
 			sec.hasChildren = true
-			if err := w.table(v, child, false); err != nil {
+			if err := w.table(v, child, false, depth+1); err != nil {
 				return err
 			}
 		case *Array:
 			if !v.isArrayOfTables() {
-				if err := writeKeyValue(&sec.body, key, v); err != nil {
+				if err := writeKeyValue(&sec.body, key, v, depth+1); err != nil {
 					return err
 				}
 				continue
 			}
 			sec.hasChildren = true
 			for _, item := range v.items {
-				if err := w.table(item.(*Table), child, true); err != nil {
+				if err := w.table(item.(*Table), child, true, depth+1); err != nil {
 					return err
 				}
 			}
-		default:
-			if err := writeKeyValue(&sec.body, key, v); err != nil {
+		case String, Bool, Int, *InlineTable:
+			if err := writeKeyValue(&sec.body, key, v, depth+1); err != nil {
 				return err
 			}
+		default:
+			return errUnknownValue
 		}
 	}
 	return nil
@@ -318,10 +345,10 @@ func (a *Array) isArrayOfTables() bool {
 }
 
 // writeKeyValue writes `key = value` and a line feed. The key is already encoded.
-func writeKeyValue(sb *strings.Builder, key string, v Value) error {
+func writeKeyValue(sb *strings.Builder, key string, v Value, depth int) error {
 	sb.WriteString(key)
 	sb.WriteString(" = ")
-	if err := writeInline(sb, v); err != nil {
+	if err := writeInline(sb, v, depth); err != nil {
 		return err
 	}
 	sb.WriteByte('\n')
@@ -329,7 +356,10 @@ func writeKeyValue(sb *strings.Builder, key string, v Value) error {
 }
 
 // writeInline writes v on one line.
-func writeInline(sb *strings.Builder, v Value) error {
+func writeInline(sb *strings.Builder, v Value, depth int) error {
+	if depth > maxDepth {
+		return ErrTooDeep
+	}
 	switch v := v.(type) {
 	case String:
 		s, err := encodeString(string(v))
@@ -347,21 +377,23 @@ func writeInline(sb *strings.Builder, v Value) error {
 			if i > 0 {
 				sb.WriteString(", ")
 			}
-			if err := writeInline(sb, item); err != nil {
+			if err := writeInline(sb, item, depth+1); err != nil {
 				return err
 			}
 		}
 		sb.WriteByte(']')
 	case *Table:
-		return writeInlineTable(sb, v.list)
+		return writeInlineTable(sb, v.list, depth)
 	case *InlineTable:
-		return writeInlineTable(sb, v.list)
+		return writeInlineTable(sb, v.list, depth)
+	default:
+		return errUnknownValue
 	}
 	return nil
 }
 
 // writeInlineTable writes `{ a = "b", c = "d" }`, or `{}` when there are no keys.
-func writeInlineTable(sb *strings.Builder, list []Entry) error {
+func writeInlineTable(sb *strings.Builder, list []Entry, depth int) error {
 	sb.WriteByte('{')
 	for i, entry := range list {
 		if i > 0 {
@@ -374,7 +406,7 @@ func writeInlineTable(sb *strings.Builder, list []Entry) error {
 		sb.WriteByte(' ')
 		sb.WriteString(key)
 		sb.WriteString(" = ")
-		if err := writeInline(sb, entry.Value); err != nil {
+		if err := writeInline(sb, entry.Value, depth+1); err != nil {
 			return err
 		}
 	}

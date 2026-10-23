@@ -175,10 +175,11 @@ func expectedMap(entries []tomlwrite.Entry) map[string]any {
 
 func checkRoundTrip(t *testing.T, d *tomlwrite.Doc) {
 	t.Helper()
-	text, err := d.Encode()
+	encoded, err := d.Encode()
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
+	text := string(encoded)
 	if !strings.HasSuffix(text, "\n") && text != "" {
 		t.Errorf("output does not end with a line feed: %q", text)
 	}
@@ -190,6 +191,7 @@ func checkRoundTrip(t *testing.T, d *tomlwrite.Doc) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("parsed document differs\n got: %#v\nwant: %#v\ntext:\n%s", got, want, text)
 	}
+	checkKeyOrder(t, d, text)
 }
 
 func TestRoundTripRandom(t *testing.T) {
