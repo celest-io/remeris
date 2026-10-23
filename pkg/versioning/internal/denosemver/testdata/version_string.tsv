@@ -1,0 +1,13 @@
+# input <TAB> String() of the version that ParseStandard and ParseNpm both give. "\t" and "\n" stand for the characters.
+# The first block is the loose grammar of node-semver as deno_semver 0.9.1 accepts it (src/lib.rs serialize_deserialize,
+# MIT licence, Copyright 2018-2025 the Deno authors); the rest is not in the Rust tests.
+= v 1.2.3-pre.other+build.test	1.2.3-pre.other+build.test
+1.2.3	1.2.3
+ v1.2.3 	1.2.3
+\t1.2.3\n	1.2.3
+01.02.03	1.2.3
+1.2.3beta	1.2.3-beta
+1.2.3-beta.1+b.2	1.2.3-beta.1+b.2
+1.2.3+build	1.2.3+build
+0.0.0	0.0.0
+18446744073709551615.0.0	18446744073709551615.0.0

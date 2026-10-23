@@ -777,7 +777,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
 - Diffs are joined with `", "`.
 
 #### `package-lock.json`
-- Read top-level `version` (`{path} did not have a 'version' field`).
+- Read top-level `version` (``{path} did not have a `version` field``, help ``Either add a `version` field or specify a `dependency` to update``).
 - Warn if `lockfileVersion` is not 2 or 3.
 - Write (no dependency): set top-level `version` and `packages[""].version`. Diff `version = {v}`.
 - Write (dependency `d`): for every value in `packages`: if `name == d`, set `version`. If `dependencies[d]` or
@@ -805,13 +805,29 @@ For each format: **read** (where the version comes from), **write** (what is edi
   4. In `workspace` (and each `workspace.members.*`, and each key of `workspace.links`, including renaming the link
      key): rewrite entries in `dependencies`, `packageJson.dependencies`, `optionalDependencies` and
      `peerDependencies` that match `d` with a recorded version, to `{scheme:}{d}@{v}`.
-  5. Diff `{d} = {v}`. Serialise in Deno's canonical lockfile format (2-space pretty with a trailing newline, keys in
-     Deno's canonical order). Check against fixtures `tests/prepare_release/deno`.
+  5. Diff `{d} = {v}`. Serialise like deno_lockfile 0.49.0 `print_v5_content` (`printer.rs`, called from
+     `Lockfile::as_json_string` in `lib.rs`): 2-space pretty with a trailing newline, the top-level keys in the fixed
+     order `version`, `specifiers`, `jsr`, `npm`, `redirects`, `remote`, `workspace`, empty sections left out, and the
+     maps sorted: `specifiers` and the dependency arrays by the normalised requirement text
+     (`JsrDepPackageReq::to_string_normalized`: `^1.0.0` prints as `1`, see deno_semver 0.9.1 `range.rs`), `jsr` by
+     `PackageNv` order (name, then version precedence), `npm`, `members` and `links` by key text. Two more printer rules (`printer.rs` 183-271): a `jsr` package's dependency
+     prints as bare `scheme:name` when that name has a single specifier in `specifiers`, otherwise as the normalised
+     requirement; an `npm` dependency prints as `name@npm:pkg@ver` for an alias and as the bare name when the package
+     has a single version (the `npm` dependency arrays are in the order of the dependency names, not of the printed
+     text; a name used in both registries counts as having several specifiers); an `npm` package's `os` and `cpu` arrays
+     print on one line. `JsrDepPackageReq::cmp` is not the print order. The Go port of the
+     requirement and version types is `pkg/versioning/internal/denosemver`, and the lockfile model, reader and printer
+     are `pkg/versioning/internal/denolock`. Check against fixtures
+     `tests/prepare_release/deno`.
 
 #### `pubspec.yaml`
 - Read top-level `version` (YAML).
-- Write: find the first line starting with `version: ` and replace **that line only** with `version: {v}`. If there
-  is no such line, parse to a YAML mapping, insert `version`, and re-serialise the whole file. Diff `{v}`.
+- Write: replace only the bytes of the top-level `version` scalar (found from the position yaml.v3 reports for the
+  first top-level `version` key), so comments, quote style, line endings and nested `version:` keys stay. Quoted values
+  keep their quotes. A block scalar, anchor, tag, escaped or multi-line value fails with a diagnostic and is not
+  written. The file is never re-serialised: a mapping with no `version` key (unreachable, since loading requires the
+  key) gets a `version: {v}` line appended. Knope replaces the whole line, everywhere it occurs. Diff `{v}`,
+  replacing any earlier diff.
 
 #### `pom.xml`
 - The root element must be `<project>` (`{path} was missing required property project`). Read `project > version` text.

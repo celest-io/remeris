@@ -1,0 +1,18 @@
+# a <TAB> b <TAB> PackageNv.Compare(a, b). The reverse comparison is checked too, with the opposite sign.
+# PackageNv derives Ord in deno_semver 0.9.1 (src/package.rs) with the name field first, so the name decides and the
+# version precedence breaks ties. deno_lockfile 0.49.0 sorts the "jsr" section of deno.lock with it. Not in the Rust tests.
+b@1.0.0	a@2.0.0	1
+a@1.0.0	a@1.0.1	-1
+a@1.0.0	a@1.0.0	0
+a@1.0.0-pre	a@1.0.0	-1
+a@1.0.0-alpha.2	a@1.0.0-alpha.10	-1
+a@1.0.0-alpha	a@1.0.0-beta	-1
+a@1.0.0-1	a@1.0.0-alpha	-1
+a@1.0.0-alpha	a@1.0.0-alpha.1	-1
+a@1.0.0+x	a@1.0.0+y	0
+@z/a@1.0.0	a@1.0.0	-1
+a@1.0.0	ab@0.0.1	-1
+B@1.0.0	a@1.0.0	-1
+@std/path@1.0.0-rc.1	@std/path@1.0.0	-1
+@std/path@1.0.0-rc.2	@std/path@1.0.0-rc.10	-1
+@std/path@1.0.8	@std/path@1.0.10	-1

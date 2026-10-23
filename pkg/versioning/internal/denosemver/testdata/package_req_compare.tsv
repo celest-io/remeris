@@ -1,0 +1,33 @@
+# a <TAB> b <TAB> PackageReq.Compare(a, b), both parsed with ParsePackageReqLoose. The reverse comparison is checked
+# too, with the opposite sign.
+# Ported from deno_semver 0.9.1 src/package.rs (sorting_package_reqs), MIT licence, Copyright 2018-2025 the Deno
+# authors. The cases below the marker line are not in the Rust tests.
+
+# sort by name
+a	b@1	-1
+# prefer non-wildcard
+a	a@1	1
+# prefer tag
+a@tag	a	-1
+# sort tags descending
+a@latest-v1	a@latest-v2	1
+# sort version requirements descending
+a@1	a@2	1
+# prefer the lower upper bound
+a@3	a@3.0.0	1
+# prefer the higher lower bound
+a@>=3.0.0	a@>3.0.0	1
+a@>=3.0.0	a@>=3.0.0	0
+# prefer the lower upper bound (you end up with an intersection of both)
+a@>=3.0.0 <=4	a@>=3.0.0 <4	1
+a@>=3.0.0 <=4	a@>=3.0.0 <=4	0
+a@>=3.0.0 <3.5	a@>=3.0.0 <3.6	-1
+# prefer the one with the fewest items when equal up to a point
+a@>=3 || 4.x	a@>=3 || 4.x	0
+a@>=3 || 4.x	a@>=3 || 4.x || 5.x	-1
+
+# not in the Rust tests
+@a/b@1	a@1	-1
+a@1.0.0-rc.2	a@1.0.0-rc.10	1
+a@^1	a@1.x	0
+a@latest	a@next	1

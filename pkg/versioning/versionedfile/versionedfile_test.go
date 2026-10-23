@@ -10,14 +10,12 @@ import (
 )
 
 const (
-	cargoToml    = "Cargo.toml"
-	packageJSON  = "package.json"
-	setupPy      = "setup.py"
-	unknownPref  = "Unknown file: "
-	notImplement = "is not implemented yet"
-	denoJSONC    = "deno.jsonc"
-	goMod        = "go.mod"
-	m9           = "M9"
+	cargoToml   = "Cargo.toml"
+	packageJSON = "package.json"
+	setupPy     = "setup.py"
+	unknownPref = "Unknown file: "
+	denoJSONC   = "deno.jsonc"
+	goMod       = "go.mod"
 )
 
 func strp(s string) *string { return &s }
@@ -250,31 +248,19 @@ func TestErrNoVersion(t *testing.T) {
 	}
 }
 
-func TestNewNotImplemented(t *testing.T) {
+// stubbedFormats are the formats whose pull requests (deno.json: PR 58, pubspec.yaml: PR 57) are not on this branch
+// yet. Delete the map when they are: from then on no format may be a stub.
+// TestNewEveryFormatBuilds checks that no format answers with the not-implemented error any more.
+func TestNewEveryFormatBuilds(t *testing.T) {
 	t.Parallel()
-	tests := map[string]struct {
-		format    versionedfile.Format
-		milestone string
-	}{
-		"CargoLock":       {versionedfile.CargoLock, m9},
-		"DenoJson":        {versionedfile.DenoJson, m9},
-		"DenoLock":        {versionedfile.DenoLock, m9},
-		"Gleam":           {versionedfile.Gleam, m9},
-		"PackageLockJson": {versionedfile.PackageLockJson, m9},
-		"MavenPom":        {versionedfile.MavenPom, m9},
-		"PubSpec":         {versionedfile.PubSpec, m9},
-		"TauriConf":       {versionedfile.TauriConf, m9},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for f := versionedfile.Cargo; f.String() != "Unknown"; f++ {
+		t.Run(f.String(), func(t *testing.T) {
 			t.Parallel()
-			f, err := versionedfile.New(versionedfile.Config{Path: "x", Format: tc.format}, "", nil)
-			if f != nil || err == nil {
-				t.Fatalf("got %v, %v", f, err)
-			}
-			want := "Versioned file format " + name + " " + notImplement + " (milestone " + tc.milestone + ")"
-			if err.Error() != want {
-				t.Errorf("got %q, want %q", err.Error(), want)
+			_, err := versionedfile.New(versionedfile.Config{Path: "x", Format: f}, "", nil)
+			var d diag.Diagnostic
+			stub := errors.As(err, &d) && d.Code() == "remeris::versioned_file::not_implemented"
+			if stub {
+				t.Errorf("format %s is still a stub: %v", f, err)
 			}
 		})
 	}

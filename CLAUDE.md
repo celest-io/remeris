@@ -146,6 +146,8 @@ pkg/versioning/     pure core (the knope-versioning equivalent): no file system,
   releasenotes/     sections, release notes rendering, change templates, changelog read and write
   internal/tomledit/ format-preserving TOML editor on go-toml/v2 unstable: key lookup, byte-span edits
   internal/jsonedit/ ordered JSON tree printed exactly like serde_json to_string_pretty (package.json & co.)
+  internal/denosemver/ the deno_semver subset deno.lock needs: versions, requirements (loose, specifier, normalised), PackageNv, PackageReq
+  internal/denolock/ the deno.lock v5 model, reader (from_json) and canonical printer (print_v5_content) of deno_lockfile 0.49.0
 ```
 
 Imports flow one way: `workflow` imports only `diag`, `internal/git`, `internal/prompt`, `internal/forge/github`,

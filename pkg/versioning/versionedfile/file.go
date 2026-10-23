@@ -23,6 +23,10 @@ type File interface {
 }
 
 // New parses content as the format named by cfg. gitTags is used by go.mod only.
+//
+// Every format has its own constructor in its own file (cargo.go, cargo_lock.go, ...). A format that is not built
+// yet has a stub constructor that returns notImplemented; to build it, replace that body in the format's file.
+// New, the tests that iterate over the formats and this switch stay untouched.
 func New(cfg Config, content string, gitTags []string) (File, error) {
 	switch cfg.Format {
 	case RegexFile:
@@ -35,10 +39,29 @@ func New(cfg Config, content string, gitTags []string) (File, error) {
 		return newPackageJSONFile(cfg.Path, content)
 	case GoMod:
 		return newGoModFile(cfg.Path, content, gitTags)
+	case CargoLock:
+		return newCargoLockFile(cfg.Path, content)
+	case Gleam:
+		return newGleamFile(cfg.Path, content)
+	case PackageLockJson:
+		return newPackageLockJSONFile(cfg.Path, content)
+	case TauriConf:
+		return newTauriConfFile(cfg.Path, content)
+	case PubSpec:
+		return newPubSpecFile(cfg.Path, content)
+	case MavenPom:
+		return newMavenPomFile(cfg.Path, content)
+	case DenoJson:
+		return newDenoJSONFile(cfg.Path, content)
+	case DenoLock:
+		return newDenoLockFile(cfg.Path, content)
 	default:
-		return nil, notImplemented(cfg.Format, "M9")
+		return nil, notImplemented(cfg.Format, milestoneM9)
 	}
 }
+
+// milestoneM9 names the milestone of the formats that are still stubs.
+const milestoneM9 = "M9"
 
 func notImplemented(f Format, milestone string) error {
 	return diag.New(fmt.Sprintf("Versioned file format %s is not implemented yet (milestone %s)", f, milestone)).

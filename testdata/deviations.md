@@ -67,3 +67,123 @@ Each entry names a Knope fixture that cannot be ported unchanged, and why (spec:
 | Gitea `host` | The host must have a scheme (`remeris::gitea::invalid_host` on a real run; a dry run prints it as written), use https (http only for loopback hosts), have no userinfo, query, fragment, space or control character, and trailing slashes are trimmed when URLs are built (`https://x/gitea/` and `https://x/gitea` both reach `https://x/gitea/api/v1/…`). A redirect to another host or port, or from https to http, is refused, and `Authorization` is never sent to another origin. Knope accepts any string and follows redirects with the token in the URL. The token is also replaced by `[REDACTED]` in every Gitea error message. | The `host` of a repository's configuration must not make the token leave the instance (spec F17, decision). |
 | Gitea release response | Any valid JSON is accepted as the answer to `POST .../releases`. Knope requires an object with `url` and `upload_url` and fails with `Trouble decoding the response from Gitea while creating a release` otherwise. Invalid JSON, or an empty body, is still that error. | Older Gitea versions send no `upload_url`, and remeris does not use the response (spec F16.2). |
 | Gitea dry run (`gitea_release/*`, `multi_forge_release/*`, `default_workflows/release/gitea`) | The host in `Would create a release on Gitea [{host}]` is printed as written, except that a user name and password are removed (`https://user:pw@gitea.example.com` prints as `https://gitea.example.com`); a host with `@` that cannot be parsed prints `[REDACTED]`. The fixtures use `https://codeberg.org`, so their output is Knope's. | A dry run does not check the host, and a password in it must not reach a terminal or a log (spec F17). |
+| `deno.lock` reading (`pkg/versioning/internal/denolock`): arrays as structs | A JSON array where deno_lockfile reads a struct (an `npm` or `jsr` entry, a workspace member, a link, `packageJson`) is an error (`invalid type: sequence, expected struct …`). The Rust serde derives accept an array there and read it positionally. | No lockfile written by Deno has that shape; guessing positional fields would only hide a corrupt file. |
+| `deno.lock` reading: non-ASCII npm ids | An npm package id or dependency that starts with a multibyte character is read normally. In Rust `extract_nv_from_id` slices `value[1..]`, which panics, so Knope crashes in `write()`. | A panic is not a behaviour to copy; for every other input the results are the same. |
+| `deno.lock` printing: floats | A float in free-form JSON (`packageJson.overrides`, `peerDependenciesMeta`) prints in the `1e+16`, `1e-7`, `1000.0` style shared with `jsonedit`. This assumes the number formatter of the `serde_json` that Knope is built with, and has not been checked against the version Knope pins. | Integers, strings and the rest of the file are exact; floats do not occur in lockfiles written by Deno. |
+
+## M9 versioned files
+
+Each format's pull request edits only its own section. Rows follow the table above: what differs from Knope and why.
+
+### Cargo.lock
+
+| Knope | remeris | Why |
+| --- | --- | --- |
+| Edits the `toml_edit` document and prints it back. | Splices the bytes of the `version` value (or appends `version = "..."` to the table), so everything else is untouched, as for Cargo.toml. | Same output as `toml_edit` for the files Cargo writes; byte-exact for hand-edited ones. |
+| A trailing comment on the edited `version` line is dropped (the decor reset of `value(...)`). | The comment is kept. | Same family as the Cargo.toml rows. |
+| `to_string()` ends the last pair with a newline. | A missing final newline is kept as read. | Byte-level splice. |
+| The unsupported-version warning prints the `toml_edit` item with its decor. | The same text is built from the file's bytes: the whitespace after `=`, the raw value, then the rest of the line (whitespace and comment), so `version = 5` warns `Unsupported version of Cargo.lock:  5. Outcome may be unexpected` (two spaces). | Not confirmed byte for byte against a Knope run (no fixture shows it); the trailing-comment rendering (`Cargo.lock:  5 # c.`) is derived from toml_edit's decor rules and could not be confirmed against Knope. A top-level `[version]` table prints an empty value. |
+| Error help says "Knope may not yet support a newer format". | "remeris may not yet support a newer format". | Naming (D1). |
+
+### gleam.toml
+
+| Knope | remeris | Why |
+| --- | --- | --- |
+| Edits the `toml_edit` document and prints it back. | Splices the bytes of the `version` value, or inserts `version = "..."` after the last top-level pair when it is missing (unreachable after F7.2 validation). | Same as Cargo.toml. |
+
+### package-lock.json
+
+| Case | Deviation | Why |
+| --- | --- | --- |
+| `prepare_release/npm_{package,dependencies}` | The real run checks the lock file and `package.json` against `printf %s "$(cat out/X)"` instead of `cmp` against `out/X`. | Q10: the output has no final newline and a txtar file always ends with one. |
+| An invalid JSON document | The message after `Error deserializing {path}: ` is the text of the Go JSON error, not serde_json's. | Different JSON library. |
+| `package-lock.json` with a duplicated key | The last value wins, in the position of the first. | The JSON tree behaves like serde_json's map. |
+
+The rest is Knope's behaviour on purpose, quirks included: a dependency edit always rewrites the file and adds its diff,
+even when nothing matches or `packages` is missing; only entries of `packages` with a `name` field are matched (npm v7
+entries such as `node_modules/x` have none, and the legacy `dependencies` section is not touched); a matching
+`dependencies` or `devDependencies` member is replaced by the bare version whatever it held, so a leading `^` is lost;
+the `lockfileVersion` warning appears on every edit and also for a missing or float (`3.0`) value.
+
+### tauri.conf.json
+
+| Case | Deviation | Why |
+| --- | --- | --- |
+| `prepare_release/tauri_conf_json` | The real run checks the Tauri files and `package.json` against `printf %s "$(cat out/X)"` instead of `cmp` against `out/X`. | Q10: the output has no final newline and a txtar file always ends with one. |
+| An invalid JSON document | The message after `Error deserializing {path}: ` is the text of the Go JSON error, not serde_json's. | Different JSON library. |
+| `tauri.conf.json` with a duplicated top level `version` key | The last value wins, in the position of the first. Knope rejects the file at load time (`duplicate field \`version\``). Other duplicated keys keep the last value in both. | Knope reads the version through a derived struct, which refuses a repeated field; the JSON tree keeps the last value like serde_json's map. |
+
+The rest is Knope's behaviour on purpose: Tauri v2's `"version": "../package.json"` is rejected as not a version, the help
+text names `tauri.conf.json` for the platform variants too, the diff is the bare version, and `.json5` and `Tauri.toml`
+are not supported.
+
+### pubspec.yaml
+
+| Case | Deviation | Why |
+| --- | --- | --- |
+| Any edit | Only the bytes of the top-level `version` scalar are replaced, found from the position yaml.v3 reports for the key's value. A trailing `# comment`, the quote style (`'1.0.0'`, `"1.0.0"`) and every other byte stay. Knope replaces the whole line and drops the comment and the quotes. | Knope's `raw.replace(line, ...)` is a text edit that loses formatting. |
+| A nested `  version: 1.0.0` (or the same text under another key) | Left alone, also when it comes before the top-level key. Knope's `replace` rewrites every occurrence of the line text in the file. | Knope's edit hits unrelated keys. |
+| A BOM at the start of the file, or CRLF, tabs and multi-byte characters before the version | Handled: the BOM is skipped and line endings are kept. Knope's `starts_with("version: ")` finds no line behind a BOM and then re-serialises the whole file. | Knope's search is a byte-prefix test on the line. |
+| `version: >-` / `\|` block scalars, anchors (`&v`), tags (`!!str`), a double-quoted value with escapes, a quoted value over several lines | `remeris` fails with `Could not update {path}: ...` (`remeris::pubspec_yaml::serialize`) and does not write. Knope rewrites the line (breaking the block scalar). | The scalar's source is not the simple text the splice replaces. |
+| `version: *alias` | The load fails with ``YAML `version` field was not a string``. | An alias node is not a string scalar; the YAML is never expanded. |
+| A flow mapping at the top level (`{version: 1.0.0}`) | Spliced like a block mapping. Knope finds no `version: ` line and re-serialises it in block style. | Same splice. |
+| Flutter versions such as `1.0.0+1` | The build metadata is part of the version (D8), so `1.0.0+1` loads. A bump writes the new version as semver prints it: the old `+1` is not carried over, and build metadata on the new version is kept. Nothing is special-cased. | No Flutter rule in the spec. |
+| Two top-level `version` keys | The load fails with ``YAML contained more than one top-level `version` field``. | Knope's choice between them is the YAML library's. |
+| An invalid YAML document | The message after `Error deserializing {path}: ` is the text of the go-yaml error, not saphyr's. | Different YAML library. |
+| A plain value shaped like a timestamp (`version: 2001-01-01`) | The load fails with ``YAML `version` field was not a string``, because yaml.v3 tags it `!!timestamp`. Knope reads it as a string and fails with a semver parse error. | Different YAML library and tag resolution. |
+| The help text of the `Could not update {path}: ...` error | It says to write `version: x.y.z` on one line without an anchor or a tag. Knope's serialize help says to report a bug. | remeris refuses to edit such a file instead of re-serialising it. |
+| Spec F6.2 ("replace that line only", re-serialise when no line) | remeris splices the scalar's bytes only, in the first top-level `version` key, and appends a line for the unreachable no-key case. It never re-serialises. | See the first rows. |
+| A file without a top-level `version` | Never reached: the load fails first (as in Knope). The insert branch appends `version: {v}` on a new line at the end of a block mapping, with the file's line ending, instead of re-serialising the document. | The spec's re-serialise branch is unreachable after F7.2 validation. |
+
+The rest is Knope's behaviour: exactly one YAML document that is a mapping, a top-level `version` that is a string (`version: 1.0`
+is a float and fails), the diff is the bare version, and a dependency is ignored.
+
+### pom.xml
+
+| Case | Change | Reason |
+| --- | --- | --- |
+| Any `pom.xml` edit (Quirk Q7) | Only the content of the first direct-child `<version>` of `<project>` is replaced, as plain text. The XML declaration, comments, indentation, line endings, byte order mark, attribute quoting, entities and everything else stay byte for byte. Knope parses the file and writes the tree again: it drops the declaration and the comments, re-indents with two spaces and writes LF. Knope's `bump_version/maven` fixture is unchanged because its input already has Knope's layout. | Spec F6.2, Quirk Q7: better behaviour, a smaller diff in the user's repository. |
+| `<version>` that holds entities, a CDATA section or comments | The whole inner range is replaced by the new version. | The element text is replaced, not its parts. |
+| Self-closing `<version/>` | `Version()` fails (no text), so a bump stops with the missing-property error before any edit. `SetVersion` itself turns it into `<version>v</version>`. | The element has no content to replace. |
+| `<version>` missing | `Version()` fails, as in Knope. `SetVersion` inserts `<version>` after the `</artifactId>` that is a direct child of `<project>`, with that line's indentation and line ending, or else before `</project>`. Knope inserts into the tree and re-emits it. | Same placement rule as Knope, byte-exact edit. |
+| Encodings | UTF-8 (with or without a byte order mark), ISO-8859-1 and US-ASCII declarations are read. Any other declared encoding, and UTF-16, is the error `Unsupported XML encoding {name} in {path}` (`remeris::maven_pom::encoding`). In an ISO-8859-1 or US-ASCII file, bytes of 0x80 and above are read as placeholders so that byte offsets stay exact; a `<version>` whose text holds such a byte is read from the original bytes and fails as a non-version, and a US-ASCII file with bytes of 0x80 and above is accepted rather than rejected. | A surgical edit needs byte offsets into the original bytes; converting other encodings would change them and the written file. |
+| Invalid XML | The message keeps Knope's form `Invalid XML in {path}: {err}`, but `{err}` is the text of Go's `encoding/xml`, not xml-rs. Files that xml-rs rejects and Go accepts (or the reverse) differ in edge cases; Go also rejects an XML declaration whose version is not `1.0`. Text or a second root element after the root is rejected, as in Knope. | Different XML library (spec 0.3). |
+| Whitespace in `<version>` | The text is not trimmed, as in Knope: ` 1.2.3` is not a version. Text that is only white space counts as missing, as in Knope (xml-rs drops white-space-only runs). | Parity. |
+| Whitespace-only run split by a comment | `<version>1.2.3<!--c--> </version>` and `<version> <!--c-->1.2.3</version>` read as `1.2.3`. xml-rs may yield the space as text, and Knope would then reject it (unverified). | Remeris drops every whitespace-only text token. |
+| Blank CDATA or `&#32;` | `<version><![CDATA[ ]]></version>` and `<version>&#32;</version>` report the missing-property error. Knope gives a semver error (unverified). | Whitespace-only text tokens are dropped, whatever their form. |
+| Undeclared namespace prefix | `<foo:version>` without `xmlns:foo` is accepted. xml-rs rejects it. | encoding/xml does not check prefixes. |
+| Encoding pseudo-attribute | Remeris looks for the declaration only at offset 0 (after a BOM); Go's decoder honours it anywhere. Safe but inconsistent. | Detection is a small byte scan. |
+| Insertion placement (missing `<version>`, unreachable after F7.2) | A trailing comment after `</artifactId>` moves down after the new element; the indentation is that of `</project>` plus one level; a single-line project gets a lone newline before the element. | Minimal rule, not polished. |
+| `dependency` on pom.xml | Knope ignores it in `set_version` and rejects it when the package is configured (package.rs). Remeris rejects it at configuration time too (`validateDependency`, `Format.SupportsDependency`), and `SetVersion` also returns `UnsupportedDependency` as a guard. | Same outcome, earlier guard. |
+
+### deno.json and deno.jsonc
+
+| Case | Deviation | Why |
+| --- | --- | --- |
+| Any edit (Quirk Q6) | Only the bytes of the top level `version` value are replaced. Comments, trailing commas, key order, indentation, line endings, a byte order mark and everything else stay. Knope sets the value in the parsed tree and prints it again as plain pretty JSON, which drops the comments. | Spec F6.2, Q6: what the Deno documentation promises. |
+| Final newline | The output keeps the final newline of the input (or its absence). Knope never writes one (Q10). The `out` files of the fixtures copied to `pkg/versioning/versionedfile/testdata/deno_json/` have a final newline added; `prepare_release/deno_*` stay skipped (M10 discovery and `deno.lock`). | Byte-level splice; a txtar file always ends with a newline. |
+| Duplicate top level `version` | The last member is read and patched, like jsonc-parser's last-wins. Earlier ones are left as they are. | Same value as Knope reads. |
+| Setting the version the file already has | The file is not changed, even if the value is written with escapes (`"1\u002e0.0"`). | Identity. |
+| `version` missing | `Version()` fails with `This file can't contain a version`, as in Knope. `SetVersion` adds `"version": "{v}"` as the last member, with the indentation and line ending of the previous member and a trailing comma if the object had one; a line comment ending the previous member's line stays there. Knope inserts into the tree and prints it again. | Unreachable after the F7.2 validation. |
+| Root that is not an object | `Version()` fails (no version). `SetVersion` fails with `Could not update {path}: the top level value is not a JSON object`. Knope writes the file again unchanged apart from the formatting, and records the diff. | Nothing to patch; unreachable after validation. |
+| Syntax accepted by jsonc-parser only | Single-quoted strings, unquoted keys, hexadecimal numbers and a leading `+` are rejected (`Could not parse {path}: hujson: line L, column C: ...`). Knope accepts them. | hujson implements JWCC (JSON with comments and trailing commas), which is stricter. |
+| Empty file, or only comments | `Could not parse {path}: ...`. Knope reads it as `null` (no version). | hujson requires a value. |
+| Parse error text | `Could not parse {path}: {err}` with the text of hujson's error, not jsonc-parser's. | Different library. |
+| Content after the root value | Rejected (`invalid character ... after top-level value`). | hujson. |
+| Nesting depth (remeris addition) | Objects and arrays nested deeper than 10000 levels are a parse error (`Could not parse {path}: nesting is deeper than 10000 levels`). Brackets inside strings and comments do not count. Knope has no such limit (jsonc-parser reports its own depth error). | hujson recurses without a limit: a few megabytes of `[` would overflow the stack, which Go cannot recover from. |
+| `dependency` | Ignored, with no diff and no write, as in Knope. | `deno.lock` owns dependency versions. |
+
+A line comment cannot contain U+2028 or U+2029 (hujson rejects them).
+
+### deno.lock
+
+| Case | Change | Reason |
+| --- | --- | --- |
+| A lockfile that deno_lockfile's `from_json` rejects, edited by a `SetVersion` that matches a specifier | Error `Could not update {path}: {reason}` (`remeris::deno_lock::update`), where `{reason}` is the text of the model error, for example `Invalid redirects section: invalid type: integer `5`, expected a map`. Knope's `write()` ends in `from_json(self.json).ok()?`, so it writes nothing and prints nothing: the release goes on and the lockfile is silently left behind. | A release that leaves the lockfile out of date without a word is worse than a clear failure. The check runs in `SetVersion`, after the match, so a lockfile that no edit touches is never rejected (as in Knope). |
+| When a write happens | Same as Knope: only when at least one `specifiers` entry named the dependency (and had a string value). Then the whole file is re-printed in the canonical form of deno_lockfile (2-space indent, fixed key order, sorted maps, final newline, empty sections and unknown top-level keys dropped), not patched in place. A call with no dependency, no `specifiers` object or no match changes nothing. | Parity; the canonical print is what Deno itself writes. |
+| Specifier keys | The key text is not rewritten, only its value; the printed key is the normalised requirement (`^1.0.0` prints as `1`), a property of the printer. | Parity with Knope's `deno_lock.rs`. |
+| JSON syntax errors | `Error deserializing {path}: {err}` with the text of Go's JSON reader, not serde_json's. | Different JSON library. |
+| `Version()` | Always `This file can't contain a version`, as in Knope (code `remeris::versioned_file::no_version`). | Parity. |
+| Removing a renamed key | Like serde_json with `preserve_order` (`Map::remove` is a swap remove), the last member fills the hole and the renamed entry is inserted at the end (an insert over an existing key replaces its value in place). It only shows for `jsr` keys that differ by build metadata alone, which the model treats as one key: the last one in the object wins. | Parity, kept on purpose. |
+| Malformed shapes (rewrite side) | The rewrite walks the JSON tree and ignores a section, member or list of the wrong type (an array where an object is expected, a non-string list item) without failing; the model then decides. A shape the model rejects (`"workspace": []`, a member or link that is an array, `"jsr": []`, an npm id without a version) is the `Could not update` error above; a `specifiers` that is not an object is a no-op. Multibyte package names and ids work (`é@1.0.0` is renamed like any other); the Rust slicing that panics on a non-ASCII id is not reproduced. | Same rule as the from_json deviation: no silent skip. The reader side is recorded with the denolock model. |
+| Cost | Each `SetVersion` that matches deep-clones the JSON tree, edits the copy, and runs `FromJSON` and `Print` on it (about 2-3 copies of the lockfile in memory at once, for example around 150 MB for a 50 MB lockfile; all work is linear in its size). Knope edits the tree it owns and builds the model once, at write time. | The files are immutable values (F6.1), and the model is checked early to report the failure. |
