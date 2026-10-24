@@ -217,9 +217,12 @@ func (g *GoGit) Rebase(ctx context.Context, to string) error {
 		return unknownGitError(err)
 	}
 	toName := plumbing.NewBranchReferenceName(to)
-	old, err := repo.Reference(toName, true)
+	old, err := repo.Reference(toName, false) // do not follow an alias: moving it would move its target
 	if err != nil {
 		return unknownGitError(err)
+	}
+	if old.Type() == plumbing.SymbolicReference {
+		return branchAliasError(to, old.Target().Short())
 	}
 	headCommit, err := repo.CommitObject(head.Hash())
 	if err != nil {
@@ -234,14 +237,16 @@ func (g *GoGit) Rebase(ctx context.Context, to string) error {
 		return unknownGitError(err)
 	}
 	if !ancestor {
-		return branchesDivergedError(to, current)
+		return notFastForwardError(to, current)
 	}
-	// Compare and set, so that a branch moved by another process since the check is not overwritten.
+	// Compare and set, so that a branch moved by another process since the check is not overwritten. go-git takes no
+	// lock, so the window is small but not closed (testdata/deviations.md).
 	if err := repo.Storer.CheckAndSetReference(plumbing.NewHashReference(toName, head.Hash()), old); err != nil {
 		return unknownGitError(err)
 	}
 	if err := repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, toName)); err != nil {
-		return incompleteCheckoutError(err)
+		return movedButNotSwitchedError(to, current, err)
 	}
+	appendRebaseReflogs(repo, to, current, old.Hash(), head.Hash())
 	return nil
 }

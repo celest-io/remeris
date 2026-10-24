@@ -2,7 +2,6 @@ package git
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,7 +107,7 @@ func checkedOutElsewhere(repo *gogit.Repository, name string) error {
 			} else if gd, err := os.ReadFile(filepath.Join(dir, "gitdir")); err == nil {
 				where = filepath.Dir(strings.TrimSpace(string(gd)))
 			}
-			return unknownGitError(fmt.Errorf("'%s' is already used by worktree at '%s'", name, where))
+			return worktreeBranchError(name, where)
 		}
 	}
 	return nil

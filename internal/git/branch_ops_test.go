@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -282,15 +283,16 @@ func TestSwitchTo(t *testing.T) { //nolint:paralleltest // sets environment vari
 	})
 }
 
+// ahead puts main one commit ahead of other (other is an ancestor of main).
+func ahead(r *testRepo) {
+	r.git("branch", "-f", branchOther, branchMain)
+	r.write("b.txt", "b\n")
+	r.git("add", ".")
+	r.commit("three")
+}
+
 func TestRebase(t *testing.T) { //nolint:paralleltest // sets environment variables
 	ctx := context.Background()
-	// ahead puts main one commit ahead of other (other is an ancestor of main).
-	ahead := func(r *testRepo) {
-		r.git("branch", "-f", branchOther, branchMain)
-		r.write("b.txt", "b\n")
-		r.git("add", ".")
-		r.commit("three")
-	}
 	t.Run("ancestor", func(t *testing.T) {
 		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
 			ahead(r)
@@ -336,29 +338,43 @@ func TestRebase(t *testing.T) { //nolint:paralleltest // sets environment variab
 			}
 		})
 	})
-	t.Run("diverged", func(t *testing.T) {
-		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
-			before := r.git("rev-parse", branchOther)
-			wantDiagCode(t, g.Rebase(ctx, branchOther), "remeris::git::branches_diverged")
-			if got := head(r); got != onMain || r.git("rev-parse", branchOther) != before {
-				t.Fatalf("a failed Rebase changed the repository (HEAD %q)", got)
-			}
-		})
+	t.Run("not a fast-forward", func(t *testing.T) {
+		for name, extra := range map[string]bool{"to is ahead": false, "both have commits": true} {
+			t.Run(name, func(t *testing.T) {
+				eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+					if extra {
+						r.write("m.txt", "m\n")
+						r.git("add", ".")
+						r.commit("main only")
+					}
+					before := r.git("rev-parse", branchOther)
+					err := g.Rebase(ctx, branchOther)
+					wantDiagCode(t, err, "remeris::git::not_fast_forward")
+					wantMessage(t, err, "Cannot fast-forward branch other to main: other has commits that are not in main")
+					if got := head(r); got != onMain || r.git("rev-parse", branchOther) != before {
+						t.Fatalf("a failed Rebase changed the repository (HEAD %q)", got)
+					}
+				})
+			})
+		}
 	})
 	t.Run("missing branch", func(t *testing.T) {
 		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
 			r.git("tag", "sometag")
 			wantDiagCode(t, g.Rebase(ctx, "nope"), "remeris::git::command")
-			wantDiagCode(t, g.Rebase(ctx, "sometag"), "remeris::git::command")
+			wantMessage(t, g.Rebase(ctx, "nope"), "cannot locate local branch 'nope'")
+			wantMessage(t, g.Rebase(ctx, "sometag"), "cannot locate local branch 'sometag'")
 		})
 	})
 	t.Run("dirty tree", func(t *testing.T) {
 		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
 			ahead(r)
 			r.write("new.txt", "x")
+			before := r.git("rev-parse", branchOther)
 			wantDiagCode(t, g.Rebase(ctx, branchOther), "remeris::git::uncommitted_changes")
-			if got := head(r); got != onMain {
-				t.Fatalf("HEAD moved to %q", got)
+			wantDiagCode(t, g.Rebase(ctx, branchMain), "remeris::git::uncommitted_changes") // even the current branch
+			if got := head(r); got != onMain || r.git("rev-parse", branchOther) != before {
+				t.Fatalf("a failed Rebase changed the repository (HEAD %q)", got)
 			}
 		})
 	})
@@ -366,7 +382,72 @@ func TestRebase(t *testing.T) { //nolint:paralleltest // sets environment variab
 		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
 			ahead(r)
 			r.git("checkout", "--quiet", "--detach")
+			before := r.git("rev-parse", branchOther)
 			wantDiagCode(t, g.Rebase(ctx, branchOther), "remeris::git::not_a_branch")
+			if r.git("rev-parse", branchOther) != before {
+				t.Fatal("a failed Rebase moved the branch")
+			}
+		})
+	})
+}
+
+func TestRebaseRefs(t *testing.T) { //nolint:paralleltest // sets environment variables
+	ctx := context.Background()
+	t.Run("unborn HEAD", func(t *testing.T) {
+		for _, backend := range []string{backendCLI, backendGoGit} {
+			t.Run(backend, func(t *testing.T) { //nolint:paralleltest // sets environment variables
+				isolateConfig(t)
+				r := newTestRepo(t, true)
+				var g Git
+				if backend == backendCLI {
+					g = openGit(t, r.dir)
+				} else {
+					var err error
+					if g, err = NewGoGit(r.dir); err != nil {
+						t.Fatal(err)
+					}
+				}
+				wantDiagCode(t, g.Rebase(ctx, branchOther), "remeris::git::command")
+			})
+		}
+	})
+	t.Run("packed refs", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			ahead(r)
+			r.git("pack-refs", "--all", "--prune")
+			if err := g.Rebase(ctx, branchOther); err != nil {
+				t.Fatal(err)
+			}
+			if got, want := r.git("rev-parse", branchOther), r.git("rev-parse", branchMain); got != want {
+				t.Fatalf("other at %s, want %s", got, want)
+			}
+		})
+	})
+	t.Run("symbolic ref alias", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			ahead(r)
+			r.git("symbolic-ref", "refs/heads/alias", "refs/heads/other")
+			before := r.git("rev-parse", branchOther)
+			wantDiagCode(t, g.Rebase(ctx, "alias"), "remeris::git::branch_alias")
+			if got := head(r); got != onMain || r.git("rev-parse", branchOther) != before {
+				t.Fatalf("a failed Rebase changed the repository (HEAD %q)", got)
+			}
+		})
+	})
+	t.Run("reflog", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			ahead(r)
+			if err := g.Rebase(ctx, branchOther); err != nil {
+				t.Fatal(err)
+			}
+			want := "remeris: RebaseBranch fast-forward other to main\n"
+			if got := r.git("log", "-g", "-1", "--format=%gs", branchOther); got != want {
+				t.Fatalf("branch reflog = %q, want %q", got, want)
+			}
+			want = "checkout: moving from main to other\n"
+			if got := r.git("log", "-g", "-1", "--format=%gs", "HEAD"); got != want {
+				t.Fatalf("HEAD reflog = %q, want %q", got, want)
+			}
 		})
 	})
 	t.Run("hostile names", func(t *testing.T) {
@@ -381,12 +462,72 @@ func TestRebase(t *testing.T) { //nolint:paralleltest // sets environment variab
 			ahead(r)
 			r.git("worktree", "add", "--quiet", filepath.Join(t.TempDir(), "wt"), branchOther)
 			before := r.git("rev-parse", branchOther)
-			wantDiagCode(t, g.Rebase(ctx, branchOther), "remeris::git::command")
+			err := g.Rebase(ctx, branchOther)
+			wantDiagCode(t, err, "remeris::git::command")
+			wantMessage(t, err, "is already used by worktree")
 			if got := head(r); got != onMain || r.git("rev-parse", branchOther) != before {
 				t.Fatalf("a failed Rebase changed the repository (HEAD %q)", got)
 			}
 		})
 	})
+}
+
+// wantMessage fails unless the error text contains want.
+func wantMessage(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want it to contain %q", err, want)
+	}
+}
+
+// TestRebaseRace puts a git wrapper on PATH that adds a commit to the branch just before update-ref runs. Rebase must
+// fail and the commit must not be lost.
+func TestRebaseRace(t *testing.T) { //nolint:paralleltest // sets environment variables
+	r := branchRepo(t)
+	r.git("branch", "-f", branchOther, branchMain)
+	r.write("b.txt", "b\n")
+	r.git("add", ".")
+	r.commit("three")
+	bin := t.TempDir()
+	script := `#!/bin/sh
+real="` + gitBin + `"
+for a in "$@"; do
+  if [ "$a" = update-ref ] && [ ! -e "$0.done" ]; then
+    : > "$0.done"
+    dir="$REMERIS_RACE_DIR"
+    tree=$("$real" -C "$dir" rev-parse refs/heads/other^{tree})
+    c=$("$real" -C "$dir" -c user.name=t -c user.email=t@example.com commit-tree -p refs/heads/other -m raced "$tree")
+    "$real" -C "$dir" update-ref refs/heads/other "$c"
+  fi
+done
+exec "$real" "$@"
+`
+	wrapper := filepath.Join(bin, "git")
+	if err := os.WriteFile(wrapper, []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(wrapper, 0o700); err != nil { //nolint:gosec // the wrapper is an executable test script
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("REMERIS_RACE_DIR", r.dir)
+	g, err := NewCLI(r.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raced := r.git("rev-parse", "refs/heads/other") // before the wrapper adds its commit
+	err = g.Rebase(context.Background(), branchOther)
+	wantDiagCode(t, err, "remeris::git::command")
+	now := r.git("rev-parse", "refs/heads/other")
+	if now == raced {
+		t.Fatal("the wrapper did not run")
+	}
+	if got := r.git("log", "-1", "--format=%s", "other"); got != "raced\n" {
+		t.Fatalf("the raced commit was lost: other is at %q", got)
+	}
+	if got := head(r); got != onMain {
+		t.Fatalf("HEAD moved to %q", got)
+	}
 }
 
 func TestIncompleteCheckoutError(t *testing.T) {

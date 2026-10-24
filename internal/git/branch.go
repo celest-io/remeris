@@ -119,13 +119,39 @@ func checkSwitch(ctx context.Context, g branchChecker, name string) error {
 	return nil
 }
 
-// branchesDivergedError is returned by Rebase when the branch is not an ancestor of HEAD. Knope would point the branch
+// notFastForwardError is returned by Rebase when the branch is not an ancestor of HEAD. Knope would point the branch
 // at HEAD and lose the commits that are only on the branch; remeris refuses (testdata/deviations.md).
-func branchesDivergedError(to, current string) error {
-	return diag.New(fmt.Sprintf("Cannot fast-forward branch %s to %s: the branches have diverged", to, current)).
-		WithCode("remeris::git::branches_diverged").
-		WithHelp(fmt.Sprintf("Branch %s has commits that are not in %s. Rebase or merge them by hand, then run this step "+
-			"again.", to, current))
+func notFastForwardError(to, current string) error {
+	return diag.New(fmt.Sprintf("Cannot fast-forward branch %s to %s: %s has commits that are not in %s",
+		to, current, to, current)).
+		WithCode("remeris::git::not_fast_forward").
+		WithHelp(fmt.Sprintf("RebaseBranch only moves %s forward. Bring those commits into %s (git rebase %s or "+
+			"git merge %s), then run this step again.", to, current, to, to))
+}
+
+// movedButNotSwitchedError is returned by Rebase when the branch was moved but HEAD could not be switched to it.
+func movedButNotSwitchedError(to, current string, cause error) error {
+	return diag.New(fmt.Sprintf("Branch %s was moved to %s but switching to it failed", to, current)).
+		WithCode("remeris::git::switch_after_move").
+		WithHelp(fmt.Sprintf("Nothing was lost. Run git switch %s.", to)).
+		WithCause(cause)
+}
+
+// branchAliasError is returned by Rebase for a branch that is a symbolic reference: moving it would move its target.
+func branchAliasError(to, target string) error {
+	return diag.New(fmt.Sprintf("Cannot move branch %s: it is a symbolic reference to %s", to, target)).
+		WithCode("remeris::git::branch_alias").
+		WithHelp("Use the name of the branch it points to.")
+}
+
+// worktreeBranchError is the error for a branch that is checked out in another worktree, like git's own.
+func worktreeBranchError(name, where string) error {
+	return unknownGitError(fmt.Errorf("'%s' is already used by worktree at '%s'", name, where))
+}
+
+// rebaseReflogMessage is the reflog message of the branch that Rebase moves.
+func rebaseReflogMessage(to, current string) string {
+	return fmt.Sprintf("remeris: RebaseBranch fast-forward %s to %s", to, current)
 }
 
 // rebaseChecker is the part of Git that the checks before Rebase need.

@@ -66,9 +66,12 @@ type Git interface {
 	// Rebase moves the existing local branch to onto the commit HEAD points to and switches to it, without changing
 	// the files. It is fast-forward only: Knope's rebase never replays commits, it points the branch at HEAD, which
 	// drops the commits of the branch that are not in HEAD. Rebase refuses that and fails when the branches have
-	// diverged, that is when to is not an ancestor of (or equal to) HEAD. It also fails on a detached HEAD, on
-	// uncommitted changes, when to is missing, invalid, or checked out in another worktree. When to is the current
-	// branch it does nothing.
+	// diverged, that is when to is not an ancestor of (or equal to) HEAD ("not_fast_forward"). The checks come in this
+	// order: a valid name, HEAD on a branch (a detached or unborn HEAD fails), no uncommitted changes, an existing
+	// branch to. Then, when to is the current branch, it does nothing. Otherwise it also refuses a to that is a
+	// symbolic reference or is checked out in another worktree. The move is a compare-and-set on the old tip (go-git
+	// takes no lock, see testdata/deviations.md), it writes the reflog message "remeris: RebaseBranch fast-forward
+	// <to> to <current>", and a failure of the switch after the move is "switch_after_move".
 	Rebase(ctx context.Context, to string) error
 }
 
