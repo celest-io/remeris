@@ -14,6 +14,7 @@ const (
 	fileA         = "a.txt"
 	codeBadBranch = "remeris::git::bad_branch_name"
 	onMain        = "main\n"
+	onOther       = "other\n"
 	backendCLI    = "cli"
 	backendGoGit  = "gogit"
 )
@@ -196,10 +197,10 @@ func TestSwitchTo(t *testing.T) { //nolint:paralleltest // sets environment vari
 			if err := g.SwitchTo(ctx, branchOther); err != nil {
 				t.Fatal(err)
 			}
-			if got := head(r); got != "other\n" {
+			if got := head(r); got != onOther {
 				t.Fatalf("HEAD = %q", got)
 			}
-			if b, _ := os.ReadFile(filepath.Join(r.dir, fileA)); string(b) != "other\n" {
+			if b, _ := os.ReadFile(filepath.Join(r.dir, fileA)); string(b) != onOther {
 				t.Fatalf("a.txt = %q", b)
 			}
 			if b, _ := os.ReadFile(filepath.Join(r.dir, "ignored.txt")); string(b) != "kept" {
@@ -276,6 +277,113 @@ func TestSwitchTo(t *testing.T) { //nolint:paralleltest // sets environment vari
 			}
 			if got := head(r); got != "a.txt\n" {
 				t.Fatalf("HEAD = %q", got)
+			}
+		})
+	})
+}
+
+func TestRebase(t *testing.T) { //nolint:paralleltest // sets environment variables
+	ctx := context.Background()
+	// ahead puts main one commit ahead of other (other is an ancestor of main).
+	ahead := func(r *testRepo) {
+		r.git("branch", "-f", branchOther, branchMain)
+		r.write("b.txt", "b\n")
+		r.git("add", ".")
+		r.commit("three")
+	}
+	t.Run("ancestor", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			ahead(r)
+			r.write("ignored.txt", "kept")
+			if err := g.Rebase(ctx, branchOther); err != nil {
+				t.Fatal(err)
+			}
+			if got := head(r); got != onOther {
+				t.Fatalf("HEAD = %q", got)
+			}
+			if got, want := r.git("rev-parse", branchOther), r.git("rev-parse", branchMain); got != want {
+				t.Fatalf("other at %s, want %s", got, want)
+			}
+			if _, err := os.Stat(filepath.Join(r.dir, "b.txt")); err != nil {
+				t.Fatalf("working tree changed: %v", err)
+			}
+			if b, _ := os.ReadFile(filepath.Join(r.dir, "ignored.txt")); string(b) != "kept" {
+				t.Fatalf("ignored.txt = %q", b)
+			}
+			if dirty, err := g.HasUncommittedChanges(ctx); err != nil || dirty {
+				t.Fatalf("dirty after rebase: %t, %v", dirty, err)
+			}
+		})
+	})
+	t.Run("equal", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			r.git("branch", "same")
+			if err := g.Rebase(ctx, "same"); err != nil {
+				t.Fatal(err)
+			}
+			if got := head(r); got != "same\n" {
+				t.Fatalf("HEAD = %q", got)
+			}
+		})
+	})
+	t.Run("current branch", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			if err := g.Rebase(ctx, branchMain); err != nil {
+				t.Fatal(err)
+			}
+			if got := head(r); got != onMain {
+				t.Fatalf("HEAD = %q", got)
+			}
+		})
+	})
+	t.Run("diverged", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			before := r.git("rev-parse", branchOther)
+			wantDiagCode(t, g.Rebase(ctx, branchOther), "remeris::git::branches_diverged")
+			if got := head(r); got != onMain || r.git("rev-parse", branchOther) != before {
+				t.Fatalf("a failed Rebase changed the repository (HEAD %q)", got)
+			}
+		})
+	})
+	t.Run("missing branch", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			r.git("tag", "sometag")
+			wantDiagCode(t, g.Rebase(ctx, "nope"), "remeris::git::command")
+			wantDiagCode(t, g.Rebase(ctx, "sometag"), "remeris::git::command")
+		})
+	})
+	t.Run("dirty tree", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			ahead(r)
+			r.write("new.txt", "x")
+			wantDiagCode(t, g.Rebase(ctx, branchOther), "remeris::git::uncommitted_changes")
+			if got := head(r); got != onMain {
+				t.Fatalf("HEAD moved to %q", got)
+			}
+		})
+	})
+	t.Run("detached HEAD", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			ahead(r)
+			r.git("checkout", "--quiet", "--detach")
+			wantDiagCode(t, g.Rebase(ctx, branchOther), "remeris::git::not_a_branch")
+		})
+	})
+	t.Run("hostile names", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			for _, name := range hostileBranchNames {
+				wantDiagCode(t, g.Rebase(ctx, name), codeBadBranch)
+			}
+		})
+	})
+	t.Run("branch checked out in another worktree", func(t *testing.T) {
+		eachBackend(t, func(t *testing.T, r *testRepo, g Git) {
+			ahead(r)
+			r.git("worktree", "add", "--quiet", filepath.Join(t.TempDir(), "wt"), branchOther)
+			before := r.git("rev-parse", branchOther)
+			wantDiagCode(t, g.Rebase(ctx, branchOther), "remeris::git::command")
+			if got := head(r); got != onMain || r.git("rev-parse", branchOther) != before {
+				t.Fatalf("a failed Rebase changed the repository (HEAD %q)", got)
 			}
 		})
 	})

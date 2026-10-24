@@ -63,6 +63,13 @@ type Git interface {
 	// moved but the checkout did not finish) comes from the go-git backend only; the CLI backend reports git's own
 	// failure as an unknown Git error. It never guesses a remote branch.
 	SwitchTo(ctx context.Context, name string) error
+	// Rebase moves the existing local branch to onto the commit HEAD points to and switches to it, without changing
+	// the files. It is fast-forward only: Knope's rebase never replays commits, it points the branch at HEAD, which
+	// drops the commits of the branch that are not in HEAD. Rebase refuses that and fails when the branches have
+	// diverged, that is when to is not an ancestor of (or equal to) HEAD. It also fails on a detached HEAD, on
+	// uncommitted changes, when to is missing, invalid, or checked out in another worktree. When to is the current
+	// branch it does nothing.
+	Rebase(ctx context.Context, to string) error
 }
 
 // TagOptions are the options of CreateTag.

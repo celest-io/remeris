@@ -174,3 +174,33 @@ func (c *CLI) SwitchTo(ctx context.Context, name string) error {
 	}
 	return nil
 }
+
+// Rebase moves the local branch to onto HEAD and switches to it, fast-forward only (see Git.Rebase).
+//
+// Commands: git merge-base --is-ancestor refs/heads/<to> HEAD (exit 1 when diverged); git branch --force
+// --end-of-options <to> HEAD (git refuses a branch used by another worktree); git switch --no-guess
+// --end-of-options <to>.
+func (c *CLI) Rebase(ctx context.Context, to string) error {
+	current, err := checkRebase(ctx, c, to)
+	if err != nil {
+		return err
+	}
+	if current == to {
+		return nil
+	}
+	if _, err := c.run(ctx, "", "merge-base", "--is-ancestor", branchRefPrefix+to, headRef); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 1 {
+			return branchesDivergedError(to, current)
+		}
+		return fail(err, unknownGitError)
+	}
+	if _, err := c.run(ctx, "", "branch", "--force", "--end-of-options", to, headRef); err != nil {
+		return fail(err, unknownGitError)
+	}
+	// HEAD and to are the same commit now, so the switch leaves the files alone.
+	if _, err := c.run(ctx, "", "switch", "--no-guess", "--end-of-options", to); err != nil {
+		return fail(err, unknownGitError)
+	}
+	return nil
+}

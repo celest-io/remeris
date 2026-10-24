@@ -194,3 +194,54 @@ func (g *GoGit) SwitchTo(ctx context.Context, name string) error {
 	}
 	return unknownGitError(err)
 }
+
+// Rebase moves the local branch to onto HEAD and switches to it, fast-forward only, like the CLI backend. The working
+// tree and the index are not touched: they already match HEAD, which is where to points afterwards.
+func (g *GoGit) Rebase(ctx context.Context, to string) error {
+	current, err := checkRebase(ctx, g, to)
+	if err != nil {
+		return err
+	}
+	if current == to {
+		return nil
+	}
+	repo, err := g.open()
+	if err != nil {
+		return err
+	}
+	if err := checkedOutElsewhere(repo, to); err != nil {
+		return err
+	}
+	head, err := repo.Head()
+	if err != nil {
+		return unknownGitError(err)
+	}
+	toName := plumbing.NewBranchReferenceName(to)
+	old, err := repo.Reference(toName, true)
+	if err != nil {
+		return unknownGitError(err)
+	}
+	headCommit, err := repo.CommitObject(head.Hash())
+	if err != nil {
+		return unknownGitError(err)
+	}
+	toCommit, err := repo.CommitObject(old.Hash())
+	if err != nil {
+		return unknownGitError(err)
+	}
+	ancestor, err := toCommit.IsAncestor(headCommit)
+	if err != nil {
+		return unknownGitError(err)
+	}
+	if !ancestor {
+		return branchesDivergedError(to, current)
+	}
+	// Compare and set, so that a branch moved by another process since the check is not overwritten.
+	if err := repo.Storer.CheckAndSetReference(plumbing.NewHashReference(toName, head.Hash()), old); err != nil {
+		return unknownGitError(err)
+	}
+	if err := repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, toName)); err != nil {
+		return incompleteCheckoutError(err)
+	}
+	return nil
+}

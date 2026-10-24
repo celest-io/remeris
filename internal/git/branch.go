@@ -118,3 +118,41 @@ func checkSwitch(ctx context.Context, g branchChecker, name string) error {
 	}
 	return nil
 }
+
+// branchesDivergedError is returned by Rebase when the branch is not an ancestor of HEAD. Knope would point the branch
+// at HEAD and lose the commits that are only on the branch; remeris refuses (testdata/deviations.md).
+func branchesDivergedError(to, current string) error {
+	return diag.New(fmt.Sprintf("Cannot fast-forward branch %s to %s: the branches have diverged", to, current)).
+		WithCode("remeris::git::branches_diverged").
+		WithHelp(fmt.Sprintf("Branch %s has commits that are not in %s. Rebase or merge them by hand, then run this step "+
+			"again.", to, current))
+}
+
+// rebaseChecker is the part of Git that the checks before Rebase need.
+type rebaseChecker interface {
+	branchChecker
+	CurrentBranch(ctx context.Context) (string, error)
+}
+
+// checkRebase validates the arguments of Rebase and returns the current branch: a valid name, HEAD on a branch, a
+// clean working tree and an existing branch to.
+func checkRebase(ctx context.Context, g rebaseChecker, to string) (string, error) {
+	if err := checkBranchName(to); err != nil {
+		return "", err
+	}
+	current, err := g.CurrentBranch(ctx)
+	if err != nil {
+		return "", err
+	}
+	if dirty, err := g.HasUncommittedChanges(ctx); err != nil {
+		return "", err
+	} else if dirty {
+		return "", uncommittedChangesError()
+	}
+	if exists, err := g.BranchExists(ctx, to); err != nil {
+		return "", err
+	} else if !exists {
+		return "", branchNotFoundError(to)
+	}
+	return current, nil
+}
