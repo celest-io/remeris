@@ -1,0 +1,32 @@
+# An untracked file is an uncommitted change: the switch is refused before the prompt, and nothing is created.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'Initial commit'
+exec git branch 12-fix-thing
+exec git switch -c 12-Fix-Thing
+cp knope.toml dirty.txt
+
+# The branch exists.
+! exec remeris switch
+stderr 'Uncommitted changes'
+stderr 'You need to commit your changes before running this step.'
+exec git branch --show-current
+stdout '^12-Fix-Thing$'
+
+# The branch does not exist: the check comes before the prompt, so no input is asked for.
+exec git branch -D 12-fix-thing
+! exec remeris switch
+stderr 'Uncommitted changes'
+! stderr 'Failed to get user input'
+exec git branch --list 12-fix-thing
+! stdout .
+
+-- knope.toml --
+[[workflows]]
+name = "switch"
+[[workflows.steps]]
+type = "SelectIssueFromBranch"
+[[workflows.steps]]
+type = "SwitchBranches"

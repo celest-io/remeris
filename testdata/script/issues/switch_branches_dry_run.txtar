@@ -1,0 +1,21 @@
+# SwitchBranches in a dry run needs an issue (the fake one SelectIssueFromBranch selects), logs the branch name and
+# touches no Git: there is no repository here.
+exec remeris --dry-run switch
+cmp stdout dry_run.log
+! stderr .
+
+# --validate dry-runs the same workflow.
+exec remeris --validate
+! stdout .
+! stderr .
+
+-- knope.toml --
+[[workflows]]
+name = "switch"
+[[workflows.steps]]
+type = "SelectIssueFromBranch"
+[[workflows.steps]]
+type = "SwitchBranches"
+-- dry_run.log --
+Would attempt to parse current branch name to select current issue
+Would switch to or create a branch named 123-fake-issue

@@ -86,7 +86,7 @@ func assertBadBranch(t *testing.T, err error) {
 	if !errors.As(err, &d) {
 		t.Fatalf("err = %v, want a diagnostic", err)
 	}
-	if d.Error() != "Bad branch name" || d.Help() != "The branch name was not formatted correctly." ||
+	if d.Error() != badBranchText || d.Help() != "The branch name was not formatted correctly." ||
 		d.Code() != "remeris::git::bad_branch_name" {
 		t.Errorf("diagnostic = %q / %q / %q", d.Error(), d.Help(), d.Code())
 	}
@@ -135,7 +135,7 @@ func TestSelectIssueFromBranchReal(t *testing.T) {
 		wantLog string
 		wantErr string
 	}{
-		"bad name": {branch: "feature-x", wantErr: "Bad branch name"},
+		"bad name": {branch: "feature-x", wantErr: badBranchText},
 		"issue": {
 			branch:  "42-fix-it",
 			want:    workflow.Issue{Key: "42", Summary: "fix-it"},
