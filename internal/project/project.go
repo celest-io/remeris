@@ -20,6 +20,7 @@ import (
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/forge/gitea"
 	"github.com/celest-io/remeris/internal/forge/github"
+	"github.com/celest-io/remeris/internal/forge/jira"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
@@ -40,6 +41,8 @@ type Loader struct {
 	GitHub *github.Forge
 	// Gitea is the Gitea forge, nil when the configuration has no [gitea] table.
 	Gitea *gitea.Forge
+	// Jira is the Jira forge, nil when the configuration has no [jira] table.
+	Jira *jira.Forge
 	// ReadFile returns the content of the file at the slash-separated relative path. nil reads from disk.
 	ReadFile func(path string) (string, error)
 	// OpenGit opens the repository. nil uses git.Open on the working directory.
@@ -74,6 +77,9 @@ func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State
 	if g := cfg.Gitea; g != nil {
 		l.Gitea = gitea.New(gitea.Config{Owner: g.Owner, Repo: g.Repo, Host: g.Host}, opts.Credentials)
 	}
+	if j := cfg.Jira; j != nil {
+		l.Jira = jira.New(jira.Config{URL: j.URL, Project: j.Project}, opts.Credentials)
+	}
 	if cfg.ReleaseNotes != nil {
 		for _, t := range cfg.ReleaseNotes.ChangeTemplates {
 			l.ChangeTemplates = append(l.ChangeTemplates, releasenotes.ChangeTemplate(t))
@@ -95,7 +101,9 @@ func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State
 func (l Loader) State(
 	ctx context.Context, pkgs []config.PackageConfig, ignoreConventionalCommits bool,
 ) (workflow.State, error) {
-	state := workflow.State{IgnoreConventionalCommits: ignoreConventionalCommits, GitHub: l.GitHub, Gitea: l.Gitea}
+	state := workflow.State{
+		IgnoreConventionalCommits: ignoreConventionalCommits, GitHub: l.GitHub, Gitea: l.Gitea, Jira: l.Jira,
+	}
 	if len(pkgs) == 0 {
 		return state, nil
 	}

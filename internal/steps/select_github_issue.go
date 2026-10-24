@@ -40,7 +40,7 @@ func (s *SelectGitHubIssue) Run(
 			slog.InfoContext(ctx, "Would query configured GitHub instance for issues with any labels")
 		}
 		slog.InfoContext(ctx, "Would prompt user to select an issue and move workflow to IssueSelected state.")
-		rt.State.Issue = &workflow.Issue{Key: "123", Summary: "Test issue"}
+		rt.State.Issue = &workflow.Issue{Key: "123", Summary: fakeIssueSummary}
 		return rt, nil
 	}
 
@@ -64,6 +64,9 @@ func (s *SelectGitHubIssue) Run(
 	rt.State.Issue = &issue
 	return rt, nil
 }
+
+// fakeIssueSummary is the title of the fake issue that the dry run of the Select*Issue steps selects.
+const fakeIssueSummary = "Test issue"
 
 // selectIssue asks the user to choose one of issues. No issue to choose from, or no way to ask, is the prompt
 // failure Knope reports.

@@ -37,7 +37,7 @@ func (s *SelectGiteaIssue) Run(
 			slog.InfoContext(ctx, "Would query configured Gitea instance for issues with any labels")
 		}
 		slog.InfoContext(ctx, "Would prompt user to select an issue")
-		rt.State.Issue = &workflow.Issue{Key: "123", Summary: "Test issue"}
+		rt.State.Issue = &workflow.Issue{Key: "123", Summary: fakeIssueSummary}
 		return rt, nil
 	}
 

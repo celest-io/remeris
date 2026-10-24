@@ -83,7 +83,7 @@ func TestSelectGitHubIssueDryRun(t *testing.T) {
 			if got := logs.String(); got != want {
 				t.Errorf("logs = %q, want %q", got, want)
 			}
-			if rt.State.Issue == nil || *rt.State.Issue != (workflow.Issue{Key: "123", Summary: "Test issue"}) {
+			if rt.State.Issue == nil || *rt.State.Issue != (workflow.Issue{Key: "123", Summary: fakeSummaryWant}) {
 				t.Errorf("issue = %v", rt.State.Issue)
 			}
 			if calls.Load() != 0 || len(scripted.Asked()) != 0 {
