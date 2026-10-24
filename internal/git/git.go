@@ -47,6 +47,22 @@ type Git interface {
 	// first is used; libgit2 would take the last). It is false when there is no remote, or on any error, like Knope's
 	// get_first_remote (spec F9.6).
 	FirstRemoteURL(ctx context.Context) (string, bool)
+	// LocalBranches returns the short names of the local branches, sorted by name (spec F19.7).
+	LocalBranches(ctx context.Context) ([]string, error)
+	// BranchExists reports whether the local branch name exists. A name that git would refuse (check-ref-format), or
+	// that starts with "-", is a "Bad branch name" error, so a hostile name can never become an option.
+	BranchExists(ctx context.Context, name string) (bool, error)
+	// CreateBranch creates the local branch name at the tip of the local branch from, without tracking it and without
+	// switching to it. It fails when name is invalid or taken, or when from does not exist.
+	CreateBranch(ctx context.Context, name, from string) error
+	// HasUncommittedChanges reports whether the index or the working tree differ from HEAD. Untracked files count,
+	// ignored files do not.
+	HasUncommittedChanges(ctx context.Context) (bool, error)
+	// SwitchTo checks out the local branch name (spec F19.8). It fails with "Uncommitted changes" when the tree is not
+	// clean, and a branch checked out in another worktree is refused. The "Could not complete checkout" error (HEAD
+	// moved but the checkout did not finish) comes from the go-git backend only; the CLI backend reports git's own
+	// failure as an unknown Git error. It never guesses a remote branch.
+	SwitchTo(ctx context.Context, name string) error
 }
 
 // TagOptions are the options of CreateTag.

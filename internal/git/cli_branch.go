@@ -89,3 +89,88 @@ func (c *CLI) FirstRemoteURL(ctx context.Context) (string, bool) {
 	}
 	return url, true
 }
+
+// LocalBranches returns the short names of the local branches, sorted by name (spec F19.7).
+//
+// Command: git for-each-ref --format=%(refname:strip=2) refs/heads/.
+func (c *CLI) LocalBranches(ctx context.Context) ([]string, error) {
+	if _, err := c.run(ctx, "", "rev-parse", "--git-dir"); err != nil {
+		return nil, fail(err, openRepoError)
+	}
+	out, err := c.run(ctx, "", "for-each-ref", "--format=%(refname:strip=2)", branchRefPrefix)
+	if err != nil {
+		return nil, fail(err, unknownGitError)
+	}
+	branches := []string{}
+	for line := range strings.SplitSeq(out, "\n") {
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches, nil
+}
+
+// BranchExists reports whether the local branch name exists. An invalid name is an error.
+//
+// Command: git show-ref --verify --quiet refs/heads/<name>.
+func (c *CLI) BranchExists(ctx context.Context, name string) (bool, error) {
+	if err := checkBranchName(name); err != nil {
+		return false, err
+	}
+	if _, err := c.run(ctx, "", "rev-parse", "--git-dir"); err != nil {
+		return false, fail(err, openRepoError)
+	}
+	_, err := c.run(ctx, "", "show-ref", "--verify", "--quiet", branchRefPrefix+name)
+	if err == nil {
+		return true, nil
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fail(err, unknownGitError)
+}
+
+// CreateBranch creates the local branch name at the tip of the local branch from, without tracking and without
+// switching to it. The name must be valid and free, and from must exist.
+//
+// Command: git branch --no-track --end-of-options <name> refs/heads/<from>.
+func (c *CLI) CreateBranch(ctx context.Context, name, from string) error {
+	if err := checkCreateBranch(ctx, c, name, from); err != nil {
+		return err
+	}
+	if _, err := c.run(ctx, "", "branch", "--no-track", "--end-of-options", name, branchRefPrefix+from); err != nil {
+		return fail(err, unknownGitError)
+	}
+	return nil
+}
+
+// HasUncommittedChanges reports whether the working tree or the index differ from HEAD. Untracked files count and
+// ignored files do not.
+//
+// Command: git --no-optional-locks status --porcelain -z --untracked-files=all (no index refresh, so a read does not
+// take locks).
+func (c *CLI) HasUncommittedChanges(ctx context.Context) (bool, error) {
+	if _, err := c.run(ctx, "", "rev-parse", "--git-dir"); err != nil {
+		return false, fail(err, openRepoError)
+	}
+	out, err := c.run(ctx, "", "--no-optional-locks", "status", "--porcelain", "-z", "--untracked-files=all")
+	if err != nil {
+		return false, fail(err, unknownGitError)
+	}
+	return out != "", nil
+}
+
+// SwitchTo checks out the local branch name. The branch must exist and the working tree must be clean (Knope's
+// switch_to_branch). A remote branch is never guessed.
+//
+// Command: git switch --no-guess --end-of-options <name>.
+func (c *CLI) SwitchTo(ctx context.Context, name string) error {
+	if err := checkSwitch(ctx, c, name); err != nil {
+		return err
+	}
+	if _, err := c.run(ctx, "", "switch", "--no-guess", "--end-of-options", name); err != nil {
+		return fail(err, unknownGitError)
+	}
+	return nil
+}

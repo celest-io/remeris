@@ -26,6 +26,8 @@ const (
 )
 
 type fakeGit struct {
+	git.Git
+
 	tags  []string
 	err   error
 	calls *int
