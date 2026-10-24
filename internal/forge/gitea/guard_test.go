@@ -100,7 +100,7 @@ func TestScrubKeepsEveryField(t *testing.T) {
 		WithRelated(nested, errors.New("plain "+testToken)).
 		WithCause(context.DeadlineExceeded)
 
-	got := c.scrubDiag(original)
+	got := c.scrub.Diag(original)
 
 	if got.Error() != "message [REDACTED]" || got.Code() != "some::code" || got.Help() != "help [REDACTED]" ||
 		got.URL() != "https://docs.example/[REDACTED]" || got.SourceCode() != "source [REDACTED]" {

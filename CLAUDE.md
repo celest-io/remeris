@@ -138,6 +138,7 @@ internal/httpx/     HTTP behaviour (F15.1): User-Agent, retrying RoundTripper wi
 internal/credentials/ stored tokens and email: env, remeris/ file, knope/ migration, prompt, save (F15.2)
 internal/forge/github/ GitHub client on go-github: the auth chain (App, GITHUB_TOKEN, stored token, prompt), WrapError; a leaf
 internal/forge/gitea/ Gitea client on net/http: header auth, hardened host, token scrubbed from errors; a leaf (not forge/github)
+internal/forge/jira/ Jira client on net/http: Basic auth through a credential RoundTripper, hardened url, token and Basic blob scrubbed from errors (httpx.Scrubber), JQL and key escaping; a leaf (not forge/github)
 internal/prompt/    Prompter interface (select, multi-select, input, password) on huh v2, and a scripted fake
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
@@ -154,7 +155,7 @@ pkg/versioning/     pure core (the knope-versioning equivalent): no file system,
 ```
 
 Imports flow one way: `workflow` imports only `diag`, `internal/git`, `internal/prompt`, `internal/forge/github`,
-`internal/forge/gitea` and `pkg/versioning/...`,
+`internal/forge/gitea`, `internal/forge/jira` (the Jira steps will use it) and `pkg/versioning/...`,
 then `variables`, `steps`, `config`, `project`, `cli`. Keep it so.
 `pkg/versioning` may import `internal/diag` (pure) and nothing else from `internal/`.
 Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.

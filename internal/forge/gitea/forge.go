@@ -133,6 +133,7 @@ func (f *Forge) RequireAuthentication(ctx context.Context) (*Client, error) {
 		cfg:   f.cfg,
 		base:  base,
 		token: token,
+		scrub: httpx.NewScrubber(token),
 		http:  &http.Client{Transport: retry, CheckRedirect: urlPolicy.CheckRedirect},
 	}
 	return f.client, nil
