@@ -17,13 +17,13 @@ stderr 'unexpected argument ''--generate'' found'
 -- knope.toml --
 [[workflows]]
 name = "release"
-steps = [{ type = "SelectGitHubIssue" }]
+steps = [{ type = "RebaseBranch", to = "main" }]
 
 [[workflows]]
 name = "before"
 steps = [{ type = "Command", command = "echo first" }]
 -- release.log --
 Error: Problem with workflow release
-  ╰─▶ Step SelectGitHubIssue is not implemented yet (milestone M11)
+  ╰─▶ Step RebaseBranch is not implemented yet (milestone M11)
 -- before.log --
 Would run echo first

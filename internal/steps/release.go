@@ -116,14 +116,11 @@ func createTag(ctx context.Context, rt *workflow.RunType[workflow.State], tag st
 		slog.InfoContext(ctx, "Would create Git tag "+tag)
 		return nil
 	}
-	if rt.State.Git == nil {
-		g, err := git.Open(ctx, ".")
-		if err != nil {
-			return err
-		}
-		rt.State.Git = g
+	g, err := ensureGit(ctx, &rt.State)
+	if err != nil {
+		return err
 	}
-	return rt.State.Git.CreateTag(ctx, tag, git.TagOptions{})
+	return g.CreateTag(ctx, tag, git.TagOptions{})
 }
 
 // headSHA reads the commit HEAD points to once per step run.
@@ -139,13 +136,10 @@ func (h *headSHA) get(ctx context.Context, state *workflow.State) string {
 		return h.value
 	}
 	h.read = true
-	g := state.Git
-	if g == nil {
-		var err error
-		if g, err = git.Open(ctx, "."); err != nil {
-			slog.DebugContext(ctx, "Could not open the Git repository: "+err.Error())
-			return ""
-		}
+	g, err := ensureGit(ctx, state)
+	if err != nil {
+		slog.DebugContext(ctx, "Could not open the Git repository: "+err.Error())
+		return ""
 	}
 	sha, err := g.HeadCommitSHA(ctx)
 	if err != nil {

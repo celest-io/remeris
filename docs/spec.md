@@ -138,6 +138,7 @@ by the project: **urfave/cli v3** and **koanf v2**. Versions were checked agains
 | Git | `git2` (libgit2) | **stdlib** `os/exec` calling the `git` CLI, with **`github.com/go-git/go-git/v5`** as the fallback when `git` is not installed (D2, F9.0) | go-git v5.19.2, 2026-07-29 | The CLI gives exact behaviour, including rebase. go-git has no rebase, so the fallback supports only fast-forward for `RebaseBranch`. v6 is still alpha. |
 | HTTP + retry | reqwest-middleware + reessaie | **stdlib** `net/http` with a retrying `RoundTripper` (also used as go-github's transport) | stdlib | About 80 lines: exponential backoff with jitter, 5 retries, honours `Retry-After` (seconds or HTTP date), logs rate-limit warnings (F15.1). Considered: `hashicorp/go-retryablehttp` (last release v0.7.8, 2025-06). |
 | GitHub API | reqwest (hand-written) | **`github.com/google/go-github/v92`** | v92.0.0, 2026-09-14 (needs Go 1.26) | All GitHub calls (D10, F16.0). Also handles the asset upload URL, so no URI-template library is needed. |
+| GitHub GraphQL | reqwest (hand-written query) | **`github.com/shurcooL/githubv4`** | v0.0.0-20260209031235-2402fdf4a9ed (no tagged release; uses `shurcooL/graphql`) | `SelectGitHubIssue` only (F19.1): Knope's query as a struct, with variables, on go-github's HTTP client. go-github is REST-only and the REST issues endpoint cannot do any-of labels. |
 | GitHub App auth | — | **`github.com/jferrl/go-githubauth`** | v1.9.1, 2026-09-19 (needs Go 1.26; uses `golang-jwt/jwt/v5`, `x/oauth2`) | App JWT → installation token as an `oauth2.TokenSource` (F16.1, E2). Rejected: `bradleyfalzon/ghinstallation/v2` (v2.19.0) because it pins `go-github/v88` and `jwt/v4`, which would add a second go-github major. |
 | Commit signing (go-git fallback, E2) | — | go-git's signing support (OpenPGP via `github.com/ProtonMail/go-crypto` v1.5.2, 2026-09-25, already a go-git dependency) | — | Only for the go-git backend. The `git` CLI backend uses the user's own git signing config. |
 | Command splitting | `execute` | Hand-written tokenizer in `internal/steps/command` | n/a | About 50 lines: whitespace separates words, `'…'` and `"…"` quote, backslash escapes, **no** `$VAR` expansion (matches Knope). Rejected: `google/shlex` (no change since 2019); `mvdan.cc/sh/v3/shell.Fields` (expands variables); `mattn/go-shellwords` (recent tag, but `go 1.13` module and adds little). |
@@ -1389,7 +1390,7 @@ for loopback hosts (`remeris::github::insecure_url`).
 | Update PR | `PullRequests.Edit(ctx, o, r, number, &github.PullRequest{Title, Body})` |
 | Create PR | `PullRequests.Create(ctx, o, r, &github.NewPullRequest{Title, Body, Head: branch, Base: base})` |
 | PRs for a commit (F16.4) | `PullRequests.ListPullRequestsWithCommit(ctx, o, r, sha, nil)` |
-| List issues (F19.1) | `Issues.ListByRepo(ctx, o, r, &github.IssueListByRepoOptions{State: "open", Labels: labels})` |
+| List issues (F19.1) | GraphQL through `githubv4` (0.3), on the HTTP client of the go-github client; no go-github method. |
 
 Errors: wrap `*github.ErrorResponse` / `*github.RateLimitError` / `*github.AbuseRateLimitError` into the same
 `ApiRequestError` message (`Trouble communicating with GitHub while {activity}: {status} with body: {message}`).
@@ -1508,11 +1509,16 @@ name too, in the dry-run text, the lookup and the `head` of the new pull request
 - Dry run: needs `[github]` (`NotConfigured`). Logs `Would query configured GitHub instance for issues with labels a, b`
   (or `with any labels`), then `Would prompt user to select an issue and move workflow to IssueSelected state.` Sets
   the fake issue `{key:"123", summary:"Test issue"}`.
-- Real: needs auth. Knope uses a GraphQL query (`issues(states:OPEN, first: 30, labels: $labels)`). go-github is
-  REST-only, so use `Issues.ListByRepo` with `State: "open"`, `Labels: labels`, `PerPage: 30`. The REST endpoint also
-  returns pull requests: skip items where `IsPullRequest()` is true, and fetch further pages until 30 issues are
-  collected or there are no more pages (same result set as the GraphQL query). Show a Select `Select an Issue` with
-  items `"{key}: {summary}"`. Log `Selected item : {issue}`.
+- Real: needs auth. Send Knope's GraphQL query unchanged, with `shurcooL/githubv4` (a struct query; `repo`, `owner`
+  and `labels` are variables, `labels` is `[String!]` and null without labels): `repository(name: $repo, owner:
+  $owner) { issues(states: OPEN, first: 30, labels: $labels) { nodes { number title } } }`. Labels match any of the
+  values; there is no `orderBy` (GitHub's default order, as in Knope), no paging and no pull requests. The request
+  uses the HTTP client of the go-github client, so the auth chain and the credential guard apply. The endpoint
+  follows the API URL: `https://api.github.com/graphql`; GitHub Enterprise Server `https://HOST/api/v3/` ->
+  `https://HOST/api/graphql`; an `api.` host without path (data residency) -> `/graphql`; any other shape is refused
+  (`remeris::issues::github::graphql_url`). A failed request, a non-200 status or a GraphQL `errors` array gives
+  `Could not communicate with GitHub while loading issues: {error}` (code `remeris::issues::github::api`). Show a
+  Select `Select an Issue` with items `"{key}: {summary}"`. Log `Selected item : {issue}`.
 
 ### F19.2 `SelectGiteaIssue { labels? }`
 The same flow with the Gitea API (F17). Dry-run text says `Gitea instance`. Fake issue `{123, "Test issue"}`.

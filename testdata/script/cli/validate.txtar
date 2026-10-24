@@ -3,7 +3,7 @@ exec remeris --validate
 ! stdout .
 ! stderr .
 
-# A step that is not implemented yet fails the dry run too, so --validate reports it.
+# A step whose configuration is missing fails the dry run too, so --validate reports it.
 cp knope-later.toml knope.toml
 ! exec remeris --validate
 ! stdout .
@@ -50,11 +50,13 @@ steps = [{ type = "SelectGitHubIssue" }]
 -- later.log --
 Error: There are problems with the defined workflows
   ╰─▶ Problem with workflow later
-      ╰─▶ Step SelectGitHubIssue is not implemented yet (milestone M11)
+      ╰─▶ GitHub is not configured
+          help: GitHub must be configured in order to use the SelectGitHubIssue step
 -- many.log --
 Error: There are problems with the defined workflows
   ╰─▶ Problem with workflow second
       ╰─▶ No packages to operate on
           help: There must be at least one package for remeris to work with, no supported package files were found in this directory.
   ╰─▶ Problem with workflow third
-      ╰─▶ Step SelectGitHubIssue is not implemented yet (milestone M11)
+      ╰─▶ GitHub is not configured
+          help: GitHub must be configured in order to use the SelectGitHubIssue step

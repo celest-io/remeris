@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"strings"
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/forge/gitea"
@@ -56,6 +57,34 @@ type State struct {
 	// client on demand and caches it; a step must not ask for the client in a dry run. Release and CreatePullRequest
 	// test it to pick the forge.
 	Gitea *gitea.Forge
+	// Issue is the issue a Select*Issue step or SelectIssueFromBranch selected, or nil before any did.
+	Issue *Issue
+}
+
+// Issue is a selected issue: a GitHub or Gitea issue number, or a Jira key, with its title.
+type Issue struct {
+	Key     string
+	Summary string
+}
+
+// String is "{key}: {summary}", the text of the selection prompt and of the log lines.
+func (i Issue) String() string { return i.Key + ": " + i.Summary }
+
+// BranchName is the branch name the issue maps to (spec F19.6): "{key}-{summary}" with the summary lowercased
+// (ASCII letters only, like Rust's to_ascii_lowercase) and every space replaced by a hyphen. Other characters
+// are kept, even when Git refuses them in a ref name.
+func (i Issue) BranchName() string {
+	return strings.ReplaceAll(i.Key+"-"+asciiLower(i.Summary), " ", "-")
+}
+
+func asciiLower(s string) string {
+	b := []byte(s)
+	for n, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			b[n] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
 }
 
 // PackageAssets is the `assets` setting of one package.
