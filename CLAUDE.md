@@ -112,10 +112,10 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 
 ## Code layout
 
-Milestones M0 to M10 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
+Milestones M0 to M11 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
 `PrepareRelease` steps, with the SemVer core, versioned files (Cargo.toml, pyproject.toml, package.json, go.mod,
 regex), packages, Git tags and staging, conventional commits, change files, changelogs, prompts and the `Version`
-and `ChangelogEntry` variables. `Release` publishes on GitHub and Gitea (GitHub first, each package in turn). Steps that are not built yet fail with `Step X is not implemented yet (milestone Mx)`; the issue steps (Jira, GitHub and Gitea issues, `SwitchBranches`, `RebaseBranch`, `SelectIssueFromBranch`; only `RebaseBranch` is missing) come with M11 (see spec section 1). Without packages in `knope.toml`, the root package and the Cargo, npm and Deno workspace members are discovered; `--generate` writes a `knope.toml` for them and `--validate` dry-runs every workflow (both are modes of the root command, available only when their precondition on `knope.toml` holds).
+and `ChangelogEntry` variables. `Release` publishes on GitHub and Gitea (GitHub first, each package in turn). The issue steps (`SelectGitHubIssue`, `SelectGiteaIssue`, `SelectJiraIssue`, `TransitionJiraIssue`, `SelectIssueFromBranch`, `SwitchBranches`, `RebaseBranch`) and the `IssueBranch` variable are built; `RebaseBranch` is fast-forward only (spec F19.8). In a dry run they read no credentials, use no network, prompt for nothing and change no Git state, but their configuration checks still fail as in Knope, and fake issues flow on. Every step in `knope.toml` is implemented. Without packages in `knope.toml`, the root package and the Cargo, npm and Deno workspace members are discovered; `--generate` writes a `knope.toml` for them and `--validate` dry-runs every workflow (both are modes of the root command, available only when their precondition on `knope.toml` holds).
 
 ```
 cmd/remeris/        entry point (calls cli.Main); main_test.go runs the testscript golden tests
@@ -128,7 +128,7 @@ internal/config/    Knope configuration (knope.toml) loading: koanf + a go-toml 
                     (a failure is kept and raised only by a workflow that reads the packages)
 internal/workflow/  Step interface, State, RunType (real or dry run), runner
 internal/variables/ Template and Variable substitution
-internal/steps/     one file per step (stubs for the unbuilt ones); steps/command splits command lines
+internal/steps/     one file per step; steps/command splits command lines
 internal/fsx/       dry-run aware file writes
 internal/glob/      Glob(fs.FS, pattern) with the semantics of Rust's glob crate (`**`, brackets, no backslash escape)
 internal/tomlwrite/ TOML writer that prints like Rust's toml::to_string (toml_writer string rules, section layout); for --generate and --upgrade. Pure, stdlib only
@@ -155,15 +155,15 @@ pkg/versioning/     pure core (the knope-versioning equivalent): no file system,
 ```
 
 Imports flow one way: `workflow` imports only `diag`, `internal/git`, `internal/prompt`, `internal/forge/github`,
-`internal/forge/gitea`, `internal/forge/jira` (the Jira steps will use it) and `pkg/versioning/...`,
+`internal/forge/gitea`, `internal/forge/jira` and `pkg/versioning/...`,
 then `variables`, `steps`, `config`, `project`, `cli`. Keep it so.
 `pkg/versioning` may import `internal/diag` (pure) and nothing else from `internal/`.
 Keep the pure core free of I/O; steps do the I/O and must do none in a dry run.
 
-### Adding or finishing a step
+### Adding a step
 
-1. Every step has its own file in `internal/steps/`, with `toml:"..."` tags on its fields. A step that is not built
-   yet has a stub whose `Run` returns `notImplemented(s, "Mx")` (in `not_implemented.go`): replace that body.
+1. Every step has its own file in `internal/steps/`, with `toml:"..."` tags on its fields. No stubs remain: a new step
+   is added directly.
 2. Implement `Type()` and `Run(ctx, rt)`. In a dry run, log what would happen and change nothing.
 3. Make sure it is in `stepConstructors` in `internal/config/decode.go`.
 4. Add unit tests, and enable the Knope fixtures that needed it (remove their `skip` line).
