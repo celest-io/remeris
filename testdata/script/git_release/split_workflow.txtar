@@ -1,5 +1,4 @@
 # Ported from knope-dev/knope, crates/knope/tests/git_release/split_workflow (MIT, see testdata/README.md).
-skip 'needs the --verbose debug lines that prepare_release/verbose waits for; split_workflow_quiet runs the same case without --verbose'
 # A Release step on its own, after a PrepareRelease run in another workflow: the version is already in Cargo.toml.
 env REMERIS_FAKE_DATE=2026-01-01
 

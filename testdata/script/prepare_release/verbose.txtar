@@ -1,9 +1,5 @@
 # Ported from knope-dev/knope, crates/knope/tests/prepare_release/verbose (MIT, see testdata/README.md).
-# Missing from remeris' debug log: "{file} has version {v}", "Looking for Git tags matching package name.",
-# "Only checking commits with scopes: [...]", "Using {RULE} rule to bump from {a} to {b}" and
-# "Rule is MAJOR, but major component is 0. Bumping minor component from {a} to {b}".
-# The "Running step" line is already remeris' own form (spec F3.2).
-skip 'remeris bug: --verbose lacks five of Knope''s debug lines (see the note above)'
+# The "Running step" line has the Go form (spec F3.2; testdata/deviations.md).
 
 env REMERIS_FAKE_DATE=2026-01-01
 
