@@ -54,22 +54,22 @@ footers = ["Changelog-First-Note"]
 ### Versioned files
 
 An entry of `versioned_files` is a path, `{ path, dependency }` or `{ path, regex }`. The path is relative to the
-working directory and must exist. The format is chosen from the last path component (case-sensitive):
+working directory and must exist. The format is chosen from the last path component (case-sensitive). `dependency` says whether the entry may name a dependency:
 
-| File name | Format | `dependency` |
-| --- | --- | --- |
-| `Cargo.toml` | Cargo | yes |
-| `Cargo.lock` | Cargo.lock | yes |
-| `deno.json`, `deno.jsonc` | Deno | yes |
-| `deno.lock` | deno.lock | yes |
-| `gleam.toml` | Gleam | no |
-| `go.mod` | Go module | no |
-| `package.json` | npm | yes |
-| `package-lock.json` | npm lock file | yes |
-| `pom.xml` | Maven | no |
-| `pubspec.yaml` | Dart/Flutter | no |
-| `pyproject.toml` | Python (`project.version` or `tool.poetry.version`) | no |
-| `tauri.conf.json`, `tauri.macos.conf.json`, `tauri.windows.conf.json`, `tauri.linux.conf.json` | Tauri | no |
+| File name | `dependency` |
+| --- | --- |
+| `Cargo.toml` | yes |
+| `Cargo.lock` | yes |
+| `deno.json`, `deno.jsonc` | yes |
+| `deno.lock` | yes |
+| `gleam.toml` | no |
+| `go.mod` | no |
+| `package.json` | yes |
+| `package-lock.json` | yes |
+| `pom.xml` | no |
+| `pubspec.yaml` | no |
+| `pyproject.toml` | no |
+| `tauri.conf.json`, `tauri.macos.conf.json`, `tauri.windows.conf.json`, `tauri.linux.conf.json` | no |
 
 - `dependency = "name"` versions that dependency inside the file instead of the file's own package version. It is
   an error on a format marked "no".
@@ -100,7 +100,7 @@ it to `[changes]`.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `change_templates` | array of strings | Templates for one change entry in the changelog, with placeholders such as `$summary` and `$details`. |
+| `change_templates` | array of strings | Templates for one change entry in the changelog, with the placeholders `$summary`, `$details`, `$commit_author_name`, `$commit_hash`, `$pr_number` and `$pr_author_login`. A template that uses a placeholder the change cannot fill is not used for that change; other `$words` stay as written. |
 
 ```toml
 [release_notes]
@@ -223,8 +223,9 @@ If `knope.toml` declares no package, remeris looks for packages in the working d
    package per member, named after its `package.name`, with its commit scope. `Cargo.lock` is added if it exists.
 2. npm workspaces: the `workspaces` patterns of `./package.json`. One package per matching directory with a
    `package.json`, which must have a `name`.
-3. A Deno workspace: a root `deno.json` or `deno.jsonc`, with its `workspace` members. A folder is a package when it
-   has a name and a version.
+3. A Deno workspace: a root `deno.json` or `deno.jsonc` is required, its `workspace` key is optional. The root folder
+   comes first, then the members. A folder is a package when its `deno.json(c)` has a name and a version, or else its
+   `package.json` has both. Only the working directory is read, never a parent workspace.
 4. Otherwise, one package named `default` that holds every default file name that exists, in this order:
    `Cargo.toml`, `Cargo.lock`, `deno.json`, `deno.lock`, `gleam.toml`, `go.mod`, `package.json`,
    `package-lock.json`, `pom.xml`, `pubspec.yaml`, `pyproject.toml` and the four `tauri*.conf.json` names, plus
