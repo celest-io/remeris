@@ -2,11 +2,12 @@
 //
 // The core does no I/O: the caller passes a Tracer built on its own *slog.Logger, and the core calls Debug at the
 // point where Knope calls debug!, so the lines come out in the same order. A nil *Tracer is valid and prints
-// nothing; pass nil wherever Knope does not log.
+// nothing; pass nil wherever Knope does not log. slog.Logger.Debug may read the clock internally when debug is
+// enabled, but the core never uses it.
 package trace
 
 import (
-	"fmt"
+	"context"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -26,20 +27,18 @@ func New(l *slog.Logger) *Tracer {
 	return &Tracer{logger: l}
 }
 
-// Debug logs msg at debug level. It does nothing on a nil Tracer.
+// Enabled reports whether Debug would write anything: false for a nil or zero-value Tracer and when the logger's
+// handler has debug disabled. Check it before building a message that costs something.
+func (t *Tracer) Enabled() bool {
+	return t != nil && t.logger != nil && t.logger.Enabled(context.Background(), slog.LevelDebug)
+}
+
+// Debug logs msg at debug level. It does nothing when the Tracer is not Enabled.
 func (t *Tracer) Debug(msg string) {
-	if t == nil || t.logger == nil {
+	if !t.Enabled() {
 		return
 	}
 	t.logger.Debug(msg)
-}
-
-// Debugf formats like fmt.Sprintf and logs the result at debug level. It formats nothing on a nil Tracer.
-func (t *Tracer) Debugf(format string, args ...any) {
-	if t == nil || t.logger == nil {
-		return
-	}
-	t.logger.Debug(fmt.Sprintf(format, args...))
 }
 
 // DebugStrings prints the strings like Rust's {:?} of a slice of strings: ["a", "b"], and [] when empty. Each

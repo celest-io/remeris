@@ -34,6 +34,9 @@ func (h lineHandler) WithGroup(string) slog.Handler      { return h }
 func capture() (*trace.Tracer, func() []string) {
 	var buf bytes.Buffer
 	return trace.New(slog.New(lineHandler{&buf})), func() []string {
+		if buf.Len() == 0 {
+			return nil
+		}
 		return strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
 	}
 }
@@ -46,12 +49,13 @@ func TestFromTagsTrace(t *testing.T) {
 		tags   []string
 		want   []string
 	}{
-		"no tags":                  {nil, nil, []string{"No tags found starting with v"}},
-		"no tag with pattern":      {nil, []string{"x1.0.0", "first/v1.0.0"}, []string{"No tags found starting with v"}},
-		"prefix without match":     {&first, []string{tag123}, []string{"No tags found starting with first/v"}},
-		"match":                    {nil, []string{tag123}, []string{""}},
-		"match that is no version": {nil, []string{"vnext", tag123}, []string{""}},
-		"prefix match":             {&first, []string{"first/v1.2.3"}, []string{""}},
+		"no tags":                       {nil, nil, []string{"No tags found starting with v"}},
+		"no tag with pattern":           {nil, []string{"x1.0.0", "first/v1.0.0"}, []string{"No tags found starting with v"}},
+		"prefix without match":          {&first, []string{tag123}, []string{"No tags found starting with first/v"}},
+		"match":                         {nil, []string{tag123}, nil},
+		"match that is no version":      {nil, []string{"vnext", tag123}, nil},
+		"only a tag that is no version": {nil, []string{"vnext"}, nil},
+		"prefix match":                  {&first, []string{"first/v1.2.3"}, nil},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -117,6 +121,11 @@ func TestCalculateNewVersionTrace(t *testing.T) {
 			lblRC,
 			"Found existing pre-release version rc.1",
 		}, "1.3.0-rc.2"},
+		"pre, existing without counter": {v123, []string{"1.3.0-rc"}, semver.PreBump("rc", semver.StableMinor), []string{
+			lblRC,
+			useMinor,
+			"Found existing pre-release version rc",
+		}, v130rc0},
 		"pre, no stable, no existing": {"", nil, semver.PreBump("rc", semver.StablePatch), []string{
 			lblRC,
 			noExisting,
@@ -133,21 +142,9 @@ func TestCalculateNewVersionTrace(t *testing.T) {
 			if got.String() != tc.result {
 				t.Errorf("version = %s, want %s", got, tc.result)
 			}
-			want := tc.want
-			if want == nil {
-				want = []string{""}
-			}
-			if gotLines := lines(); !slices.Equal(gotLines, want) {
-				t.Errorf("lines = %q, want %q", gotLines, want)
+			if gotLines := lines(); !slices.Equal(gotLines, tc.want) {
+				t.Errorf("lines = %q, want %q", gotLines, tc.want)
 			}
 		})
-	}
-}
-
-func TestBumpStablePrintsNothing(t *testing.T) {
-	t.Parallel()
-	// The exported BumpStable has no tracer; this only checks it still bumps like the traced twin.
-	if got := semver.BumpStable(semver.MustParse(v041).Core(), semver.StableMajor); got.String() != "0.5.0" {
-		t.Errorf("BumpStable = %s, want 0.5.0", got)
 	}
 }

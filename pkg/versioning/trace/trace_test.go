@@ -44,10 +44,13 @@ func TestDebugStrings(t *testing.T) {
 	}
 }
 
-// plain prints only the message of a record, one per line.
-type plain struct{ buf *bytes.Buffer }
+// plain prints only the message of a record, one per line, for records at or above min.
+type plain struct {
+	buf *bytes.Buffer
+	min slog.Level
+}
 
-func (plain) Enabled(context.Context, slog.Level) bool { return true }
+func (h plain) Enabled(_ context.Context, l slog.Level) bool { return l >= h.min }
 func (h plain) Handle(_ context.Context, r slog.Record) error {
 	h.buf.WriteString(r.Message + "\n")
 	return nil
@@ -58,21 +61,40 @@ func (h plain) WithGroup(string) slog.Handler      { return h }
 func TestTracer(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	tr := trace.New(slog.New(plain{&buf}))
+	tr := trace.New(slog.New(plain{&buf, slog.LevelDebug}))
+	if !tr.Enabled() {
+		t.Fatal("Enabled() = false, want true")
+	}
 	tr.Debug("one")
-	tr.Debugf("two %d", 2)
-	if got, want := buf.String(), "one\ntwo 2\n"; got != want {
+	tr.Debug("two")
+	if got, want := buf.String(), "one\ntwo\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }
 
-func TestNilTracer(t *testing.T) {
+func TestTracerDebugDisabled(t *testing.T) {
 	t.Parallel()
-	for name, tr := range map[string]*trace.Tracer{"nil tracer": nil, "nil logger": trace.New(nil)} {
+	var buf bytes.Buffer
+	tr := trace.New(slog.New(plain{&buf, slog.LevelInfo}))
+	if tr.Enabled() {
+		t.Error("Enabled() = true, want false when the handler drops debug")
+	}
+	tr.Debug("x")
+	if buf.Len() != 0 {
+		t.Errorf("output = %q, want none", buf.String())
+	}
+}
+
+func TestSilentTracers(t *testing.T) {
+	t.Parallel()
+	tests := map[string]*trace.Tracer{"nil tracer": nil, "nil logger": trace.New(nil), "zero value": {}}
+	for name, tr := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+			if tr.Enabled() {
+				t.Error("Enabled() = true, want false")
+			}
 			tr.Debug("x")
-			tr.Debugf("x %d", 1)
 		})
 	}
 }

@@ -84,6 +84,9 @@ func bumpStable(c Core, r StableRule, t *trace.Tracer) Core {
 	default:
 		next = Core{Major: c.Major, Minor: c.Minor, Patch: c.Patch + 1}
 	}
+	if !t.Enabled() {
+		return next
+	}
 	span := " from " + c.String() + " to " + next.String()
 	switch {
 	case effective == r:

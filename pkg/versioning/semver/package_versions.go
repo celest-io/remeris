@@ -3,7 +3,6 @@ package semver
 import (
 	"math"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/celest-io/remeris/internal/diag"
@@ -36,7 +35,7 @@ func FromTags(prefix *string, tags []string, t *trace.Tracer) PackageVersions {
 	if prefix != nil {
 		pattern = *prefix + "/v"
 	}
-	if !slices.ContainsFunc(tags, func(tag string) bool { return strings.HasPrefix(tag, pattern) }) {
+	if t.Enabled() && !slices.ContainsFunc(tags, func(tag string) bool { return strings.HasPrefix(tag, pattern) }) {
 		t.Debug("No tags found starting with " + pattern)
 	}
 	var p PackageVersions
@@ -192,10 +191,13 @@ func (p PackageVersions) calculatePre(label string, r StableRule, t *trace.Trace
 	base := p.baseCore(r, t)
 	var counter uint64
 	// Spec F1.3 step 2: an existing "1.2.4-beta" without a counter is followed by "1.2.4-beta.0".
+	found := false
 	if old, ok := p.prereleases[base][label]; ok {
-		_, n, hasCounter := old.PreLabel()
-		t.Debug("Found existing pre-release version " + label + "." + strconv.FormatUint(n, 10))
-		if hasCounter {
+		found = true
+		if t.Enabled() {
+			t.Debug("Found existing pre-release version " + preString(old))
+		}
+		if _, n, hasCounter := old.PreLabel(); hasCounter {
 			if n == math.MaxUint64 {
 				return Version{}, diag.Newf("The pre-release counter of %s cannot be increased", old).
 					WithCode("remeris::pre_release_counter_overflow")
@@ -203,8 +205,17 @@ func (p PackageVersions) calculatePre(label string, r StableRule, t *trace.Trace
 			counter = n + 1
 		}
 	}
-	if counter == 0 {
+	if !found {
 		t.Debug("No existing pre-release version found; creating " + label + ".0")
 	}
 	return NewPre(base, label, counter)
+}
+
+// preString joins the pre-release identifiers of v, like Knope's Display of a Prerelease: "rc.1".
+func preString(v Version) string {
+	ids := make([]string, len(v.Pre))
+	for i, id := range v.Pre {
+		ids[i] = id.Str
+	}
+	return strings.Join(ids, ".")
 }
