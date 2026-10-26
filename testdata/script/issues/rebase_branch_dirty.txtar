@@ -1,0 +1,27 @@
+# An untracked file is an uncommitted change: the step is refused and the branch stays where it is.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'Initial commit'
+exec git branch release
+exec git commit --allow-empty -m 'Second commit'
+exec git rev-parse release
+cp stdout release.sha
+cp knope.toml dirty.txt
+
+! exec remeris rebase
+! stdout .
+stderr 'Uncommitted changes'
+stderr 'You need to commit your changes before running this step.'
+exec git branch --show-current
+stdout '^main$'
+exec git rev-parse release
+cmp stdout release.sha
+
+-- knope.toml --
+[[workflows]]
+name = "rebase"
+[[workflows.steps]]
+type = "RebaseBranch"
+to = "release"
