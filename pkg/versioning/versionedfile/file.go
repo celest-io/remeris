@@ -1,7 +1,6 @@
 package versionedfile
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/celest-io/remeris/internal/diag"
@@ -24,9 +23,7 @@ type File interface {
 
 // New parses content as the format named by cfg. gitTags is used by go.mod only.
 //
-// Every format has its own constructor in its own file (cargo.go, cargo_lock.go, ...). A format that is not built
-// yet has a stub constructor that returns notImplemented; to build it, replace that body in the format's file.
-// New, the tests that iterate over the formats and this switch stay untouched.
+// Every format has its own constructor in its own file (cargo.go, cargo_lock.go, ...).
 func New(cfg Config, content string, gitTags []string) (File, error) {
 	switch cfg.Format {
 	case RegexFile:
@@ -56,16 +53,8 @@ func New(cfg Config, content string, gitTags []string) (File, error) {
 	case DenoLock:
 		return newDenoLockFile(cfg.Path, content)
 	default:
-		return nil, notImplemented(cfg.Format, milestoneM9)
+		return nil, diag.New("Unknown versioned file format " + cfg.Format.String())
 	}
-}
-
-// milestoneM9 names the milestone of the formats that are still stubs.
-const milestoneM9 = "M9"
-
-func notImplemented(f Format, milestone string) error {
-	return diag.New(fmt.Sprintf("Versioned file format %s is not implemented yet (milestone %s)", f, milestone)).
-		WithCode(codeNotImplemented)
 }
 
 // Diff accumulates the dry-run descriptions of successive SetVersion calls (F6.1). It is an immutable value:
