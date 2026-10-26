@@ -1,0 +1,24 @@
+# A branch that does not exist is created from a branch the user picks. Without a terminal nothing can be asked, and
+# nothing is created.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'Initial commit'
+exec git switch -c 12-Fix-Thing
+
+! exec remeris switch
+stdout 'Creating a new branch called 12-fix-thing'
+stderr 'Failed to get user input'
+exec git branch --list 12-fix-thing
+! stdout .
+exec git branch --show-current
+stdout '^12-Fix-Thing$'
+
+-- knope.toml --
+[[workflows]]
+name = "switch"
+[[workflows.steps]]
+type = "SelectIssueFromBranch"
+[[workflows.steps]]
+type = "SwitchBranches"

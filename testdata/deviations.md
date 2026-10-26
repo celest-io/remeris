@@ -4,7 +4,7 @@ Each entry names a Knope fixture that cannot be ported unchanged, and why (spec:
 
 | Fixture | Change | Reason |
 | --- | --- | --- |
-| `validate/kitchen_sink` | Workflow names such as `Cannot SelectJiraIssue without Jira config ` must be renamed (no spaces, no trailing space). The Jira, GitHub issue and `SwitchBranches` workflows are in `validate/kitchen_sink_issues`, skipped until M11. | Remeris restricts workflow names to `^[A-Za-z0-9_-]+$` because a `.` would break the koanf key path (spec F3.1). Knope allows any string. |
+| `validate/kitchen_sink` | Workflow names such as `Cannot SelectJiraIssue without Jira config ` must be renamed (no spaces, no trailing space). The Jira, GitHub issue and `SwitchBranches` workflows are in `validate/kitchen_sink_issues`. | Remeris restricts workflow names to `^[A-Za-z0-9_-]+$` because a `.` would break the koanf key path (spec F3.1). Knope allows any string. |
 | Version grammar (F1.1) | `1.2.3-rc4`, `1.2.3-rc.4.5`, `1.2.3+build.7` and `1.2.3-alpha.beta.1` are valid versions. Knope rejected them, so tags like these were skipped; they now count as releases. | Full SemVer 2.0.0 (D8). |
 | Version grammar (F1.1) | Rejected now, accepted by Knope: leading zeros (`01.2.3`, which Knope read as `1.2.3`, and `1.2.3-rc.01`) and a leading `+` on a number (`+1.2.3`, accepted by Rust's integer parser). Build identifiers may keep leading zeros. Numeric identifiers, pre-release ones included, must fit in a uint64; SemVer itself sets no limit. | Full SemVer 2.0.0 (D8), with the uint64 limit of spec F1.1. |
 | Version ordering (F1.1) | Pre-releases are ordered by SemVer 2.0.0 section 11 precedence, not by "label string, then number". Both give the same order for the `label.N` shape. | Quirk Q2, D8. |
@@ -246,7 +246,7 @@ Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workfl
 | --- | --- | --- |
 | `--validate` (or `--upgrade`) without a `knope.toml` | Not a flag, as in Knope (`ConfigSource::Default` defines only `--generate`): `unexpected argument '--validate' found`, with the help `To pass '--validate' as a value, use '-- --validate'.`. Exit code 1; clap exits with 2 and prints a usage block. The same text is used for every unknown flag, of the root and of a workflow. | urfave/cli's own message (`flag provided but not defined: -validate`, plus a usage dump) is replaced by clap's wording. |
 | An unknown workflow name with `--validate`, `--generate` or `--upgrade` | `No workflow named {name}`, before the mode runs. | clap rejects an unknown subcommand before it looks at any flag. Its text differs (`unrecognized subcommand`) and its exit code is 2. |
-| Steps of milestone M11 (`SwitchBranches`, `RebaseBranch`) | Fail in a dry run with `Step X is not implemented yet (milestone M11)`, so `--validate` reports a workflow that uses them even when Knope would pass it. | The steps have no implementation yet; passing them would hide that. `validate/kitchen_sink_issues` is skipped until they exist. |
+| Steps of milestone M11 (`RebaseBranch`) | Fail in a dry run with `Step X is not implemented yet (milestone M11)`, so `--validate` reports a workflow that uses them even when Knope would pass it. | The steps have no implementation yet; passing them would hide that. |
 | Exit code and rendering | Exit code 1 for every error. The related errors are printed as `╰─▶` lines by `internal/diag`, without miette's `Error:` blocks, codes and URLs. | Spec F3.3, D4. |
 
 ## M10 --generate and --upgrade
@@ -303,6 +303,15 @@ Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workfl
 | Authentication | The GitHub App, `GITHUB_TOKEN`, the stored token, then a prompt, sent by the credential guard of the shared client. Knope sends `Authorization: bearer {token}` by hand. | The step shares the client of the other GitHub steps. |
 | Failure of the request | `Could not communicate with GitHub while loading issues: {error}` for every failure: transport, non-200 status, GraphQL `errors` array, malformed JSON. Knope has separate texts for malformed JSON (`Could not deserialize response ...`), I/O and an unexpected response (`Received unexpected data from GitHub: {json}`), and ignores the status and the `errors` array. | One error path; a missing repository arrives as a GraphQL error. |
 | Order | No `orderBy`, as in Knope (GitHub's default order). | Same query. |
+
+## M11 SwitchBranches
+
+| Case | Change | Reason |
+| --- | --- | --- |
+| Order of the checks | The working tree is checked before the base branch is asked and before the new branch is created; Knope asks, creates the branch and only then fails on uncommitted changes. Nothing is left behind. | Same as the clean check of the Git layer, below. |
+| The base branch question | `Which branch do you want to base off of?` is asked only when the branch is created, over the local branches sorted by name. | Same as Knope; recorded because the options come from `LocalBranches`. |
+| The branch name | A name git refuses (from an issue title, for example `a..b` or a trailing `/`) is `Bad branch name` and nothing is created. Knope hands it to libgit2. | The name is not trusted. |
+| Dry run | Logs `Would switch to or create a branch named {name}` and opens no repository. | Same as Knope. |
 
 ## M11 Git branch operations
 

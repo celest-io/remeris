@@ -1,0 +1,19 @@
+# SwitchBranches without a selected issue fails, in a real run and in a dry run, before any Git access (there is no
+# repository here).
+! exec remeris switch
+! stdout .
+cmp stderr no_issue.err
+
+! exec remeris --dry-run switch
+! stdout .
+cmp stderr no_issue.err
+
+-- knope.toml --
+[[workflows]]
+name = "switch"
+[[workflows.steps]]
+type = "SwitchBranches"
+-- no_issue.err --
+Error: Problem with workflow switch
+  ╰─▶ No issue selected
+      help: Switching branches requires selecting an issue first with SelectGitHubIssue or SelectJiraIssue

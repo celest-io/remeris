@@ -142,8 +142,7 @@ func TestUnimplementedSteps(t *testing.T) {
 		step      workflow.Step
 		milestone string
 	}{
-		"SwitchBranches": {&SwitchBranches{}, milestone11},
-		"RebaseBranch":   {&RebaseBranch{}, milestone11},
+		"RebaseBranch": {&RebaseBranch{}, milestone11},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
