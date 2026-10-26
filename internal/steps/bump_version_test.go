@@ -38,7 +38,7 @@ func stateFor(t *testing.T, tags []string, content string, names ...string) work
 			pn = versioning.CustomName(name)
 		}
 		cfgs := []versionedfile.Config{cfg}
-		pkg, err := versioning.NewPackage(pn, cfgs, state.AllVersionedFiles, tags, versionedfile.Standard, nil)
+		pkg, err := versioning.NewPackage(pn, cfgs, state.AllVersionedFiles, tags, versionedfile.Standard, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -164,7 +164,7 @@ func TestBumpVersionLeavesPendingActionsEmpty(t *testing.T) {
 	}
 	all := []versionedfile.File{f}
 	pkg, err := versioning.NewPackage(
-		versioning.DefaultName(), []versionedfile.Config{cfg}, all, []string{tagV123}, versionedfile.Standard, nil,
+		versioning.DefaultName(), []versionedfile.Config{cfg}, all, []string{tagV123}, versionedfile.Standard, nil, nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -200,7 +200,7 @@ func TestBumpVersionDropsTagActions(t *testing.T) {
 	}
 	all := []versionedfile.File{taggingFile{inner}}
 	pkg, err := versioning.NewPackage(
-		versioning.DefaultName(), []versionedfile.Config{cfg}, all, nil, versionedfile.Standard, nil,
+		versioning.DefaultName(), []versionedfile.Config{cfg}, all, nil, versionedfile.Standard, nil, nil,
 	)
 	if err != nil {
 		t.Fatal(err)

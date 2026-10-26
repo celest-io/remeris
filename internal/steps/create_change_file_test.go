@@ -32,7 +32,7 @@ func changePackages(t *testing.T, sections releasenotes.Sections, names ...strin
 		if name != "" {
 			pn = versioning.CustomName(name)
 		}
-		pkg, err := versioning.NewPackage(pn, nil, nil, nil, 0, nil)
+		pkg, err := versioning.NewPackage(pn, nil, nil, nil, 0, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

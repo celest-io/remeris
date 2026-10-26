@@ -202,7 +202,7 @@ func TestChanges(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := conventional.Changes(tt.commits, tt.scopes, tt.sections)
+			got := conventional.Changes(tt.commits, tt.scopes, tt.sections, nil)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got  %+v\nwant %+v", got, tt.want)
 			}
@@ -216,7 +216,7 @@ func TestChangesGitInfo(t *testing.T) {
 	got := conventional.Changes([]conventional.CommitMessage{
 		{Message: "fix: a bug\n\nBREAKING CHANGE: broke", Info: info},
 		{Message: "feat: no info"},
-	}, nil, nil)
+	}, nil, nil, nil)
 	if len(got) != 3 {
 		t.Fatalf("got %d changes, want 3", len(got))
 	}

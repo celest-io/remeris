@@ -11,6 +11,7 @@ import (
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/action"
+	"github.com/celest-io/remeris/pkg/versioning/trace"
 )
 
 // Release tags and publishes the prepared release (spec F14). It executes the AddTag and CreateRelease actions
@@ -83,17 +84,9 @@ func findPreparedReleases(ctx context.Context, state *workflow.State) []action.A
 		if _, ok := pkg.LatestVersion(); !ok {
 			continue
 		}
-		slog.DebugContext(ctx, "Searching for last package tag to determine if there's a release to release")
-		if last := pkg.LastTagOf(state.AllGitTags); last != nil {
-			slog.DebugContext(ctx, "Last tag is "+last.String())
-		}
-		pr, ok := pkg.FindPreparedRelease(state.AllGitTags)
+		pr, ok := pkg.FindPreparedRelease(state.AllGitTags, trace.New(slog.Default()))
 		if !ok {
 			continue
-		}
-		if !pr.FromChangelog {
-			slog.DebugContext(ctx,
-				"Release has previously been prepared without a changelog, will create a release with no notes.")
 		}
 		actions = append(actions, pkg.PreparedReleaseActions(pr.Release, state.AllVersionedFiles)...)
 	}

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/celest-io/remeris/pkg/versioning/changes"
+	"github.com/celest-io/remeris/pkg/versioning/trace"
 )
 
 // CommitMessage is a commit as the conversion needs it: Knope's Commit.
@@ -15,8 +16,14 @@ type CommitMessage struct {
 
 // Changes converts commits (oldest first) to changes (F10.2), like Knope's changes_from_commit_messages. Messages
 // that do not parse are skipped. scopes nil means no scope filter; non-nil empty drops every scoped commit.
-// sections may be nil, then no custom footer is listed. The function is pure.
-func Changes(commits []CommitMessage, scopes []string, sections changes.FooterLookup) []changes.Change {
+// sections may be nil, then no custom footer is listed. When scopes is not nil, t receives "Only checking commits
+// with scopes: [...]" first, even when there are no commits. The function is pure.
+func Changes(
+	commits []CommitMessage, scopes []string, sections changes.FooterLookup, t *trace.Tracer,
+) []changes.Change {
+	if scopes != nil {
+		t.Debug("Only checking commits with scopes: " + trace.DebugStrings(scopes))
+	}
 	var out []changes.Change
 	for _, c := range commits {
 		out = append(out, commitChanges(c, scopes, sections)...)

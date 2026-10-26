@@ -25,6 +25,7 @@ import (
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/releasenotes"
+	"github.com/celest-io/remeris/pkg/versioning/trace"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
@@ -132,7 +133,15 @@ func (l Loader) State(
 		if p.IgnoreGoMajorVersioning {
 			gv = versionedfile.IgnoreMajorRules
 		}
-		pkg, err := versioning.NewPackage(p.Name, p.VersionedFiles, state.AllVersionedFiles, state.AllGitTags, gv, p.Scopes)
+		pkg, err := versioning.NewPackage(
+			p.Name,
+			p.VersionedFiles,
+			state.AllVersionedFiles,
+			state.AllGitTags,
+			gv,
+			p.Scopes,
+			trace.New(slog.Default()),
+		)
 		if err != nil {
 			return workflow.State{}, err
 		}

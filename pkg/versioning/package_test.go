@@ -232,7 +232,7 @@ func TestValidateVersionedFiles(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got, version, err := versioning.ValidateVersionedFiles(tc.configs, tc.files(t))
+			got, version, err := versioning.ValidateVersionedFiles(tc.configs, tc.files(t), nil)
 			if tc.wantErr != "" {
 				checkDiag(t, err, tc.wantErr, tc.wantCode, tc.wantHelp, tc.wantIs)
 				return
@@ -290,7 +290,7 @@ func TestValidateVersionedFilesDoesNotModifyInput(t *testing.T) {
 	t.Parallel()
 	configs := []versionedfile.Config{cfg(cargoLock, versionedfile.CargoLock, nil), cfg(cargoToml, versionedfile.Cargo, nil)}
 	files := []versionedfile.File{fakeFile{path: cargoLock}, realCargo(t, cargoToml, cargoBody)}
-	if _, _, err := versioning.ValidateVersionedFiles(configs, files); err != nil {
+	if _, _, err := versioning.ValidateVersionedFiles(configs, files, nil); err != nil {
 		t.Fatal(err)
 	}
 	if configs[0].Dependency != nil {
@@ -330,7 +330,7 @@ func TestNewPackage(t *testing.T) {
 				files = []versionedfile.File{fakeFile{path: packageJSON, version: tc.fileVer}}
 			}
 			scopes := []string{"a"}
-			p, err := versioning.NewPackage(tc.name, configs, files, tc.tags, versionedfile.IgnoreMajorRules, scopes)
+			p, err := versioning.NewPackage(tc.name, configs, files, tc.tags, versionedfile.IgnoreMajorRules, scopes, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -362,7 +362,7 @@ func TestNewPackageError(t *testing.T) {
 	files := []versionedfile.File{
 		fakeFile{path: packageJSON, version: v100}, fakeFile{path: "b/package.json", version: v200},
 	}
-	_, err := versioning.NewPackage(versioning.DefaultName(), configs, files, nil, versionedfile.Standard, nil)
+	_, err := versioning.NewPackage(versioning.DefaultName(), configs, files, nil, versionedfile.Standard, nil, nil)
 	checkDiag(t, err, "Found inconsistent versions in package: package.json had 1.0.0 and b/package.json had 2.0.0",
 		codeIncons, helpSame, nil)
 }
@@ -376,7 +376,7 @@ func TestSetVersion(t *testing.T) {
 			cfg(cargoToml, versionedfile.Cargo, strp(fooDep)),
 		}
 		files := []versionedfile.File{realCargo(t, cargoToml, cargoBody)}
-		p, err := versioning.NewPackage(versioning.DefaultName(), configs, files, nil, versionedfile.Standard, nil)
+		p, err := versioning.NewPackage(versioning.DefaultName(), configs, files, nil, versionedfile.Standard, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -406,7 +406,7 @@ func TestSetVersion(t *testing.T) {
 			cfg(packageJSON, versionedfile.PackageJson, strp(fooDep)), cfg(packageJSON, versionedfile.PackageJson, nil),
 		}
 		files := []versionedfile.File{fakeFile{path: "unrelated.json"}, fakeFile{path: packageJSON, version: v100}}
-		p, err := versioning.NewPackage(versioning.DefaultName(), configs, files, nil, versionedfile.Standard, nil)
+		p, err := versioning.NewPackage(versioning.DefaultName(), configs, files, nil, versionedfile.Standard, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -425,8 +425,17 @@ func TestSetVersion(t *testing.T) {
 	t.Run("a file shared by two packages", func(t *testing.T) {
 		t.Parallel()
 		files := []versionedfile.File{fakeFile{path: packageJSON, version: v100}}
-		one, err := versioning.NewPackage(versioning.DefaultName(),
-			[]versionedfile.Config{cfg(packageJSON, versionedfile.PackageJson, nil)}, files, nil, versionedfile.Standard, nil)
+		one, err := versioning.NewPackage(
+			versioning.DefaultName(),
+			[]versionedfile.Config{
+				cfg(packageJSON, versionedfile.PackageJson, nil),
+			},
+			files,
+			nil,
+			versionedfile.Standard,
+			nil,
+			nil,
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -438,6 +447,7 @@ func TestSetVersion(t *testing.T) {
 			files,
 			nil,
 			versionedfile.Standard,
+			nil,
 			nil,
 		)
 		if err != nil {
@@ -461,7 +471,7 @@ func TestSetVersion(t *testing.T) {
 		files := []versionedfile.File{fakeFile{path: packageJSON, version: v100}}
 		p, err := versioning.NewPackage(versioning.DefaultName(),
 			[]versionedfile.Config{cfg(packageJSON, versionedfile.PackageJson, nil)}, files,
-			[]string{"v1.1.0-rc.1", tagV100}, versionedfile.Standard, nil)
+			[]string{"v1.1.0-rc.1", tagV100}, versionedfile.Standard, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -481,8 +491,17 @@ func TestSetVersion(t *testing.T) {
 		t.Parallel()
 		boom := errors.New("boom")
 		files := []versionedfile.File{fakeFile{path: packageJSON, version: v100, setErr: boom}}
-		p, err := versioning.NewPackage(versioning.DefaultName(),
-			[]versionedfile.Config{cfg(packageJSON, versionedfile.PackageJson, nil)}, files, nil, versionedfile.Standard, nil)
+		p, err := versioning.NewPackage(
+			versioning.DefaultName(),
+			[]versionedfile.Config{
+				cfg(packageJSON, versionedfile.PackageJson, nil),
+			},
+			files,
+			nil,
+			versionedfile.Standard,
+			nil,
+			nil,
+		)
 		if err != nil {
 			t.Fatal(err)
 		}

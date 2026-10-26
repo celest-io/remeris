@@ -43,7 +43,7 @@ func preparedPackage(t *testing.T, name versioning.PackageName, tags []string, c
 func TestFindPreparedReleaseIgnoresBuildMetadata(t *testing.T) {
 	t.Parallel()
 	p := &versioning.Package{Name: versioning.DefaultName(), Versions: semver.FromVersion(mustVersion(t, v100))}
-	if pr, ok := p.FindPreparedRelease([]string{"v1.0.0+b1"}); ok {
+	if pr, ok := p.FindPreparedRelease([]string{"v1.0.0+b1"}, nil); ok {
 		t.Fatalf("FindPreparedRelease = %+v, want nothing to release", pr)
 	}
 }
@@ -104,7 +104,7 @@ func TestFindPreparedRelease(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			p := preparedPackage(t, tc.name, tc.tags, tc.current, tc.changelog)
-			got, ok := p.FindPreparedRelease(tc.tags)
+			got, ok := p.FindPreparedRelease(tc.tags, nil)
 			if ok != tc.want {
 				t.Fatalf("found = %v, want %v", ok, tc.want)
 			}
@@ -131,17 +131,6 @@ func TestFindPreparedRelease(t *testing.T) {
 				t.Errorf("LastTag = %v, want %s", got.LastTag, tc.wantLast)
 			}
 		})
-	}
-}
-
-func TestLastTagOf(t *testing.T) {
-	t.Parallel()
-	p := &versioning.Package{Name: versioning.CustomName("foo")}
-	if got := p.LastTagOf([]string{"v1.0.0", "bar/v2.0.0"}); got != nil {
-		t.Errorf("LastTagOf = %s, want nil", got)
-	}
-	if got := p.LastTagOf([]string{"v1.0.0", fooTagV123}); got == nil || got.String() != v123 {
-		t.Errorf("LastTagOf = %v, want %s", got, v123)
 	}
 }
 
@@ -241,7 +230,7 @@ func TestPreparedReleaseActions(t *testing.T) {
 			p := preparedPackage(t, versioning.DefaultName(), tc.tags, tc.current, "")
 			p.Files, p.GoVersioning = tc.cfgs, tc.gv
 			var got []action.Action
-			if pr, ok := p.FindPreparedRelease(tc.tags); ok {
+			if pr, ok := p.FindPreparedRelease(tc.tags, nil); ok {
 				got = p.PreparedReleaseActions(pr.Release, tc.files(t))
 			}
 			var kinds []string
