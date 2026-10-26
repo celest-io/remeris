@@ -14,6 +14,7 @@ import (
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/forge/gitea"
 	"github.com/celest-io/remeris/internal/forge/github"
+	"github.com/celest-io/remeris/internal/forge/jira"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/prompt"
 	"github.com/celest-io/remeris/pkg/versioning"
@@ -57,6 +58,9 @@ type State struct {
 	// client on demand and caches it; a step must not ask for the client in a dry run. Release and CreatePullRequest
 	// test it to pick the forge.
 	Gitea *gitea.Forge
+	// Jira is the Jira forge, or nil when the configuration has no `[jira]` table. It builds its client (and reads or
+	// asks for the email and the token) on demand and caches it; a step must not ask for the client in a dry run.
+	Jira *jira.Forge
 	// Issue is the issue a Select*Issue step or SelectIssueFromBranch selected, or nil before any did.
 	Issue *Issue
 }

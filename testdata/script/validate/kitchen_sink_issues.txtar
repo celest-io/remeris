@@ -1,6 +1,6 @@
 # Ported from knope-dev/knope, crates/knope/tests/validate/kitchen_sink (MIT, see testdata/README.md).
 # The issue workflows of kitchen_sink: they need the Jira and GitHub issue steps, which come with milestone M11.
-skip 'needs the SelectJiraIssue, TransitionJiraIssue, SelectGitHubIssue and SwitchBranches steps (milestone M11)'
+skip 'needs the SelectGitHubIssue and SwitchBranches steps (milestone M11)'
 exec git init --initial-branch=main
 exec git config user.email fake@remeris.dev
 exec git config user.name "Fake remeris"
