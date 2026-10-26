@@ -56,7 +56,7 @@ func (p *Package) FindPreparedRelease(allTags []string) (PreparedRelease, bool) 
 // LastTagOf returns the newest release tag of the package among allTags, or nil when there is none. Tags of other
 // packages are ignored.
 func (p *Package) LastTagOf(allTags []string) *semver.Version {
-	v, ok := semver.FromTags(p.Name.Custom(), allTags).Latest()
+	v, ok := semver.FromTags(p.Name.Custom(), allTags, nil).Latest()
 	if !ok {
 		return nil
 	}

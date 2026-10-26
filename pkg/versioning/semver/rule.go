@@ -1,5 +1,7 @@
 package semver
 
+import "github.com/celest-io/remeris/pkg/versioning/trace"
+
 // StableRule is a bump rule that only applies to stable versions. The values are ordered, so the larger one
 // wins when several changes imply different rules.
 type StableRule int
@@ -65,16 +67,31 @@ func ReleaseBump() Rule { return Rule{Kind: RuleRelease} }
 
 // BumpStable returns the next stable core for the rule. While major is 0, Knope shifts the rules down one
 // level: Major bumps minor, and Minor and Patch bump patch.
-func BumpStable(c Core, r StableRule) Core {
+func BumpStable(c Core, r StableRule) Core { return bumpStable(c, r, nil) }
+
+// bumpStable is BumpStable with Knope's debug lines for the tracer t, which may be nil.
+func bumpStable(c Core, r StableRule, t *trace.Tracer) Core {
+	effective := r
 	if c.Major == 0 && r != StablePatch {
-		r--
+		effective--
 	}
-	switch r {
+	var next Core
+	switch effective {
 	case StableMajor:
-		return Core{Major: c.Major + 1}
+		next = Core{Major: c.Major + 1}
 	case StableMinor:
-		return Core{Major: c.Major, Minor: c.Minor + 1}
+		next = Core{Major: c.Major, Minor: c.Minor + 1}
 	default:
-		return Core{Major: c.Major, Minor: c.Minor, Patch: c.Patch + 1}
+		next = Core{Major: c.Major, Minor: c.Minor, Patch: c.Patch + 1}
 	}
+	span := " from " + c.String() + " to " + next.String()
+	switch {
+	case effective == r:
+		t.Debug("Using " + r.String() + " rule to bump" + span)
+	case r == StableMajor:
+		t.Debug("Rule is MAJOR, but major component is 0. Bumping minor component" + span)
+	default:
+		t.Debug("Rule is MINOR, but major component is 0. Bumping patch component" + span)
+	}
+	return next
 }

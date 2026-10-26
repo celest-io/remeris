@@ -3,9 +3,11 @@ package semver
 import (
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/pkg/versioning/trace"
 )
 
 // ErrPreReleaseNotFound is returned by CalculateNewVersion when a Release rule is requested and the package has
@@ -27,11 +29,15 @@ type PackageVersions struct {
 // FromTags builds the history from Git tags, which must be in newest-first order (spec F1.3, F9.3). A tag is
 // used when it starts with "v", or with "{prefix}/v" when prefix is not nil. The first occurrence of that pattern
 // is removed and the rest is parsed as a Version; tags that do not parse are skipped. The first stable tag ends
-// the scan, because only pre-releases newer than the latest stable version matter.
-func FromTags(prefix *string, tags []string) PackageVersions {
+// the scan, because only pre-releases newer than the latest stable version matter. The tracer t, which may be nil,
+// gets Knope's "No tags found starting with {pattern}" line when no tag starts with the pattern.
+func FromTags(prefix *string, tags []string, t *trace.Tracer) PackageVersions {
 	pattern := "v"
 	if prefix != nil {
 		pattern = *prefix + "/v"
+	}
+	if !slices.ContainsFunc(tags, func(tag string) bool { return strings.HasPrefix(tag, pattern) }) {
+		t.Debug("No tags found starting with " + pattern)
 	}
 	var p PackageVersions
 	for _, tag := range tags {
@@ -154,11 +160,12 @@ func (p PackageVersions) LastStable() (Version, bool) {
 
 // CalculateNewVersion applies the rule to the history (spec F1.3). A stable rule bumps the stable version; with no
 // stable version it takes the largest pre-release core as it is, or 0.0.0. A pre rule gives the next
-// "core-label.N". A release rule gives the largest pre-release core, or ErrPreReleaseNotFound.
-func (p PackageVersions) CalculateNewVersion(r Rule) (Version, error) {
+// "core-label.N". A release rule gives the largest pre-release core, or ErrPreReleaseNotFound. The tracer t, which
+// may be nil, gets the debug lines Knope prints while it calculates the version.
+func (p PackageVersions) CalculateNewVersion(r Rule, t *trace.Tracer) (Version, error) {
 	switch r.Kind {
 	case RulePre:
-		return p.calculatePre(r.Label, r.Stable)
+		return p.calculatePre(r.Label, r.Stable, t)
 	case RuleRelease:
 		c, ok := p.maxCore()
 		if !ok {
@@ -166,32 +173,38 @@ func (p PackageVersions) CalculateNewVersion(r Rule) (Version, error) {
 		}
 		return c.Version(), nil
 	default:
-		return p.baseCore(r.Stable).Version(), nil
+		return p.baseCore(r.Stable, t).Version(), nil
 	}
 }
 
 // baseCore is the core a new version is built on: the stable version bumped by r or, with no stable version, the
 // largest pre-release core as it is (assumed set by hand), or 0.0.0.
-func (p PackageVersions) baseCore(r StableRule) Core {
+func (p PackageVersions) baseCore(r StableRule, t *trace.Tracer) Core {
 	if p.stable != nil {
-		return BumpStable(p.stable.Core(), r)
+		return bumpStable(p.stable.Core(), r, t)
 	}
 	c, _ := p.maxCore()
 	return c
 }
 
-func (p PackageVersions) calculatePre(label string, r StableRule) (Version, error) {
-	base := p.baseCore(r)
+func (p PackageVersions) calculatePre(label string, r StableRule, t *trace.Tracer) (Version, error) {
+	t.Debug("Pre-release label " + label + " selected. Determining next stable version...")
+	base := p.baseCore(r, t)
 	var counter uint64
 	// Spec F1.3 step 2: an existing "1.2.4-beta" without a counter is followed by "1.2.4-beta.0".
 	if old, ok := p.prereleases[base][label]; ok {
-		if _, n, hasCounter := old.PreLabel(); hasCounter {
+		_, n, hasCounter := old.PreLabel()
+		t.Debug("Found existing pre-release version " + label + "." + strconv.FormatUint(n, 10))
+		if hasCounter {
 			if n == math.MaxUint64 {
 				return Version{}, diag.Newf("The pre-release counter of %s cannot be increased", old).
 					WithCode("remeris::pre_release_counter_overflow")
 			}
 			counter = n + 1
 		}
+	}
+	if counter == 0 {
+		t.Debug("No existing pre-release version found; creating " + label + ".0")
 	}
 	return NewPre(base, label, counter)
 }

@@ -180,7 +180,7 @@ func commitsSinceLastStable(
 	}
 	slog.DebugContext(ctx, "Getting conventional commits since last release of package "+name)
 	var tag *string
-	if v, ok := semver.FromTags(pkg.Name.Custom(), state.AllGitTags).LastStable(); ok {
+	if v, ok := semver.FromTags(pkg.Name.Custom(), state.AllGitTags, nil).LastStable(); ok {
 		t := pkg.ReleaseTag(v)
 		tag = &t
 	}

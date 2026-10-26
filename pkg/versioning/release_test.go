@@ -28,7 +28,7 @@ const (
 
 func preparedPackage(t *testing.T, name versioning.PackageName, tags []string, current string, cl string) *versioning.Package {
 	t.Helper()
-	p := &versioning.Package{Name: name, Versions: semver.FromTags(name.Custom(), tags)}
+	p := &versioning.Package{Name: name, Versions: semver.FromTags(name.Custom(), tags, nil)}
 	if current != "" {
 		p.Versions.Update(mustVersion(t, current))
 	}

@@ -89,6 +89,6 @@ func nextVersion(pkg *versioning.Package, rule semver.Rule) (semver.Version, ver
 	if pkg.Override != nil {
 		return *pkg.Override, versionedfile.BumpMajor, nil
 	}
-	v, err := pkg.Versions.CalculateNewVersion(rule)
+	v, err := pkg.Versions.CalculateNewVersion(rule, nil)
 	return v, pkg.GoVersioning, err
 }

@@ -256,7 +256,7 @@ func NewPackage(
 	if err != nil {
 		return nil, err
 	}
-	versions := semver.FromTags(name.custom, gitTags)
+	versions := semver.FromTags(name.custom, gitTags, nil)
 	if fromFiles != nil {
 		versions.Update(*fromFiles)
 	}
@@ -352,7 +352,7 @@ func (p *Package) ApplyChanges(
 			rule = semver.PreBump(*cfg.PrereleaseLabel, rule.Stable)
 		}
 		var err error
-		if version, err = p.Versions.CalculateNewVersion(rule); err != nil {
+		if version, err = p.Versions.CalculateNewVersion(rule, nil); err != nil {
 			return nil, nil, err
 		}
 	}

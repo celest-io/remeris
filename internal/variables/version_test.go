@@ -13,7 +13,7 @@ import (
 )
 
 func pkgWith(tags ...string) *versioning.Package {
-	return &versioning.Package{Versions: semver.FromTags(nil, tags)}
+	return &versioning.Package{Versions: semver.FromTags(nil, tags, nil)}
 }
 
 func TestResolveVersion(t *testing.T) {
