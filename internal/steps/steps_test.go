@@ -15,10 +15,6 @@ import (
 	"github.com/celest-io/remeris/internal/workflow"
 )
 
-const (
-	milestone11 = "M11"
-)
-
 func skipOnWindows(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -134,29 +130,6 @@ func TestCommandRunSideEffectsAndShellExpansion(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(".", "$REMERIS_TEST_VALUE")); err != nil {
 		t.Errorf("the file named by the literal $VAR should exist: %v", err)
-	}
-}
-
-func TestUnimplementedSteps(t *testing.T) {
-	cases := map[string]struct {
-		step      workflow.Step
-		milestone string
-	}{
-		"RebaseBranch": {&RebaseBranch{}, milestone11},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			if tc.step.Type() != name {
-				t.Errorf("Type() = %q", tc.step.Type())
-			}
-			want := "Step " + name + " is not implemented yet (milestone " + tc.milestone + ")"
-			for _, rt := range []workflow.RunType[workflow.State]{workflow.Real(workflow.State{}), workflow.DryRun(workflow.State{})} {
-				_, err := tc.step.Run(context.Background(), rt)
-				if err == nil || err.Error() != want {
-					t.Errorf("dry-run=%v: err = %v, want %q", rt.DryRun, err, want)
-				}
-			}
-		})
 	}
 }
 

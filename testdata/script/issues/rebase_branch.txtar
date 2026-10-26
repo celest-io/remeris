@@ -1,0 +1,32 @@
+# RebaseBranch moves a branch that is behind the current one up to the current commit and switches to it.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'Initial commit'
+exec git branch release
+exec git commit --allow-empty -m 'Second commit'
+exec git rev-parse main
+cp stdout main.sha
+
+exec remeris rebase
+cmp stdout rebased.log
+! stderr .
+exec git branch --show-current
+stdout '^release$'
+exec git rev-parse release
+cmp stdout main.sha
+exec git rev-parse main
+cmp stdout main.sha
+
+-- .gitignore --
+*.sha
+-- knope.toml --
+[[workflows]]
+name = "rebase"
+[[workflows.steps]]
+type = "RebaseBranch"
+to = "release"
+-- rebased.log --
+Rebased current branch onto release
+Switched to branch release, don't forget to push!

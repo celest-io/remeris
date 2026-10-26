@@ -1,0 +1,18 @@
+# A dry run only logs: it checks no branch and opens no repository (there is none here).
+exec remeris --dry-run rebase
+cmp stdout dry_run.log
+! stderr .
+
+# --validate dry-runs the same workflow.
+exec remeris --validate
+! stdout .
+! stderr .
+
+-- knope.toml --
+[[workflows]]
+name = "rebase"
+[[workflows.steps]]
+type = "RebaseBranch"
+to = "release"
+-- dry_run.log --
+Would rebase current branch onto release

@@ -1,0 +1,21 @@
+# A branch that does not exist is an error, and nothing changes.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'Initial commit'
+
+! exec remeris rebase
+! stdout .
+stderr 'release'
+exec git branch --show-current
+stdout '^main$'
+exec git branch --list release
+! stdout .
+
+-- knope.toml --
+[[workflows]]
+name = "rebase"
+[[workflows.steps]]
+type = "RebaseBranch"
+to = "release"

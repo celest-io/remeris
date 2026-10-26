@@ -93,7 +93,7 @@ internal/variables/            # Template + Variable substitution
 internal/git/                  # Git interface + implementation
 internal/forge/github/         # go-github client, auth (token or GitHub App), releases, PRs, issues
 internal/forge/gitea/          # Gitea client on net/http (leaf): header auth, hardened host, releases, PRs, issues
-internal/issues/jira/
+internal/forge/jira/            # Jira client on net/http (leaf): Basic auth, hardened url, issues and transitions
 internal/httpx/                # client with retry/backoff/rate-limit logging, ApiRequestError
 internal/credentials/          # token/email store in user config dir, prompting
 internal/prompt/               # select, multiselect, text, password
@@ -135,7 +135,7 @@ by the project: **urfave/cli v3** and **koanf v2**. Versions were checked agains
 | Regex | `regex` | **stdlib** `regexp` | stdlib | RE2 semantics in both, so behaviour matches. |
 | Glob | `glob` | **stdlib** `io/fs` (`fs.WalkDir` + `path.Match` per segment, with `**` handled by the walker) | stdlib | About 60 lines. `filepath.Glob` alone has no `**`. Fallback if edge cases pile up: `github.com/bmatcuk/doublestar/v4` (v4.10.2, 2026-09-20). |
 | Prompts | `inquire` | **`charm.land/huh/v2`** | v2.0.3, 2026-03-10 (needs Go 1.25.8, built on `charm.land/bubbletea/v2` v2.0.10, 2026-09-24) | Select, MultiSelect with a "select at least one" validator, Input, and Input in password mode. Replaces `AlecAivazis/survey` (no release since 2022). Put it behind `internal/prompt` so tests can script answers. |
-| Git | `git2` (libgit2) | **stdlib** `os/exec` calling the `git` CLI, with **`github.com/go-git/go-git/v5`** as the fallback when `git` is not installed (D2, F9.0) | go-git v5.19.2, 2026-07-29 | The CLI gives exact behaviour, including rebase. go-git has no rebase, so the fallback supports only fast-forward for `RebaseBranch`. v6 is still alpha. |
+| Git | `git2` (libgit2) | **stdlib** `os/exec` calling the `git` CLI, with **`github.com/go-git/go-git/v5`** as the fallback when `git` is not installed (D2, F9.0) | go-git v5.19.2, 2026-07-29 | The CLI gives exact behaviour. `RebaseBranch` is fast-forward only on both backends (D6), so go-git needs no rebase. v6 is still alpha. |
 | HTTP + retry | reqwest-middleware + reessaie | **stdlib** `net/http` with a retrying `RoundTripper` (also used as go-github's transport) | stdlib | About 80 lines: exponential backoff with jitter, 5 retries, honours `Retry-After` (seconds or HTTP date), logs rate-limit warnings (F15.1). Considered: `hashicorp/go-retryablehttp` (last release v0.7.8, 2025-06). |
 | GitHub API | reqwest (hand-written) | **`github.com/google/go-github/v92`** | v92.0.0, 2026-09-14 (needs Go 1.26) | All GitHub calls (D10, F16.0). Also handles the asset upload URL, so no URI-template library is needed. |
 | GitHub GraphQL | reqwest (hand-written query) | **`github.com/shurcooL/githubv4`** | v0.0.0-20260209031235-2402fdf4a9ed (no tagged release; uses `shurcooL/graphql`) | `SelectGitHubIssue` only (F19.1): Knope's query as a struct, with variables, on go-github's HTTP client. go-github is REST-only and the REST issues endpoint cannot do any-of labels. |
@@ -956,7 +956,7 @@ type Git interface {
     // F19:
     LocalBranches() ([]string, error); BranchExists(name string) bool
     CreateBranch(name, from string) error; Checkout(name string) error
-    HasUncommittedChanges() (bool, error); Rebase(current, to string) error   // F19.8
+    HasUncommittedChanges() (bool, error); Rebase(ctx, to string) error   // F19.8
 }
 ```
 
@@ -975,7 +975,7 @@ Two implementations of the `Git` interface, chosen once at startup:
 | `AddFiles` | `Worktree.Add` per path; `Worktree.Remove` for deleted paths |
 | `CreateTag` | `Repository.CreateTag` with `CreateTagOptions{Message: "", Tagger: …}`. The tagger comes from git config (`user.name`/`user.email`, read with `config.LoadConfig(GlobalScope)` + repo config), else the same `Could not determine Git committer…` error |
 | `CreateBranch`, `Checkout`, `HasUncommittedChanges` | `Repository.CreateBranch` + `Storer.SetReference`, `Worktree.Checkout{Force: true}`, `Worktree.Status` (respects `.gitignore`) |
-| `Rebase` | **Fast-forward only** (go-git has no rebase). If `to` is an ancestor of HEAD, move `to` to HEAD and check it out. Otherwise fail with `RebaseBranch needs the git command when the branches have diverged` (help: `Install git, or rebase manually.`) |
+| `Rebase` | Same as the CLI backend: **fast-forward only** on both backends (D6). It refuses a dirty tree, a missing `to` and a `to` that is not an ancestor of (or equal to) HEAD (`remeris::git::not_fast_forward`). Otherwise it sets `refs/heads/<to>` to HEAD's commit (a compare-and-set on the old tip) and switches to `to`; a failed switch after the move is `remeris::git::switch_after_move`. A `to` that is a symbolic ref is `remeris::git::branch_alias`. |
 
 Both backends must pass the same contract test suite (`internal/git/contract_test.go`), run against temporary
 repositories. The go-git run sets `PATH` to an empty dir to force the fallback.
@@ -1478,7 +1478,8 @@ The activities are `creating a release`, `fetching existing pull requests`, `upd
   the branch, whose `head.repo.owner.login` is the configured owner (case-insensitive; a null `head.repo`, a deleted fork,
   never matches) and whose `base.ref` is the base. Unknown or missing JSON fields are tolerated. Then
   `PATCH …/pulls/{number}` `{body,title}`, or `POST …/pulls` `{title,body,head,base}` (any JSON answer is accepted).
-- Issues: `GET {base}/repos/{o}/{r}/issues?labels={comma-joined}&state=open&limit=30` → `[{number,title}]`.
+- Issues: `GET {base}/repos/{o}/{r}/issues?labels={comma-joined}&state=open&limit=30&type=issues` → `[{number,title}]`.
+  Gitea's endpoint also returns pull requests unless `type=issues` is sent (Knope does not send it: deviation).
 - `TryFromRemote(url)`: `git@host:owner/repo(.git)` → host `https://host`. `https://host/owner/repo(.git)` → the same.
   Anything else → none. Known public Gitea hosts for auto-detection: `codeberg.org`.
 
@@ -1560,23 +1561,21 @@ Needs a selected issue. Dry run: `Would switch to or create a branch named {name
   `Uncommitted changes`. Checkout is a forced checkout of HEAD after setting HEAD to the branch.
 
 ### F19.8 `RebaseBranch { to }`
-**What Knope actually does** (docs and log text say otherwise): it calls libgit2
-`repo.rebase(branch = to, upstream = None, onto = HEAD)`. That replays the commits of `to` that are not in the current
-branch **on top of the current branch**, moves the `to` ref, then checks out `to`. In effect it lands the current
-(feature) branch into `to` as a linear history: if `to` has no new commits, `to` is fast-forwarded to the feature
-branch. The feature branch itself is not changed. "Don't forget to push!" means push `to`. Knope has no tests for
-this step.
+**What Knope actually does** (its docs and log text say otherwise): it calls libgit2 `repo.rebase(branch = to,
+upstream = None, onto = HEAD)` and finishes it. That never replays a commit. After it refuses a dirty tree it sets
+`refs/heads/<to>` to HEAD's commit and switches to `to`, so the commits that are only on `to` are lost. "Don't forget
+to push!" means push `to`. Knope has no tests for this step.
 
-**Decision (D6):** keep Knope's behaviour.
-- Dry run: `Would rebase current branch onto {to}` (Knope's wording, kept for parity).
-- Real: `cur = CurrentBranch()`; `to` must be a local branch (remotes are not checked). CLI backend:
-  `git rebase {cur} {to}`. This checks out `to`, replays its own commits onto `cur`, and leaves `to` checked out.
-  go-git backend: see F9.0. Then log `Rebased current branch onto {to}` and `Switched to branch {to}, don't forget to push!`.
-- Conflicts: the CLI leaves the rebase in progress. Fail with `Rebase stopped because of conflicts` (help:
-  `Resolve them and run 'git rebase --continue', or 'git rebase --abort'.`). Knope fails with a generic Git error
-  instead.
-- Fix the step's reference docs when we write the remeris docs: describe it as "integrate the current branch into
-  `to` with a linear history, then switch to `to`".
+**Decision (D6, revised by the user in the M11 kickoff, tracking issue #96):** fast-forward only, on both Git backends.
+- Dry run: `Would rebase current branch onto {to}` (Knope's wording). It checks nothing and opens no Git.
+- Real: `Git.Rebase(ctx, to)`. HEAD must be on a branch, the working tree must be clean (`Uncommitted changes`) and
+  `to` must be an existing local branch (remotes are not checked). When `to` has commits that are not in the current
+  branch it fails with `Cannot fast-forward branch {to} to {cur}: {to} has commits that are not in {cur}` (code
+  `remeris::git::not_fast_forward`, help: bring those commits into the current branch, then run the step again).
+  Otherwise `to` is moved to HEAD's commit and checked out, and the step logs `Rebased current branch onto {to}` and
+  `Switched to branch {to}, don't forget to push!`. The files do not change. Other refusals (`branch_alias`,
+  `switch_after_move`, a branch checked out in another worktree) are in F9.0 and `testdata/deviations.md`.
+- Docs: describe the step as "move `to` forward to the current commit and switch to it".
 
 ---
 
@@ -1709,7 +1708,9 @@ printed, or the same error if the path exists. See testdata/deviations.md.
   errors (`There are problems with the defined workflows`, one related error per workflow `Problem with workflow {name}`).
   Exit 0 if there are none. Config load errors (F2.2) and package errors are reported before validation starts;
   `--override-version` and `--prerelease-label` are applied first. A dry run reads no credentials and never prompts.
-  The issue steps (M11) fail in a dry run until they are built.
+  The issue steps run in a dry run like any step: they read no credentials, call no network, prompt for nothing and change
+  no Git state. Their configuration and issue checks still fail as in Knope (`GitHub is not configured`, `No issue selected`),
+  and the fake issues they select flow on to the steps after them.
 
 Fixtures: `tests/upgrade/*`, `tests/validate/*`.
 
@@ -1928,7 +1929,7 @@ Sketch:
 | Q11 | `deno.jsonc` is missing from the explicit file-name table | F6.1 | **Fix** (add it) |
 | Q12 | `CreateTag` makes annotated tags with empty messages | F9.5 | Keep |
 | Q13 | The npm workspace `changelog` is always set, even when the file doesn't exist | F20.3 | Keep |
-| Q14 | `RebaseBranch` rebases `to` onto the current branch and switches to it (docs say the opposite) | F19.8 | Keep (D6) |
+| Q14 | `RebaseBranch` never replays commits: it points `to` at HEAD and switches to it, dropping the commits only on `to` (docs say it rebases) | F19.8 | **Change**: fast-forward only (D6) |
 
 ---
 
@@ -1943,7 +1944,7 @@ Recorded 2026-10-02.
 | D3 | Knope Bot (GitHub App) | Out of scope for now | — |
 | D4 | Diagnostics | Match Knope's message and help text. No source snippets or docs URLs until the remeris docs exist. | F3.3 |
 | D5 | Jira search endpoint | Use `POST /rest/api/3/search/jql` | F19.3 |
-| D6 | `RebaseBranch` | Keep Knope's behaviour (integrate the current branch into `to`, then switch to `to`) | F19.8 |
+| D6 | `RebaseBranch` | Fast-forward only on both backends: fail with `not_fast_forward` when `to` has commits that are not in the current branch (revised in the M11 kickoff, issue #96) | F19.8 |
 | D7 | Minimum Go version | Go 1.27 | 0.3 |
 | D8 | Version grammar | Full SemVer 2.0.0 from Phase 1 (pre-release ids, build metadata, §11 precedence). Bumps keep Knope's `label.N` shape. | F1 |
 | D9 | CLI flags and config | Reuse readykit's urfave/cli v3 + koanf (`cliflagv3`) pattern, with a lineage-based key prefix for subcommands | F3.1 |

@@ -1,0 +1,30 @@
+# A branch with commits of its own is not moved: nothing is lost, nothing changes.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name "Fake remeris"
+exec git add .
+exec git commit -m 'Initial commit'
+exec git switch -c release
+exec git commit --allow-empty -m 'Release only'
+exec git switch main
+exec git commit --allow-empty -m 'Main only'
+exec git rev-parse release
+cp stdout release.sha
+
+! exec remeris rebase
+! stdout .
+stderr 'Cannot fast-forward branch release to main: release has commits that are not in main'
+stderr 'RebaseBranch only moves release forward'
+exec git branch --show-current
+stdout '^main$'
+exec git rev-parse release
+cmp stdout release.sha
+
+-- .gitignore --
+*.sha
+-- knope.toml --
+[[workflows]]
+name = "rebase"
+[[workflows.steps]]
+type = "RebaseBranch"
+to = "release"
