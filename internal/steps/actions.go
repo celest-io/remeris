@@ -68,7 +68,9 @@ func executeActions(dryRun bool, actions []action.Action) (remainder []action.Ac
 				slog.Info("Would delete " + a.Path)
 				continue
 			}
-			_ = fsx.Remove(false, filepath.FromSlash(a.Path)) // ignored on purpose: another package may have removed the file
+			// The error is ignored on purpose, like Knope (step/releases/package.rs: "Ignore errors since we remove
+			// changesets per-package") and spec F13.3: another package may have removed the file already.
+			_ = fsx.Remove(false, filepath.FromSlash(a.Path))
 		case action.KindAddTag, action.KindCreateRelease:
 			remainder = append(remainder, a)
 		}
