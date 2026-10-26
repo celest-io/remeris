@@ -194,3 +194,59 @@ func (g *GoGit) SwitchTo(ctx context.Context, name string) error {
 	}
 	return unknownGitError(err)
 }
+
+// Rebase moves the local branch to onto HEAD and switches to it, fast-forward only, like the CLI backend. The working
+// tree and the index are not touched: they already match HEAD, which is where to points afterwards.
+func (g *GoGit) Rebase(ctx context.Context, to string) error {
+	current, err := checkRebase(ctx, g, to)
+	if err != nil {
+		return err
+	}
+	if current == to {
+		return nil
+	}
+	repo, err := g.open()
+	if err != nil {
+		return err
+	}
+	if err := checkedOutElsewhere(repo, to); err != nil {
+		return err
+	}
+	head, err := repo.Head()
+	if err != nil {
+		return unknownGitError(err)
+	}
+	toName := plumbing.NewBranchReferenceName(to)
+	old, err := repo.Reference(toName, false) // do not follow an alias: moving it would move its target
+	if err != nil {
+		return unknownGitError(err)
+	}
+	if old.Type() == plumbing.SymbolicReference {
+		return branchAliasError(to, old.Target().Short())
+	}
+	headCommit, err := repo.CommitObject(head.Hash())
+	if err != nil {
+		return unknownGitError(err)
+	}
+	toCommit, err := repo.CommitObject(old.Hash())
+	if err != nil {
+		return unknownGitError(err)
+	}
+	ancestor, err := toCommit.IsAncestor(headCommit)
+	if err != nil {
+		return unknownGitError(err)
+	}
+	if !ancestor {
+		return notFastForwardError(to, current)
+	}
+	// Compare and set, so that a branch moved by another process since the check is not overwritten. go-git takes no
+	// lock, so the window is small but not closed (testdata/deviations.md).
+	if err := repo.Storer.CheckAndSetReference(plumbing.NewHashReference(toName, head.Hash()), old); err != nil {
+		return unknownGitError(err)
+	}
+	if err := repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, toName)); err != nil {
+		return movedButNotSwitchedError(to, current, err)
+	}
+	appendRebaseReflogs(repo, to, current, old.Hash(), head.Hash())
+	return nil
+}

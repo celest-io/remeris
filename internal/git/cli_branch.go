@@ -174,3 +174,74 @@ func (c *CLI) SwitchTo(ctx context.Context, name string) error {
 	}
 	return nil
 }
+
+// Rebase moves the local branch to onto HEAD and switches to it, fast-forward only (see Git.Rebase).
+//
+// Both commits are resolved once and the branch is moved with a compare-and-set, so a commit that another process adds
+// to the branch in between is never lost: the update fails instead.
+//
+// Commands: git symbolic-ref -q refs/heads/<to> (an alias is refused); git rev-parse --verify <ref>^{commit};
+// git worktree list --porcelain -z; git merge-base --is-ancestor <old> <new> (exit 1 when not a fast-forward);
+// git update-ref -m <message> refs/heads/<to> <new> <old>; git switch --no-guess --end-of-options <to>.
+func (c *CLI) Rebase(ctx context.Context, to string) error {
+	current, err := checkRebase(ctx, c, to)
+	if err != nil {
+		return err
+	}
+	if current == to {
+		return nil
+	}
+	ref := branchRefPrefix + to
+	target, err := c.run(ctx, "", "symbolic-ref", "-q", ref)
+	if err == nil {
+		return branchAliasError(to, strings.TrimSpace(target))
+	}
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		return fail(err, unknownGitError)
+	}
+	oldOut, err := c.run(ctx, "", "rev-parse", "--verify", ref+"^{commit}")
+	if err != nil {
+		return fail(err, unknownGitError)
+	}
+	newOut, err := c.run(ctx, "", "rev-parse", "--verify", headRef+"^{commit}")
+	if err != nil {
+		return fail(err, unknownGitError)
+	}
+	oldHash, newHash := strings.TrimSpace(oldOut), strings.TrimSpace(newOut)
+	if err := c.checkNotInWorktree(ctx, to); err != nil {
+		return err
+	}
+	if _, err := c.run(ctx, "", "merge-base", "--is-ancestor", oldHash, newHash); err != nil {
+		if errors.As(err, &exit) && exit.ExitCode() == 1 {
+			return notFastForwardError(to, current)
+		}
+		return fail(err, unknownGitError)
+	}
+	if _, err := c.run(ctx, "", "update-ref", "-m", rebaseReflogMessage(to, current), ref, newHash, oldHash); err != nil {
+		return fail(err, unknownGitError)
+	}
+	// HEAD and to are the same commit now, so the switch leaves the files alone.
+	if _, err := c.run(ctx, "", "switch", "--no-guess", "--end-of-options", to); err != nil {
+		return fail(err, func(cause error) error { return movedButNotSwitchedError(to, current, cause) })
+	}
+	return nil
+}
+
+// checkNotInWorktree fails when the branch is checked out in a worktree. The caller has checked that HEAD of this
+// worktree is on another branch.
+func (c *CLI) checkNotInWorktree(ctx context.Context, name string) error {
+	out, err := c.run(ctx, "", "worktree", "list", "--porcelain", "-z")
+	if err != nil {
+		return fail(err, unknownGitError)
+	}
+	var path string
+	for field := range strings.SplitSeq(out, "\x00") {
+		if p, ok := strings.CutPrefix(field, "worktree "); ok {
+			path = p
+		} else if field == "branch "+branchRefPrefix+name {
+			return worktreeBranchError(name, path)
+		}
+	}
+	return nil
+}
