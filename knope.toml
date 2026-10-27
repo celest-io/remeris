@@ -6,7 +6,7 @@
 # than its tags, so Release (run after the release PR merges) would find nothing to publish.
 [package]
 changelog = "CHANGELOG.md"
-versioned_files = [{ path = "VERSION", regex = "(?m)^(?<version>\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.]+)?)$" }]
+versioned_files = [{ path = "VERSION", regex = "(?m)^(?<version>\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?)$" }]
 
 # --- prepare-release-bot ---------------------------------------------------
 # Run on every push to main. Computes the next version from commits, updates the changelog on a
