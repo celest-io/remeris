@@ -10,7 +10,7 @@ set up once, how to cut the first release (v0.0.1), and how users verify a downl
 | --- | --- | --- |
 | 1 | `prepare-release.yaml` | On every push to `main` (and by hand), runs `remeris prepare-release-bot`. It computes the next version from the conventional commits since the last tag, writes `CHANGELOG.md` and `VERSION` on a `release` branch, and opens or updates the `release` pull request. |
 | 2 | you | Review the PR (the changelog is its body) and merge it. |
-| 3 | `release.yaml` | When a PR whose head branch is `release` is merged, runs `remeris release`: it creates the GitHub release and the `vX.Y.Z` tag. |
+| 3 | `release.yaml` | On the push of the squashed or rebased release commit to `main`, runs `remeris release`: it creates the GitHub release and the `vX.Y.Z` tag at that commit. |
 | 4 | `push-artifact.yaml` | The tag push builds the archives, signs and attests them, and uploads them to the release. |
 
 Design points:
@@ -21,7 +21,11 @@ Design points:
     changed or swapped release asset out of a job that holds the App token. Both values change together: see [Renovate](#renovate).
 - **App token, not `GITHUB_TOKEN`.** A tag or a push made with the default token does not trigger other workflows. The release and the PR use a token minted for the GitHub App,
     so the tag push starts `push-artifact.yaml`.
-- **The release PR is found by its head branch** (`release`), not by its title. `release.yaml` also checks that the PR is from this repository and was opened by the App.
+- **The release is created on a push to `main`, not on the PR event.** `release.yaml` runs on every push to `main` but only starts its job when the head commit message starts
+    with `chore: prepare release`. The title is not trusted: the first step asks the API (`commits/<sha>/pulls`, with the read-only default token) and requires exactly one PR for
+    the pushed commit that is merged, from the `release` branch of this repository, into `main`, and opened by the App (`<app-slug>[bot]`). If the API check fails, or the App slug
+    or the lookup is missing, nothing is released: read the log and re-run the job (the PR association of a new commit can lag, and the step already retries for 30 seconds). The
+    tag and release point at the pushed commit. The `release` environment is restricted to `main` because the run is on `main`.
 - **`VERSION`.** The package in `knope.toml` has one versioned file, `VERSION`, a plain text file with the version. The binary does not read it: its version comes from the tag
     through `-ldflags -X`. It exists because `Release` runs after the PR is merged, in a new workflow run, and finds the release to publish by comparing the package version with
     the last tag. A package with no versioned file has no version except its tags, so `Release` would find nothing. `push-artifact.yaml` also refuses a tag that differs from
@@ -76,8 +80,8 @@ Then:
 
 1. Install the App on `celest-io/remeris` only.
 2. Generate a private key (a `.pem` file) on the App page and note the **Client ID** (starts with `Iv`).
-3. Create an Environment named `release` (Settings, Environments). Its deployment branches are `main` and the head ref `release` (the `release.yaml` run is a `pull_request` event
-    from the release PR). Store the two secrets **in this environment**, not as repository secrets:
+3. Create an Environment named `release` (Settings, Environments). Its deployment branches are `main` only (both workflows that use it run on `main`). Store the two secrets
+    **in this environment**, not as repository secrets:
 
 | Environment secret | Value |
 | --- | --- |
@@ -121,7 +125,7 @@ first release must be `0.0.1` whatever lands first.
 4. Merge it **only when the latest Prepare release run has finished and is green**, and **before anything else is merged into `main`**. Each push to `main` runs the workflow again
     without a version and would recompute (and overwrite) the forced release PR. A run that is still going can replace the PR content right after you reviewed it. If a push slipped
     in, run the workflow again with `0.0.1` and review again.
-5. `release.yaml` runs on the merge: it creates the `v0.0.1` GitHub release with the changelog as notes, and the tag.
+5. `release.yaml` runs on the push of the squashed release commit to `main`: it creates the `v0.0.1` GitHub release with the changelog as notes, and the tag.
 6. `push-artifact.yaml` runs on the tag, and attaches the archives, `SHA256SUMS` and `SHA256SUMS.sigstore.json` to the release.
 7. [Verify](#verify-a-download) one download.
 
@@ -130,7 +134,8 @@ same rule as in step 4 holds for every later release: merge the release PR only 
 
 If something fails halfway:
 
-- **Release job failed, no release:** re-run the failed `release.yaml` run. `remeris release` publishes the release for a `VERSION` that has no tag.
+- **Release job failed, no release:** re-run the failed `release.yaml` run (including when its PR check failed: nothing was released). `remeris release` publishes the release for
+    a `VERSION` that has no tag.
 - **Release exists, no archives:** re-run `push-artifact.yaml` from the Actions tab; `gh release upload` refuses to overwrite, so delete the partial assets first.
 - **Wrong version in the PR:** run **Prepare release** again with the right version, or close the PR and delete the `release` branch (as the App, or as an administrator who lifts
     the ruleset for the moment).
