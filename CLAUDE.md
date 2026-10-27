@@ -33,7 +33,7 @@ environment variable per name, `REMERIS_*` first (for example `REMERIS_PRERELEAS
 Tools are pinned in `mise.toml` and tasks are executable files in `mise-tasks/`. There is no Makefile.
 
 ```sh
-mise install        # Go, golangci-lint, hk, zizmor
+mise install        # Go, golangci-lint, hk, jactionlint, ryl, rumdl, shellcheck, cosign
 mise run build      # build/remeris, with the version information injected
 mise run test       # go test ./...
 mise run lint       # hk check --all
@@ -91,7 +91,14 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 ## Lint and style
 
 - `hk.pkl` runs hk builtins only: whitespace, end-of-file, line endings, symlinks, merge conflicts, private
-  keys, `go mod tidy`, golangci-lint (format and lint) and zizmor for the workflows.
+  keys, mise config formatting, YAML (`ryl`, `.ryl.toml`), Markdown (`rumdl`, `.rumdl.toml`; agent files such as
+  `CLAUDE.md` are not linted), `go mod tidy`, golangci-lint (format and lint) and jactionlint for the workflows.
+  The hk version is pinned in `mise.toml` and in the two Pkl package URLs of `hk.pkl` (keep the three in lockstep;
+  Renovate moves them together). Tool configuration lives in single files at the root: `hk.pkl`, `mise.toml`,
+  `.ryl.toml`, `.rumdl.toml`.
+- `mise.lock` is committed (`lockfile = true`) and mise verifies tool provenance with cosign. After changing a tool
+  version run `mise lock --platform linux-x64,linux-arm64,macos-arm64` (and `mise --env claude lock ...` for
+  `mise.claude.toml`) and commit the lockfiles. To run the hooks of `hk/base.pkl` on commit, run `hk install --mise`.
 - `.golangci.yaml` is ReadyKit's config. It runs on tests too. Notable rules: `goconst` (3 or more uses of a
   string literal become a constant, tests included), `gosec`, `revive`, line length 128 (golines), imports
   grouped with this module last (goimports). Fix the code, not the config. A `//nolint` needs a reason.
@@ -105,8 +112,9 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 - Branches: `feat/...`, `fix/...`, `chore/...`. Open draft PRs. Stack a PR on another by using its branch as the
   base; retarget to `main` when the one below merges.
 - GitHub Actions are pinned to commit SHAs with the tag in a comment, and Renovate keeps them current
-  (`renovate.json`). Never use a floating tag in a workflow. zizmor audits the workflows, and its online
-  audits need `GH_TOKEN` (CI sets it).
+  (`renovate.json`). Never use a floating tag in a workflow. jactionlint audits the workflows (it also wants a
+  `timeout-minutes` on every job, a `concurrency` group and explicit `permissions`) and runs `shellcheck` on their
+  `run:` scripts.
 - Dependencies: prefer the standard library. Add a module only for the reasons given in spec 0.3, at the
   versions it lists or newer patch releases.
 

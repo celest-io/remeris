@@ -4,13 +4,13 @@
 remeris [global options] [workflow [workflow options]]
 ```
 
-`remeris --help` lists the workflows and `remeris <workflow> --help` shows the options of one. `--version` (`-V`)
-prints the version. Remeris reads `knope.toml` in the working directory; see [configuration.md](configuration.md).
+`remeris --help` lists the workflows and `remeris <workflow> --help` shows the options of one. `--version` (`-V`) prints the version. Remeris reads `knope.toml` in the working
+directory; see [configuration.md](configuration.md).
 
 ## Workflows
 
-Each workflow in `knope.toml` is a subcommand with the same name. Without a `knope.toml`, the workflows `release`,
-`document-change` and `get-version` exist, and `--generate` writes them to a file.
+Each workflow in `knope.toml` is a subcommand with the same name. Without a `knope.toml`, the workflows `release`, `document-change` and `get-version` exist, and `--generate`
+writes them to a file.
 
 Global options can be given before or after the workflow name.
 
@@ -34,8 +34,8 @@ Options of a workflow, present only when the workflow has the step that uses the
 
 ## Special modes
 
-These options belong to the root command and replace the workflow. Naming a workflow with one of them is an error
-(`No workflow named ...`). Which of them exist depends on `knope.toml`:
+These options belong to the root command and replace the workflow. Naming a workflow with one of them is an error (`No workflow named ...`). Which of them exist depends on
+`knope.toml`:
 
 | Mode | Exists when | What it does |
 | --- | --- | --- |
@@ -43,19 +43,16 @@ These options belong to the root command and replace the workflow. Naming a work
 | `--upgrade` | there is a `knope.toml` | Moves `ignore_conventional_commits` from `PrepareRelease` steps to `[changes]`. Prints `Nothing to upgrade` if there is nothing to move. Otherwise it rewrites the whole file, so comments and formatting are lost, and it refuses (`remeris::upgrade::unknown_key`) when the file has keys remeris does not read. With `--dry-run` it prints the result. |
 | `--validate` | there is a `knope.toml` | Loads the packages, then runs every workflow as a dry run and reports all problems together. Logs are silenced. `--override-version` of a workflow is applied first. |
 
-Where a mode does not exist, the option is an unknown argument: `unexpected argument '--validate' found`.
-`--generate` and `--upgrade` ignore `--prerelease-label`, so the label never reaches the file they write.
+Where a mode does not exist, the option is an unknown argument: `unexpected argument '--validate' found`. `--generate` and `--upgrade` ignore `--prerelease-label`, so the label
+never reaches the file they write.
 
 ## Output
 
-- Normal messages go to stdout, one per line, with no level or time. Warnings, such as a rate-limit hint, are
-  printed the same way. Prompts are written to stdout too.
-- A failure is rendered to stderr as `Error: <message>`, then `help: <text>` when there is one, then related
-  errors. Messages and help text follow Knope's, with `knope` rewritten to `remeris`. Diagnostics carry a code
-  such as `remeris::generate::exists` where one is defined. They carry no documentation URLs.
-- `--verbose` adds the debug lines to stdout: `Running step ...`, the packages loaded, the Git tags and commits
-  used, the conventional-commit and version-rule decisions, and pull request lookups. Knope prints most of these
-  as `debug!` lines. Remeris also prints some that Knope does not, all at debug level:
+- Normal messages go to stdout, one per line, with no level or time. Warnings, such as a rate-limit hint, are printed the same way. Prompts are written to stdout too.
+- A failure is rendered to stderr as `Error: <message>`, then `help: <text>` when there is one, then related errors. Messages and help text follow Knope's, with `knope` rewritten
+    to `remeris`. Diagnostics carry a code such as `remeris::generate::exists` where one is defined. They carry no documentation URLs.
+- `--verbose` adds the debug lines to stdout: `Running step ...`, the packages loaded, the Git tags and commits used, the conventional-commit and version-rule decisions, and pull
+    request lookups. Knope prints most of these as `debug!` lines. Remeris also prints some that Knope does not, all at debug level:
 
 | Line | When |
 | --- | --- |
@@ -96,30 +93,23 @@ Knope's argument parser exits with 2 on usage errors. Remeris exits with 1.
 
 A forge or Jira credential is looked up in this order, and the first non-blank value wins:
 
-1. The environment variable, for the GitHub token (`GITHUB_TOKEN`) and the Gitea token (`GITEA_TOKEN`). An empty
-   variable counts as unset. Jira has no variable.
-2. The file `remeris/<name>` in the user configuration directory (Go's `os.UserConfigDir`, for example
-   `~/.config` on Linux). The names are `github_token`, `gitea_token`, `jira_token` and `email`. A file holds the
-   raw value.
-3. The file `knope/<name>` in the same directory. Its value is copied to the `remeris` directory, so a Knope user is
-   not asked again. Knope's files are left in place.
-4. A prompt, which asks for the secret without echo and saves the answer to `remeris/<name>` (directory mode
-   0700, file mode 0600). A blank answer is refused and not saved. Without a terminal the prompt fails with
-   `Failed to get user input`.
+1. The environment variable, for the GitHub token (`GITHUB_TOKEN`) and the Gitea token (`GITEA_TOKEN`). An empty variable counts as unset. Jira has no variable.
+2. The file `remeris/<name>` in the user configuration directory (Go's `os.UserConfigDir`, for example `~/.config` on Linux). The names are `github_token`, `gitea_token`,
+    `jira_token` and `email`. A file holds the raw value.
+3. The file `knope/<name>` in the same directory. Its value is copied to the `remeris` directory, so a Knope user is not asked again. Knope's files are left in place.
+4. A prompt, which asks for the secret without echo and saves the answer to `remeris/<name>` (directory mode 0700, file mode 0600). A blank answer is refused and not saved.
+    Without a terminal the prompt fails with `Failed to get user input`.
 
-The Gitea token file is shared by all hosts. Jira needs both an email address and an API token, each stored in its
-own file. Values are never logged. In a dry run credentials are not read, so nothing is copied or prompted.
+The Gitea token file is shared by all hosts. Jira needs both an email address and an API token, each stored in its own file. Values are never logged. In a dry run credentials are
+not read, so nothing is copied or prompted.
 
 ### GitHub App
 
-With `--github-app-id` set, remeris authenticates as a GitHub App installation instead of using a token. The
-private key comes from `--github-app-private-key-path`, or else from `REMERIS_GITHUB_APP_PRIVATE_KEY`. These
-options are checked when `knope.toml` has a `[github]` section: an App ID needs a key, an installation ID needs an
-App ID, and IDs must not be negative (`remeris::github::app_options`). A key without an App ID is ignored.
-They are never read from `knope.toml`.
+With `--github-app-id` set, remeris authenticates as a GitHub App installation instead of using a token. The private key comes from `--github-app-private-key-path`, or else from
+`REMERIS_GITHUB_APP_PRIVATE_KEY`. These options are checked when `knope.toml` has a `[github]` section: an App ID needs a key, an installation ID needs an App ID, and IDs must not
+be negative (`remeris::github::app_options`). A key without an App ID is ignored. They are never read from `knope.toml`.
 
 ### GitHub Enterprise
 
-An `api_url` or `upload_url` in `[github]` receives credentials only if the same URL is given with
-`--github-api-url` or `--github-upload-url` (or the variables above), so a repository's configuration cannot decide
-where a token is sent.
+An `api_url` or `upload_url` in `[github]` receives credentials only if the same URL is given with `--github-api-url` or `--github-upload-url` (or the variables above), so a
+repository's configuration cannot decide where a token is sent.

@@ -1,10 +1,10 @@
 # remeris
 
-Remeris is a release tool written in Go. It reads Knope's `knope.toml`, `.changeset/` files and Git tag formats,
-writes the same file edits and changelog output, and prints the same messages.
+Remeris is a release tool written in Go. It reads Knope's `knope.toml`, `.changeset/` files and Git tag formats, writes the same file edits and changelog output, and prints the
+same messages.
 
-Status: the first phase is a drop-in replacement for [Knope](https://github.com/knope-dev/knope) 0.23.1. Every
-step that Knope's `knope.toml` can use is implemented. The differences are listed in
+Status: the first phase is a drop-in replacement for [Knope](https://github.com/knope-dev/knope) 0.23.1. Every step that Knope's `knope.toml` can use is implemented. The
+differences are listed in
 [docs/differences.md](docs/differences.md).
 
 ## Install
@@ -24,8 +24,7 @@ mise run build   # writes build/remeris
 
 ## Quick start
 
-In a Git repository with a package file such as `Cargo.toml`, `package.json` or `pyproject.toml`, and no
-`knope.toml`:
+In a Git repository with a package file such as `Cargo.toml`, `package.json` or `pyproject.toml`, and no `knope.toml`:
 
 ```sh
 remeris --generate           # write a knope.toml with the release, document-change and get-version workflows
@@ -34,8 +33,7 @@ remeris release --dry-run    # show what a release would do, changing nothing
 remeris release              # prepare and create the release
 ```
 
-A repository without a `knope.toml` already has these three workflows with the same defaults, so `--generate`
-only saves them to a file you can edit.
+A repository without a `knope.toml` already has these three workflows with the same defaults, so `--generate` only saves them to a file you can edit.
 
 ## Documentation
 

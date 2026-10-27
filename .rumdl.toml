@@ -1,0 +1,12 @@
+[global]
+line-length = 180
+flavor = "mkdocs"
+
+[MD013]
+line-length = 180
+reflow = true
+reflow-mode = "normalize"
+
+[per-file-ignores]
+# GitHub renders the PR template as the PR body, so it has no title heading
+".github/pull_request_template.md" = ["MD041"]

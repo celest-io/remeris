@@ -5,27 +5,31 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           persist-credentials: false
-      # Installs Go, golangci-lint, hk and zizmor from mise.toml.
-      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      # Installs Go, golangci-lint, hk, jactionlint and the other tools from mise.toml.
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492  # v5.0.1
       - run: mise run ci
-        env:
-          GH_TOKEN: ${{ github.token }} # zizmor's online audits
 
   # Compile and vet only: the Windows and macOS code paths are not run in CI.
   cross-os:
     name: vet (${{ matrix.goos }})
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     strategy:
@@ -33,11 +37,11 @@ jobs:
       matrix:
         goos: [windows, darwin]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           persist-credentials: false
       # Installs Go from mise.toml.
-      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492  # v5.0.1
       - run: mise exec -- go vet ./...
         env:
           GOOS: ${{ matrix.goos }}

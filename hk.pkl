@@ -1,8 +1,29 @@
-amends "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Config.pkl"
-import "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Builtins.pkl"
+amends "package://github.com/jdx/hk/releases/download/v2.8.1/hk@2.8.1#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.8.1/hk@2.8.1#/Builtins.pkl"
+
+/// Agent instruction and config markdown: tool-owned, not ours to lint.
+local agentMarkdown =
+  List(
+    "**/CLAUDE.md",
+    "**/CLAUDE.local.md",
+    "**/AGENTS.md",
+    "**/GEMINI.md",
+    "**/.claude/**",
+    "**/.agents/**",
+    "**/.cursor/**",
+    "**/.windsurf/**",
+    "**/.clinerules/**",
+    "**/.gemini/**",
+    "**/.codex/**",
+    ".github/copilot-instructions.md",
+    ".github/instructions/**",
+    ".github/prompts/**",
+    ".github/agents/**",
+  )
 
 // Shared by the implicit check, fix and pre-commit hooks.
 steps {
+  // repo guards
   ["trailing-whitespace"] = Builtins.trailing_whitespace
   ["end-of-file-fixer"] = Builtins.newlines
   ["mixed-line-ending"] = Builtins.mixed_line_ending
@@ -11,8 +32,52 @@ steps {
   ["check-executables-have-shebangs"] = Builtins.check_executables_have_shebangs
   ["check-merge-conflict"] = Builtins.check_merge_conflict
   ["detect-private-key"] = Builtins.detect_private_key
+
+  // config languages
+  ["mise"] = Builtins.mise
+
+  // yaml
+  ["ryl"] = Builtins.ryl
+  ["ryl_format"] = Builtins.ryl_format
+
+  // markdown
+  ["ryl_markdown"] = (Builtins.ryl_markdown) { exclude = agentMarkdown }
+  ["ryl_markdown_format"] = (Builtins.ryl_markdown_format) { exclude = agentMarkdown }
+  ["rumdl"] = (Builtins.rumdl) { exclude = agentMarkdown }
+
+  // github actions
+  ["jactionlint"] = Builtins.jactionlint
+
+  // go
   ["go-mod-tidy"] = Builtins.gomod_tidy
   ["golangci-lint-fmt"] = Builtins.golangci_lint_fmt
   ["golangci-lint"] = Builtins.golangci_lint
-  ["zizmor"] = Builtins.zizmor
 }
+
+hooks {
+  // If mise-pinned versions change, auto-install them on pull (merge and rebase).
+  ["post-merge"] {
+    steps {
+      ["mise-install"] { glob = "mise.toml"; check = "mise install" }
+    }
+  }
+  ["post-rewrite"] {
+    steps {
+      ["mise-install"] { glob = "mise.toml"; check = "mise install" }
+    }
+  }
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps {
+      // If mise.toml or its lockfile changed, regenerate mise.lock for linux-x64, linux-arm64 and macos-arm64.
+      ["mise-lock"] {
+        glob = List("mise.toml", "mise.lock")
+        fix = "mise lock --platform linux-x64,linux-arm64,macos-arm64"
+        stage = "mise.lock"
+      }
+    }
+  }
+}
+
+warnings = List("missing-profiles")
