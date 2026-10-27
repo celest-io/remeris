@@ -12,7 +12,7 @@ configurations that follow.
 say so in the PR description instead of guessing silently. The parts you will use most:
 
 - section 0: architecture, package layout (0.2) and dependency choices with versions (0.3);
-- section 1: milestones M0-M11, built in order, each one shippable on its own;
+- section 1: milestones M0-M12, built in order, each one shippable on its own;
 - the Quirks register (Q1-Q14) and Decisions (D1-D12) at the end: they say which Knope behaviour to keep
   and which to change.
 
@@ -139,10 +139,13 @@ internal/credentials/ stored tokens and email: env, remeris/ file, knope/ migrat
 internal/forge/github/ GitHub client on go-github: the auth chain (App, GITHUB_TOKEN, stored token, prompt), WrapError; a leaf
 internal/forge/gitea/ Gitea client on net/http: header auth, hardened host, token scrubbed from errors; a leaf (not forge/github)
 internal/forge/jira/ Jira client on net/http: Basic auth through a credential RoundTripper, hardened url, token and Basic blob scrubbed from errors (httpx.Scrubber), JQL and key escaping; a leaf (not forge/github)
+internal/version/   build information: variables set by ldflags -X (mise run build); a plain go build leaves them "unknown"
+internal/testnet/   test-only guard for TestMain: refuses non-loopback requests, clears forge tokens, empties HOME and config dirs
 internal/prompt/    Prompter interface (select, multi-select, input, password) on huh v2, and a scripted fake
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
   semver/           full SemVer 2.0.0 Version: Parse, Compare, rules, bumps, PackageVersions
+  trace/            Tracer: carries Knope's --verbose debug lines through the pure core (a nil Tracer prints nothing)
   action/           Action (WriteToFile, RemoveFile, AddTag, CreateRelease), Release, ReleaseTag: a leaf package
   versionedfile/    Format table, Config, the File interface and one file per format
   changes/          Change, ChangeType, the Source interface; changes/conventional parses conventional commits

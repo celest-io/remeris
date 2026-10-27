@@ -1,11 +1,11 @@
 # Remeris: spec for a Go reimplementation of Knope
 
-**Source analysed:** [knope-dev/knope](https://github.com/knope-dev/knope) at `c952077` (2026-09-14), Knope CLI `0.23.0`,
+**Source analysed:** [knope-dev/knope](https://github.com/knope-dev/knope) at `af540f3`, Knope CLI `0.23.1`,
 `knope-versioning` `0.8.x`, `knope-config` `0.4.x`, plus the [changesets](https://github.com/knope-dev/changesets) crate it
 depends on.
 
 **Scope:**
-- **Phase 1 (parity):** rebuild Knope's features in Go, one at a time (milestones M0–M11). Two foundations go beyond
+- **Phase 1 (parity):** rebuild Knope's features in Go, one at a time (milestones M0–M12; M0–M11 are parity). Two foundations go beyond
   Knope from the start because the rest builds on them: full SemVer 2.0.0 (F1) and extension hooks for Phase 2.
 - **Phase 2 (extensions):** pre-release channels, signed commits (git or GitHub App), more changelog sources, and
   better monorepo support with per-package variables. See [Phase 2](#phase-2-extensions-beyond-knope).
@@ -176,6 +176,7 @@ Each milestone ships something users can run, and its tests pass on its own. Lat
 | M9 | Remaining formats | F6: `Cargo.lock`, `gleam.toml`, `package-lock.json`, `pubspec.yaml`, `pom.xml`, `tauri*.conf.json`, `deno.json(c)`, `deno.lock` | Full format parity |
 | M10 | Discovery + tooling | F20 (Cargo/npm/Deno workspaces, `--generate`), F21 (`--upgrade`, `--validate`) | Zero-config monorepos |
 | M11 | Issues | F19 (GitHub/Gitea/Jira issues, SwitchBranches, RebaseBranch, SelectIssueFromBranch, TransitionJiraIssue), `IssueBranch` variable | Issue-driven dev workflows |
+| M12 | Parity polish | Verbose debug-line parity, fixture and doc audit, user docs | Output and docs match Knope line for line |
 
 Phase 2 milestones (P2.1–P2.6) are listed at the end of [Phase 2](#phase-2-extensions-beyond-knope).
 
@@ -1718,7 +1719,7 @@ Fixtures: `tests/upgrade/*`, `tests/validate/*`.
 
 ## Phase 2: Extensions beyond Knope
 
-Phase 1 (M0–M11) reaches Knope parity. Phase 2 adds features Knope doesn't have. Each extension below is a
+Phase 1 (M0–M12) reaches Knope parity. Phase 2 adds features Knope doesn't have. Each extension below is a
 design sketch: enough to keep Phase 1 from closing doors, and a starting point for its own detailed spec when we
 get there. All new config keys are optional, and Knope ignores unknown keys, so a `knope.toml` that uses them still
 loads in Knope (it just won't do the new things).
