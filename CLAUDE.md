@@ -118,6 +118,12 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 - Dependencies: prefer the standard library. Add a module only for the reasons given in spec 0.3, at the
   versions it lists or newer patch releases.
 
+## Releasing
+
+remeris releases itself with its own `knope.toml`: `prepare-release.yaml` opens the `release` PR (signed commit through ghcommit, GitHub App token), merging it runs
+`release.yaml`, and the `v*` tag starts `push-artifact.yaml` (`mise run dist`, cosign, attestations). The version lives in Git tags and in the `VERSION` file, which only
+the release workflow reads. Do not edit `CHANGELOG.md` or `VERSION` by hand. `docs/releasing.md` has the GitHub App setup, the secrets and the steps to cut a release.
+
 ## Code layout
 
 Milestones M0 to M11 are in place: `remeris <workflow>` runs `Command`, `BumpVersion`, `CreateChangeFile` and
