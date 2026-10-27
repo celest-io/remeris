@@ -148,6 +148,7 @@ pkg/versioning/     pure core (the knope-versioning equivalent): no file system,
   changes/          Change, ChangeType, the Source interface; changes/conventional parses conventional commits
   changesets/       .changeset files: parse, write, normalise ids, group by package, convert to changes
   releasenotes/     sections, release notes rendering, change templates, changelog read and write
+  trace/            Tracer carries the --verbose debug lines through the pure core (a nil Tracer prints nothing); DebugStrings prints lists like Rust's {:?}
   internal/tomledit/ format-preserving TOML editor on go-toml/v2 unstable: key lookup, byte-span edits
   internal/jsonedit/ ordered JSON tree printed exactly like serde_json to_string_pretty (package.json & co.)
   internal/denosemver/ the deno_semver subset deno.lock needs: versions, requirements (loose, specifier, normalised), PackageNv, PackageReq

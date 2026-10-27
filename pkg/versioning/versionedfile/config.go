@@ -24,7 +24,6 @@ const (
 	codeConflictingOptions    = "remeris::versioned_file::conflicting_options"
 	codeNoVersion             = "remeris::versioned_file::no_version"
 	codeUnsupportedDependency = "remeris::package::unsupported_dependency"
-	codeNotImplemented        = "remeris::versioned_file::not_implemented"
 )
 
 // NewConfig validates a versioned_files entry (F2.2 step 2). A non-nil regex (even empty) selects RegexFile.

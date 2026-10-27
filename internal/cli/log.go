@@ -5,6 +5,8 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+
+	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
 // plainHandler prints the bare message of each record on its own line: no time, level, target or
@@ -32,8 +34,9 @@ func (h *plainHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h *plainHandler) WithGroup(string) slog.Handler      { return h }
 
 // setupLogging installs the default logger: INFO, or DEBUG when verbose, to w. While quiet,
-// nothing is printed (used by --validate).
+// nothing is printed (used by --validate). The warnings of the versioned files go through it too.
 func setupLogging(w io.Writer, verbose, quiet bool) {
+	versionedfile.SetWarnSink(func(msg string) { slog.Warn(msg) })
 	switch {
 	case quiet:
 		slog.SetDefault(slog.New(slog.DiscardHandler))

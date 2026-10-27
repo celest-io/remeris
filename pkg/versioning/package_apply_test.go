@@ -39,7 +39,7 @@ func newApplyPackage(t *testing.T, name versioning.PackageName, notes versioning
 	t.Helper()
 	files := []versionedfile.File{realCargo(t, cargoToml, cargoBody)}
 	p, err := versioning.NewPackage(name, []versionedfile.Config{cfg(cargoToml, versionedfile.Cargo, nil)}, files, nil,
-		versionedfile.Standard, nil)
+		versionedfile.Standard, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,8 +264,17 @@ func TestApplyChangesErrors(t *testing.T) {
 		t.Parallel()
 		boom := errors.New("boom")
 		files := []versionedfile.File{fakeFile{path: packageJSON, version: v123, setErr: boom}}
-		p, err := versioning.NewPackage(versioning.DefaultName(),
-			[]versionedfile.Config{cfg(packageJSON, versionedfile.PackageJson, nil)}, files, nil, versionedfile.Standard, nil)
+		p, err := versioning.NewPackage(
+			versioning.DefaultName(),
+			[]versionedfile.Config{
+				cfg(packageJSON, versionedfile.PackageJson, nil),
+			},
+			files,
+			nil,
+			versionedfile.Standard,
+			nil,
+			nil,
+		)
 		if err != nil {
 			t.Fatal(err)
 		}

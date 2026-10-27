@@ -2,11 +2,13 @@ package steps
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/action"
 	"github.com/celest-io/remeris/pkg/versioning/semver"
+	"github.com/celest-io/remeris/pkg/versioning/trace"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
@@ -89,6 +91,6 @@ func nextVersion(pkg *versioning.Package, rule semver.Rule) (semver.Version, ver
 	if pkg.Override != nil {
 		return *pkg.Override, versionedfile.BumpMajor, nil
 	}
-	v, err := pkg.Versions.CalculateNewVersion(rule)
+	v, err := pkg.Versions.CalculateNewVersion(rule, trace.New(slog.Default()))
 	return v, pkg.GoVersioning, err
 }

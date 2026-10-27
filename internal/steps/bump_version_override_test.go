@@ -73,7 +73,7 @@ func TestBumpVersionOverrideGoModBumpsMajor(t *testing.T) {
 			}
 			state := workflow.State{AllVersionedFiles: []versionedfile.File{f}}
 			pkg, err := versioning.NewPackage(versioning.DefaultName(), []versionedfile.Config{cfg},
-				state.AllVersionedFiles, []string{tagV123}, versionedfile.Standard, nil)
+				state.AllVersionedFiles, []string{tagV123}, versionedfile.Standard, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

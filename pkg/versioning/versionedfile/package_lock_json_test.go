@@ -3,7 +3,7 @@ package versionedfile_test
 import (
 	"bytes"
 	"errors"
-	"log/slog"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -164,21 +164,13 @@ func mustPkgLock(t *testing.T, content string) versionedfile.File {
 	return f
 }
 
-// capturePkgLockLog replaces the default logger and returns what it logged. The logger is global, so callers must not
-// run in parallel.
+// capturePkgLockLog sets the warning sink and returns what it received, one msg="..." line per warning. The sink is
+// global, so callers must not run in parallel.
 func capturePkgLockLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
-	old := slog.Default()
-	slog.SetDefault(
-		slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
-			if a.Key == slog.TimeKey || a.Key == slog.LevelKey {
-				return slog.Attr{}
-			}
-			return a
-		}})),
-	)
-	t.Cleanup(func() { slog.SetDefault(old) })
+	versionedfile.SetWarnSink(func(msg string) { fmt.Fprintf(&buf, "msg=%q\n", msg) })
+	t.Cleanup(func() { versionedfile.SetWarnSink(nil) })
 	return &buf
 }
 
@@ -546,11 +538,8 @@ func FuzzPackageLockSetVersion(f *testing.F) {
 		f.Add(seed, true)
 		f.Add(seed, false)
 	}
-	quiet := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	versionedfile.SetWarnSink(nil)
 	f.Fuzz(func(t *testing.T, content string, withDependency bool) {
-		old := slog.Default()
-		slog.SetDefault(quiet)
-		defer slog.SetDefault(old)
 		file, err := newPkgLock(content)
 		if err != nil {
 			return

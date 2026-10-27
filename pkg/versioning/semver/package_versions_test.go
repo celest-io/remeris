@@ -110,7 +110,7 @@ func TestCalculateNewVersion(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got, err := mustHistory(tc.stable, tc.pres...).CalculateNewVersion(tc.rule)
+			got, err := mustHistory(tc.stable, tc.pres...).CalculateNewVersion(tc.rule, nil)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -123,7 +123,7 @@ func TestCalculateNewVersion(t *testing.T) {
 
 func TestCalculateNewVersionInvalidLabel(t *testing.T) {
 	t.Parallel()
-	_, err := mustHistory(v123).CalculateNewVersion(semver.PreBump("a..b", semver.StablePatch))
+	_, err := mustHistory(v123).CalculateNewVersion(semver.PreBump("a..b", semver.StablePatch), nil)
 	var pe *semver.ParseError
 	if !errors.As(err, &pe) {
 		t.Fatalf("got %v, want a *ParseError", err)
@@ -139,7 +139,7 @@ func TestReleaseWithoutPreRelease(t *testing.T) {
 	for name, p := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := p.CalculateNewVersion(semver.ReleaseBump())
+			_, err := p.CalculateNewVersion(semver.ReleaseBump(), nil)
 			if !errors.Is(err, semver.ErrPreReleaseNotFound) {
 				t.Fatalf("got %v, want ErrPreReleaseNotFound", err)
 			}
@@ -186,7 +186,7 @@ func TestFromTags(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			p := semver.FromTags(tc.prefix, tc.tags)
+			p := semver.FromTags(tc.prefix, tc.tags, nil)
 			v, ok := p.LastStable()
 			checkOpt(t, whatStable, tc.wantStable, v, ok)
 			v, ok = p.Latest()
@@ -198,10 +198,10 @@ func TestFromTags(t *testing.T) {
 func TestFromTagsKeepsEveryLabel(t *testing.T) {
 	t.Parallel()
 	tags := []string{"v1.3.0-beta.0", "v1.3.0-alpha.1", "v1.3.0-alpha.0", tag123}
-	p := semver.FromTags(nil, tags)
+	p := semver.FromTags(nil, tags, nil)
 	tests := map[string]string{labelAlpha: "1.3.0-alpha.2", lBeta: "1.3.0-beta.1"}
 	for label, want := range tests {
-		got, err := p.CalculateNewVersion(semver.PreBump(label, semver.StableMinor))
+		got, err := p.CalculateNewVersion(semver.PreBump(label, semver.StableMinor), nil)
 		if err != nil || got.String() != want {
 			t.Errorf("label %s: got %s, %v; want %s", label, got, err, want)
 		}
@@ -302,7 +302,7 @@ func TestFromTagsThenFiles(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			p := semver.FromTags(nil, tags)
+			p := semver.FromTags(nil, tags, nil)
 			p.Update(semver.MustParse(tc.files))
 			v, ok := p.LastStable()
 			checkOpt(t, whatStable, tc.wantStable, v, ok)
@@ -314,7 +314,7 @@ func TestFromTagsThenFiles(t *testing.T) {
 
 func TestCloneIsIndependent(t *testing.T) {
 	t.Parallel()
-	a := semver.FromTags(nil, []string{tag124rc0, tag123})
+	a := semver.FromTags(nil, []string{tag124rc0, tag123}, nil)
 	b := a.Clone()
 	b.Update(semver.MustParse(v124rc1))
 	b.Update(semver.MustParse(v130))
@@ -338,8 +338,8 @@ func TestUpdateCopiesTheVersion(t *testing.T) {
 
 func TestPreCounterOverflow(t *testing.T) {
 	t.Parallel()
-	p := semver.FromTags(nil, []string{"v1.0.0-rc.18446744073709551615"})
-	_, err := p.CalculateNewVersion(semver.PreBump("rc", semver.StablePatch))
+	p := semver.FromTags(nil, []string{"v1.0.0-rc.18446744073709551615"}, nil)
+	_, err := p.CalculateNewVersion(semver.PreBump("rc", semver.StablePatch), nil)
 	var d diag.Diagnostic
 	if !errors.As(err, &d) || d.Code() != "remeris::pre_release_counter_overflow" {
 		t.Fatalf("CalculateNewVersion() error = %v, want the counter overflow diagnostic", err)

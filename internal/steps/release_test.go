@@ -31,6 +31,7 @@ const (
 	v120        = "1.2.0"
 	lastTag100  = "Last tag is 1.0.0"
 	searching   = "Searching for last package tag to determine if there's a release to release"
+	noTagsV     = "No tags found starting with v"
 	noChangelog = "Release has previously been prepared without a changelog, will create a release with no notes."
 )
 
@@ -62,7 +63,7 @@ func releaseState(t *testing.T, tags []string, withGoMod bool, names ...string) 
 		if name != "" {
 			pn = versioning.CustomName(name)
 		}
-		pkg, err := versioning.NewPackage(pn, cfgs, all, tags, versionedfile.Standard, nil)
+		pkg, err := versioning.NewPackage(pn, cfgs, all, tags, versionedfile.Standard, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -186,7 +187,7 @@ func TestReleaseFindsPreparedRelease(t *testing.T) {
 			wantDebug: []string{searching, lastTag100, noChangelog},
 		},
 		"no tag at all": {
-			names: []string{""}, wantTags: []string{tagV120}, wantDebug: []string{searching, noChangelog},
+			names: []string{""}, wantTags: []string{tagV120}, wantDebug: []string{searching, noTagsV, noChangelog},
 		},
 		"equal to the last tag": {
 			tags: []string{tagV120}, names: []string{""}, wantDebug: []string{searching, "Last tag is 1.2.0"},

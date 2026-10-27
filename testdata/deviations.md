@@ -329,3 +329,9 @@ Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workfl
 | go-git: submodules | Edits inside a submodule's working tree are reported clean by go-git; git reports the submodule dirty. | go-git's status does not descend into submodules. |
 | go-git: branch alias | A branch that is a symbolic ref (`git symbolic-ref refs/heads/alias refs/heads/main`) stores the target, not the alias, in HEAD after `SwitchTo`; git stores the alias. | go-git's checkout resolves the reference. |
 | go-git: races | The branch checks and the write are not atomic: a branch created by another process between the check and `CreateBranch`, or a checkout in another worktree, may be overwritten or missed. git takes the ref lock. `Rebase` has the same limit (go-git takes no lock or flock; see the next rows). | go-git has no ref transaction for these checks. |
+
+## M12 debug lines
+
+| Fixture | Change | Reason |
+| --- | --- | --- |
+| `--verbose` pre-release bump of `1.2.4-beta` | Full SemVer allows a pre-release without a counter. For it remeris prints `Found existing pre-release version beta`, then bumps to `beta.0` without the `No existing pre-release version found` line. | Knope cannot represent a pre-release without a counter, so there is no Knope output to match. |

@@ -1,9 +1,7 @@
 package versionedfile_test
 
 import (
-	"context"
 	"errors"
-	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -36,31 +34,17 @@ func newLock(t *testing.T, content string) versionedfile.File {
 	return f
 }
 
-// captureHandler records the messages logged through slog.Default.
-type captureHandler struct {
-	mu   *sync.Mutex
-	msgs *[]string
-}
-
-func (captureHandler) Enabled(context.Context, slog.Level) bool { return true }
-
-func (h captureHandler) Handle(_ context.Context, r slog.Record) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	*h.msgs = append(*h.msgs, r.Message)
-	return nil
-}
-
-func (h captureHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
-func (h captureHandler) WithGroup(string) slog.Handler      { return h }
-
-// captureWarnings replaces the default logger, so tests that use it must not run in parallel.
+// captureWarnings sets the warning sink, so tests that use it must not run in parallel.
 func captureWarnings(t *testing.T) *[]string {
 	t.Helper()
+	var mu sync.Mutex
 	msgs := &[]string{}
-	old := slog.Default()
-	slog.SetDefault(slog.New(captureHandler{mu: &sync.Mutex{}, msgs: msgs}))
-	t.Cleanup(func() { slog.SetDefault(old) })
+	versionedfile.SetWarnSink(func(msg string) {
+		mu.Lock()
+		defer mu.Unlock()
+		*msgs = append(*msgs, msg)
+	})
+	t.Cleanup(func() { versionedfile.SetWarnSink(nil) })
 	return msgs
 }
 
@@ -347,10 +331,7 @@ func FuzzCargoLockSetVersion(f *testing.F) {
 	} {
 		f.Add(seed)
 	}
-	log := slog.New(slog.DiscardHandler)
-	old := slog.Default()
-	slog.SetDefault(log)
-	f.Cleanup(func() { slog.SetDefault(old) })
+	versionedfile.SetWarnSink(nil)
 	f.Fuzz(func(t *testing.T, content string) {
 		file, err := versionedfile.New(versionedfile.Config{Path: lockPath, Format: versionedfile.CargoLock}, content, nil)
 		if err != nil {

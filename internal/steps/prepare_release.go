@@ -16,6 +16,7 @@ import (
 	"github.com/celest-io/remeris/pkg/versioning/changesets"
 	"github.com/celest-io/remeris/pkg/versioning/releasenotes"
 	"github.com/celest-io/remeris/pkg/versioning/semver"
+	"github.com/celest-io/remeris/pkg/versioning/trace"
 )
 
 // Names, codes and texts of PrepareRelease, word for word as Knope has them (spec F13).
@@ -86,8 +87,9 @@ func (s *PrepareRelease) Run(
 			enrichGitInfo(ctx, state.GitHub, list, rt.DryRun)
 		}
 
-		logImpliedRules(ctx, pkg, list)
-		cfg := versioning.ChangeConfig{Force: pkg.TakeOverride(), GoVersioning: pkg.GoVersioning}
+		cfg := versioning.ChangeConfig{
+			Force: pkg.TakeOverride(), GoVersioning: pkg.GoVersioning, Trace: trace.New(slog.Default()),
+		}
 		if s.PrereleaseLabel != "" {
 			label := s.PrereleaseLabel
 			cfg.PrereleaseLabel = &label
@@ -154,18 +156,19 @@ func (s *PrepareRelease) gatherChanges(
 	if s.IgnoreConventionalCommits {
 		slog.WarnContext(ctx, deprecatedIgnoreWarning)
 	}
-	var list []changes.Change
+	// Knope also prints the scopes when the commits are ignored, so Changes is always called.
+	var commits []conventional.CommitMessage
 	if !s.IgnoreConventionalCommits && !state.IgnoreConventionalCommits {
-		commits, err := commitsSinceLastStable(ctx, state, pkg)
-		if err != nil {
+		var err error
+		if commits, err = commitsSinceLastStable(ctx, state, pkg); err != nil {
 			return nil, err
 		}
-		sections := pkg.ReleaseNotes.Sections
-		if sections == nil {
-			sections = releasenotes.DefaultSections()
-		}
-		list = conventional.Changes(commits, pkg.Scopes, sections)
 	}
+	sections := pkg.ReleaseNotes.Sections
+	if sections == nil {
+		sections = releasenotes.DefaultSections()
+	}
+	list := conventional.Changes(commits, pkg.Scopes, sections, trace.New(slog.Default()))
 	return append(list, changeFileChanges(ctx, state.Git, pkg, set)...), nil
 }
 
@@ -180,7 +183,7 @@ func commitsSinceLastStable(
 	}
 	slog.DebugContext(ctx, "Getting conventional commits since last release of package "+name)
 	var tag *string
-	if v, ok := semver.FromTags(pkg.Name.Custom(), state.AllGitTags).LastStable(); ok {
+	if v, ok := semver.FromTags(pkg.Name.Custom(), state.AllGitTags, trace.New(slog.Default())).LastStable(); ok {
 		t := pkg.ReleaseTag(v)
 		tag = &t
 	}
@@ -229,15 +232,4 @@ func gitInfo(info *git.CommitInfo) *changes.GitInfo {
 		return nil
 	}
 	return &changes.GitInfo{Hash: info.Hash, AuthorName: info.AuthorName}
-}
-
-// logImpliedRules prints, in verbose mode, the rule each change implies (spec F10.2).
-func logImpliedRules(ctx context.Context, pkg *versioning.Package, list []changes.Change) {
-	if len(list) == 0 {
-		return
-	}
-	slog.DebugContext(ctx, "Determining new version for "+pkg.Name.String())
-	for _, c := range list {
-		slog.DebugContext(ctx, c.Origin.String()+"\n\timplies rule "+c.Type.Rule().String())
-	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/celest-io/remeris/pkg/versioning/changesets"
 	"github.com/celest-io/remeris/pkg/versioning/releasenotes"
 	"github.com/celest-io/remeris/pkg/versioning/semver"
+	"github.com/celest-io/remeris/pkg/versioning/trace"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
 
@@ -156,8 +157,11 @@ func findFile(all []versionedfile.File, path string) (versionedfile.File, bool) 
 // dependency entry. Entries with a dependency do not count toward the package version; the others must all
 // have the same version, build metadata included. A file that cannot hold a version (versionedfile.ErrNoVersion)
 // and has no dependency is an error, as in Knope.
+//
+// t receives "{path} has version {v}" for each file that counts toward the package version, in config order and
+// before that file is compared with the first one, so an inconsistent-versions error comes after both lines.
 func ValidateVersionedFiles(
-	configs []versionedfile.Config, all []versionedfile.File,
+	configs []versionedfile.Config, all []versionedfile.File, t *trace.Tracer,
 ) ([]versionedfile.Config, *semver.Version, error) {
 	files := make([]versionedfile.File, len(configs))
 	for i, cfg := range configs {
@@ -188,6 +192,7 @@ func ValidateVersionedFiles(
 		if err != nil {
 			return nil, nil, err
 		}
+		t.Debug(cfg.Path + " has version " + v.String())
 		switch {
 		case first == nil:
 			first, firstPath = &v, cfg.Path
@@ -243,7 +248,8 @@ func cargoPackageName(configs []versionedfile.Config, all []versionedfile.File) 
 
 // NewPackage builds a package from its configs and the parsed files (the pure half of spec F7.1). gitTags must be
 // newest first. The history starts from the tags of the package; a version found in the files is added to it
-// (Update), so a file ahead of the latest tag wins. The inputs are not modified.
+// (Update), so a file ahead of the latest tag wins. The inputs are not modified. t receives the file versions (see
+// ValidateVersionedFiles), "Looking for Git tags matching package name." and the FromTags line; nil prints nothing.
 func NewPackage(
 	name PackageName,
 	configs []versionedfile.Config,
@@ -251,12 +257,14 @@ func NewPackage(
 	gitTags []string,
 	goVersioning versionedfile.GoVersioning,
 	scopes []string,
+	t *trace.Tracer,
 ) (*Package, error) {
-	validated, fromFiles, err := ValidateVersionedFiles(configs, all)
+	validated, fromFiles, err := ValidateVersionedFiles(configs, all, t)
 	if err != nil {
 		return nil, err
 	}
-	versions := semver.FromTags(name.custom, gitTags)
+	t.Debug("Looking for Git tags matching package name.")
+	versions := semver.FromTags(name.custom, gitTags, t)
 	if fromFiles != nil {
 		versions.Update(*fromFiles)
 	}
@@ -313,6 +321,8 @@ type ChangeConfig struct {
 	PrereleaseLabel *string
 	// GoVersioning is how go.mod files handle major versions for a calculated version.
 	GoVersioning versionedfile.GoVersioning
+	// Trace receives Knope's debug lines; nil prints nothing. See ApplyChanges.
+	Trace *trace.Tracer
 }
 
 // ApplyChanges is the per-package part of PrepareRelease (spec F13, F7.4, F12.6): Knope's Package::apply_changes
@@ -329,6 +339,10 @@ type ChangeConfig struct {
 // gives the same action in both: dedupe with action.Dedupe), the WriteToFile of the changelog when the package has
 // one, and the CreateRelease. The changelog of ReleaseNotes is replaced with the updated one. On error the package
 // is unchanged.
+//
+// cfg.Trace receives, once there are changes or a Force: "Determining new version for {name}" (named packages only);
+// then either "Using overridden version {v}", or one "{source}\n\timplies rule {RULE}" line per change in list order
+// followed by the traced CalculateNewVersion lines.
 func (p *Package) ApplyChanges(
 	list []changes.Change, all []versionedfile.File, cfg ChangeConfig, date string,
 ) ([]versionedfile.File, []action.Action, error) {
@@ -339,20 +353,26 @@ func (p *Package) ApplyChanges(
 	var (
 		version semver.Version
 		gv      = cfg.GoVersioning
+		t       = cfg.Trace
 	)
+	if p.Name.custom != nil {
+		t.Debug("Determining new version for " + *p.Name.custom)
+	}
 	if cfg.Force != nil {
 		version, gv = *cfg.Force, versionedfile.BumpMajor
+		t.Debug("Using overridden version " + version.String())
 	} else {
 		rules := make([]semver.StableRule, len(list))
 		for i, c := range list {
 			rules[i] = c.Type.Rule()
+			t.Debug(c.Origin.String() + "\n\timplies rule " + rules[i].String())
 		}
 		rule := semver.StableBump(semver.MaxStableRule(rules...))
 		if cfg.PrereleaseLabel != nil {
 			rule = semver.PreBump(*cfg.PrereleaseLabel, rule.Stable)
 		}
 		var err error
-		if version, err = p.Versions.CalculateNewVersion(rule); err != nil {
+		if version, err = p.Versions.CalculateNewVersion(rule, t); err != nil {
 			return nil, nil, err
 		}
 	}
