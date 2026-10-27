@@ -1,0 +1,56 @@
+name: Release
+# When the "release" PR made by prepare-release.yaml is merged into main, create the GitHub release and
+# the v* tag. The tag push then triggers push-artifact.yaml, which builds and uploads the binaries.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+# Least privilege for the default token: it only checks the repo out (read). The release itself is
+# created with the minted App token below, so the tag it creates triggers push-artifact.yaml. A tag
+# created with the default GITHUB_TOKEN would NOT trigger that downstream workflow.
+permissions:
+  contents: read
+jobs:
+  release:
+    # Only the merged release PR of this repository (a fork cannot use the secrets anyway).
+    if: >-
+      github.event.pull_request.merged == true
+      && github.event.pull_request.head.ref == 'release'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Mint GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.RELEASE_BOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-metadata: read
+      # The commit the merge produced on main, not the PR's test-merge ref: the release tag points at it.
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install mise
+        uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492  # v5.0.1
+        with:
+          cache: false
+      # Bootstrap: remeris releases itself with the binary built from the commit being released.
+      # To use the last released binary instead, see "Bootstrap" in docs/releasing.md.
+      - name: Build remeris from this commit
+        run: |
+          mise run build
+          echo "${GITHUB_WORKSPACE}/build" >> "$GITHUB_PATH"
+      - name: Create release and tag
+        run: remeris release --verbose
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
