@@ -149,7 +149,7 @@ first release must be `0.0.1` whatever lands first.
     in, run the workflow again with `0.0.1` and review again.
 5. `release.yaml` runs on the push of the squashed release commit to `main`: it creates the `v0.0.1` GitHub release with the changelog as notes, and the tag.
 6. `push-artifact.yaml` runs on the tag, and attaches the archives, `SHA256SUMS`, `SHA256SUMS.sigstore.json` and `packslip.sigstore.json` to the release. (The real v0.0.1 predates
-    the packslip jobs: it gets its bundle with [the manual run](#add-the-bundle-to-an-existing-release).)
+    the packslip jobs and is deliberately left without a bundle: mise installs start with the first release made by this workflow.)
 7. [Verify](#verify-a-download) one download.
 
 The merge of the release PR pushes a commit that `prepare-release.yaml` skips (see the loop guard). From then on the version is computed from the commits since the last tag. The
@@ -160,8 +160,9 @@ If something fails halfway:
 - **Release job failed, no release:** re-run the failed `release.yaml` run (including when its PR check failed: nothing was released). `remeris release` publishes the release for
     a `VERSION` that has no tag.
 - **Release exists, no archives:** re-run `push-artifact.yaml` from the Actions tab; `gh release upload` refuses to overwrite, so delete the partial assets first.
-- **Archives exist, no `packslip.sigstore.json`** (the packslip jobs failed, or the release is older than the packslip support, like v0.0.1): run the workflow by hand, see
-    [Add the bundle to an existing release](#add-the-bundle-to-an-existing-release). Re-running only the failed packslip jobs of the tag run also works, and the upload overwrites.
+- **Archives exist, no `packslip.sigstore.json`** (the packslip jobs failed, or the release is older than the packslip support; v0.0.1 stays without a bundle on purpose): run the
+    workflow by hand, see [Add the bundle to an existing release](#add-the-bundle-to-an-existing-release). Re-running only the failed packslip jobs of the tag run also works, and
+    the upload overwrites.
 - **Wrong version in the PR:** run **Prepare release** again with the right version, or close the PR and delete the `release` branch (as the App, or as an administrator who lifts
     the ruleset for the moment).
 
@@ -221,8 +222,9 @@ another ref).
 
 ### Add the bundle to an existing release
 
-The releases made before the packslip support have no bundle (v0.0.1 is the first one). To add it without releasing again, once this workflow is on `main`: Actions,
-**Push artifact**, **Run workflow**, branch `main`, and enter the tag (`v0.0.1`) in `tag`; or `gh workflow run push-artifact.yaml --ref main -f tag=v0.0.1`.
+v0.0.1 predates the packslip support and is deliberately left without a bundle. For a later release whose packslip jobs failed, the bundle can be added without releasing again,
+once this workflow is on `main`: Actions, **Push artifact**, **Run workflow**, branch `main`, and enter the tag (`v0.0.2`, for example) in `tag`; or
+`gh workflow run push-artifact.yaml --ref main -f tag=v0.0.2`.
 
 The run executes only the `resolve`, `packslip` and `publish-packslip` jobs. It refuses a ref other than `main`, a tag that is not `v` plus a SemVer version, a tagged commit that
 is not on `main`, and a tag that differs from the `VERSION` of that commit. It signs only the archives that are on the release and that verify against the `SHA256SUMS` signed by
