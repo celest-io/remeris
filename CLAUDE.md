@@ -93,9 +93,9 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
 - `hk.pkl` runs hk builtins only: whitespace, end-of-file, line endings, symlinks, merge conflicts, private
   keys, mise config formatting, YAML (`ryl`, `.ryl.toml`), Markdown (`rumdl`, `.rumdl.toml`; agent files such as
   `CLAUDE.md` are not linted), `go mod tidy`, golangci-lint (format and lint) and jactionlint for the workflows.
-  The hk version is pinned in `mise.toml` and in `hk/Config.pkl` and `hk/Builtins.pkl` (keep the three in lockstep;
-  Renovate moves them together). `hk/base.pkl` holds the steps that do not depend on Go, `github-actions/` the
-  GitHub Actions linter (its tool is added to `mise.toml` with `include`).
+  The hk version is pinned in `mise.toml` and in the two Pkl package URLs of `hk.pkl` (keep the three in lockstep;
+  Renovate moves them together). Tool configuration lives in single files at the root: `hk.pkl`, `mise.toml`,
+  `.ryl.toml`, `.rumdl.toml`.
 - `mise.lock` is committed (`lockfile = true`) and mise verifies tool provenance with cosign. After changing a tool
   version run `mise lock --platform linux-x64,linux-arm64,macos-arm64` (and `mise --env claude lock ...` for
   `mise.claude.toml`) and commit the lockfiles. To run the hooks of `hk/base.pkl` on commit, run `hk install --mise`.

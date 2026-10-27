@@ -1,7 +1,4 @@
 min_version = "2026.10.8"
-# github-actions/ holds jactionlint, the GitHub Actions linter that replaces zizmor.
-include = ["github-actions/mise.toml"]
-
 [settings]
 lockfile = true
 
@@ -12,4 +9,5 @@ golangci-lint = "2.14.0"
 hk = { version = "2.8.1", workflow = "release.yml" } # runner that orchestrates the hooks in hk.pkl
 rumdl = "0.3.0"                                      # lints Markdown
 shellcheck = "0.11.0"                                # jactionlint runs it on the run: scripts of the workflows
+jactionlint = "2.3.0"                                # lints GitHub Actions workflows (replaces zizmor)
 cosign = "3.1.4"                                     # mise verifies the provenance of tools in mise.lock with it
