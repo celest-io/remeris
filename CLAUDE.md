@@ -98,7 +98,7 @@ Both start through `mise exec`, so they use the versions pinned in this repo.
   `.ryl.toml`, `.rumdl.toml`.
 - `mise.lock` is committed (`lockfile = true`) and mise verifies tool provenance with cosign. After changing a tool
   version run `mise lock --platform linux-x64,linux-arm64,macos-arm64` (and `mise --env claude lock ...` for
-  `mise.claude.toml`) and commit the lockfiles. To run the hooks of `hk/base.pkl` on commit, run `hk install --mise`.
+  `mise.claude.toml`) and commit the lockfiles. To run the hooks of `hk.pkl` on commit, run `hk install --mise`.
 - `.golangci.yaml` is ReadyKit's config. It runs on tests too. Notable rules: `goconst` (3 or more uses of a
   string literal become a constant, tests included), `gosec`, `revive`, line length 128 (golines), imports
   grouped with this module last (goimports). Fix the code, not the config. A `//nolint` needs a reason.
@@ -159,7 +159,6 @@ internal/prompt/    Prompter interface (select, multi-select, input, password) o
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
   semver/           full SemVer 2.0.0 Version: Parse, Compare, rules, bumps, PackageVersions
-  trace/            Tracer: carries Knope's --verbose debug lines through the pure core (a nil Tracer prints nothing)
   action/           Action (WriteToFile, RemoveFile, AddTag, CreateRelease), Release, ReleaseTag: a leaf package
   versionedfile/    Format table, Config, the File interface and one file per format
   changes/          Change, ChangeType, the Source interface; changes/conventional parses conventional commits
