@@ -37,3 +37,4 @@ build/
 # Personal Claude Code and mise overrides
 .claude/*.local.*
 mise.local.*
+dist/

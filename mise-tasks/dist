@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+#MISE description="Build the release archives and SHA256SUMS into dist/ (usage: mise run dist -- v0.0.1)"
+# Cross-builds remeris for linux, darwin and windows on amd64 and arm64 with plain `go build` (CGO off, -trimpath), injecting the
+# version information like mise-tasks/build. Output, for a version v0.0.1:
+#   dist/remeris_v0.0.1_<os>_<arch>.tar.gz (zip for windows), each holding remeris (remeris.exe), LICENSE and README.md
+#   dist/SHA256SUMS
+# Environment: DIST_DIR (default dist), DIST_TARGETS (space-separated os/arch pairs, default all six).
+set -euo pipefail
+
+pkg=github.com/celest-io/remeris/internal/version
+default_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
+
+# normalize_version prints the tag form (v0.0.1) of a version given with or without the leading v.
+normalize_version() {
+  local v="${1:?version required}"
+  v="${v#v}"
+  if [[ ! "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+    echo "dist: '$1' is not a SemVer version" >&2
+    return 1
+  fi
+  printf 'v%s\n' "$v"
+}
+
+# ldflags_for prints the -ldflags value for a tag.
+ldflags_for() {
+  local tag="$1" revision branch build_date go_version flags
+  revision="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+  build_date="$(date -u '+%Y-%m-%d_%H:%M:%S')"
+  go_version="$(go version | awk '{print $3}')"
+  flags=(
+    "-X '${pkg}.Version=${tag}'"
+    "-X '${pkg}.Revision=${revision}'"
+    "-X '${pkg}.Branch=${branch}'"
+    "-X '${pkg}.BuildUser=$(whoami)'"
+    "-X '${pkg}.BuildDate=${build_date}'"
+    "-X '${pkg}.GoVersion=${go_version}'"
+  )
+  # Set by GitHub Actions; left as "unknown" for local builds.
+  if [ -n "${GITHUB_RUN_NUMBER:-}" ]; then
+    flags+=("-X '${pkg}.BuildNumber=${GITHUB_RUN_NUMBER}'")
+  fi
+  echo "${flags[*]}"
+}
+
+# build_target builds and archives one os/arch pair into $out.
+build_target() {
+  local tag="$1" target="$2" out="$3" ldflags="$4"
+  local goos="${target%/*}" goarch="${target#*/}"
+  local name="remeris_${tag}_${goos}_${goarch}" exe=remeris stage
+  [ "$goos" = windows ] && exe=remeris.exe
+
+  stage="$(mktemp -d)"
+  mkdir "${stage}/${name}"
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "$ldflags" -o "${stage}/${name}/${exe}" ./cmd/remeris
+  cp LICENSE README.md "${stage}/${name}/"
+
+  if [ "$goos" = windows ]; then
+    (cd "$stage" && zip --quiet --recurse-paths "${out}/${name}.zip" "$name")
+  else
+    tar --create --gzip --file "${out}/${name}.tar.gz" --directory "$stage" --owner=0 --group=0 --numeric-owner "$name"
+  fi
+  rm -rf "$stage"
+  echo "built ${name}"
+}
+
+main() {
+  local tag out ldflags target
+  tag="$(normalize_version "${1:-}")"
+  out="$(realpath -m "${DIST_DIR:-dist}")"
+  ldflags="$(ldflags_for "$tag")"
+
+  rm -rf "$out"
+  mkdir -p "$out"
+  for target in ${DIST_TARGETS:-$default_targets}; do
+    build_target "$tag" "$target" "$out" "$ldflags"
+  done
+  (
+    cd "$out"
+    shopt -s nullglob
+    archives=(*.tar.gz *.zip)
+    sha256sum -- "${archives[@]}" >SHA256SUMS
+    sha256sum --check SHA256SUMS
+  )
+}
+
+# Run main only when executed, so the functions can be sourced by a test.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
+fi
