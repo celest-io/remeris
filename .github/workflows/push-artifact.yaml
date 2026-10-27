@@ -19,14 +19,16 @@ on:
         type: string
 # One run per tag: a dispatch for a tag waits for the tag-push run of the same tag, and the other way round.
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.tag || github.ref }}
+  group: ${{ github.workflow }}-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 permissions: {}
 jobs:
   build:
     # Tag pushes only: a dispatch never builds, it signs what the release already has.
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: the archives are reproducible only for the same tar, gzip, zip and Go, and "latest" moves
+    # to a new image (and new tool versions) without a change of this file. Move it with a reviewed change.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -138,8 +140,9 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
       commit: ${{ steps.commit.outputs.commit }}
     steps:
-      # The workflow file that signs is the one of the ref the run was started from. Only main is accepted, so a
-      # branch with a changed copy of this workflow cannot sign a release.
+      # The workflow file that signs is the one of the ref the run was started from. This check is inside that file,
+      # so it only stops mistakes: someone with write access can push a branch with a modified copy and run it there
+      # (see "Who can run push-artifact.yaml by hand" in docs/releasing.md).
       - name: Check the workflow ref and the tag input
         id: tag
         env:
@@ -202,54 +205,88 @@ jobs:
       id-token: write  # keyless signing (GitHub OIDC)
     env:
       TAG: ${{ needs.resolve.outputs.tag || github.ref_name }}
+      COMMIT: ${{ needs.resolve.outputs.commit || github.sha }}
     outputs:
       tag: ${{ steps.release.outputs.tag }}
+      bundle-sha256: ${{ steps.bundle.outputs.sha256 }}
     steps:
       # No checkout: this job runs no file of the repository.
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
-      - name: Download the release assets
+      # First SHA256SUMS and its signature, and nothing else: the list of files to sign comes from the verified list,
+      # not from a pattern, so it does not depend on the archive formats.
+      - name: Verify SHA256SUMS of the release
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh release download "$TAG" --dir dist \
-            --pattern 'remeris_*.tar.gz' --pattern 'remeris_*.zip' --pattern SHA256SUMS --pattern SHA256SUMS.sigstore.json
+          gh release download "$TAG" --dir dist --pattern SHA256SUMS --pattern SHA256SUMS.sigstore.json
+          # Signed by the push-artifact workflow of this repository, at this tag, for a push of this commit.
+          cosign verify-blob dist/SHA256SUMS \
+            --bundle dist/SHA256SUMS.sigstore.json \
+            --certificate-identity "https://github.com/${REPO}/.github/workflows/push-artifact.yaml@refs/tags/${TAG}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-github-workflow-sha "$COMMIT" \
+            --certificate-github-workflow-trigger push
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-      # Only archives that the workflow of this tag built and signed are signed again: SHA256SUMS has the
-      # signature of that workflow, lists exactly the archives found, and every archive matches it and has
-      # its build provenance attestation (which the packslip links).
-      - name: Verify the assets of the release
+      # Exactly the files that SHA256SUMS lists, with names that are plain file names of this project.
+      - name: Download and verify the archives of the release
+        id: archives
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           cd dist
-          cosign verify-blob SHA256SUMS \
-            --bundle SHA256SUMS.sigstore.json \
-            --certificate-identity "https://github.com/${REPO}/.github/workflows/push-artifact.yaml@refs/tags/${TAG}" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com
-          sha256sum --check SHA256SUMS
-          shopt -s nullglob
-          archives=(remeris_*.tar.gz remeris_*.zip)
-          diff <(printf '%s\n' "${archives[@]}" | LC_ALL=C sort) <(awk '{print $2}' SHA256SUMS | LC_ALL=C sort)
-          for archive in "${archives[@]}"; do
-            gh attestation verify "$archive" --repo "$REPO" \
-              --signer-workflow "${REPO}/.github/workflows/push-artifact.yaml" --source-ref "refs/tags/${TAG}"
+          name_re='^remeris_v[0-9A-Za-z.+-]+_(linux|darwin|windows)_(amd64|arm64)\.(tar\.gz|tar\.xz|zip)$'
+          mapfile -t listed < <(awk '{print $2}' SHA256SUMS)
+          if [ "${#listed[@]}" -eq 0 ]; then
+            echo "SHA256SUMS lists no file" >&2
+            exit 1
+          fi
+          pattern_args=()
+          for name in "${listed[@]}"; do
+            if [[ ! "$name" =~ $name_re ]]; then
+              echo "SHA256SUMS lists an unexpected file name: ${name}" >&2
+              exit 1
+            fi
+            pattern_args+=(--pattern "$name")
           done
+          gh release download "$TAG" --dir . "${pattern_args[@]}"
+          sha256sum --check SHA256SUMS
+          # The directory holds the listed archives and nothing else (a duplicate in the list fails here too).
+          shopt -s nullglob
+          present=(remeris_*)
+          diff <(printf '%s\n' "${present[@]}" | LC_ALL=C sort) <(printf '%s\n' "${listed[@]}" | LC_ALL=C sort)
+          # Every archive was built and attested by the workflow of this tag, from this commit.
+          for archive in "${listed[@]}"; do
+            gh attestation verify "$archive" --repo "$REPO" \
+              --cert-identity "https://github.com/${REPO}/.github/workflows/push-artifact.yaml@refs/tags/${TAG}" \
+              --cert-oidc-issuer https://token.actions.githubusercontent.com \
+              --source-ref "refs/tags/${TAG}" --source-digest "$COMMIT"
+          done
+          # The input of the action: whitespace separated paths (the names have no whitespace, checked above).
+          echo "artifacts=$(printf 'dist/%s ' "${listed[@]}")" >> "$GITHUB_OUTPUT"
       - name: Sign the packslip
         id: packslip
         uses: jdx/packslip@3a4afb16b29d3ac639fcd35cbe99124184f71859  # v1.11.1
         with:
-          artifacts: dist/remeris_*.tar.gz dist/remeris_*.zip
+          artifacts: ${{ steps.archives.outputs.artifacts }}
           bin: remeris
           tag: ${{ env.TAG }}
-          commit: ${{ needs.resolve.outputs.commit || github.sha }}
+          commit: ${{ env.COMMIT }}
           attest: link
           upload: false
+      # The upload job checks the artifact it downloads against this hash.
+      - name: Record the hash of the bundle
+        id: bundle
+        env:
+          BUNDLE: ${{ steps.packslip.outputs.bundle }}
+        run: echo "sha256=$(sha256sum "$BUNDLE" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Keep the bundle for the next job
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
@@ -261,12 +298,16 @@ jobs:
   # Attaches the bundle to the release. It holds the write permission and signs nothing.
   publish-packslip:
     needs: packslip
+    # Not the implicit success(): it also looks at the jobs further up the needs chain, and one of them is always
+    # skipped (resolve on a tag push, build and publish on a dispatch), which would skip this job every time.
+    if: ${{ !cancelled() && needs.packslip.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write  # gh release upload
     env:
       TAG: ${{ needs.packslip.outputs.tag }}
+      BUNDLE_SHA256: ${{ needs.packslip.outputs.bundle-sha256 }}
     steps:
       - name: Download the bundle
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
@@ -279,5 +320,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          test -f packslip/packslip.sigstore.json
+          echo "${BUNDLE_SHA256}  packslip/packslip.sigstore.json" | sha256sum --check -
           gh release upload "$TAG" packslip/packslip.sigstore.json --clobber
