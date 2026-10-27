@@ -1,16 +1,13 @@
 # Configuration
 
-remeris reads Knope's `knope.toml` from the working directory. This page lists what remeris reads from it. For
-what each setting means in practice, see the Knope documentation at <https://knope.tech>; remeris follows it, and
-[differences.md](differences.md) lists where it does not. For the command line, see [usage.md](usage.md). For the
-project overview, see [../README.md](../README.md).
+remeris reads Knope's `knope.toml` from the working directory. This page lists what remeris reads from it. For what each setting means in practice, see the Knope documentation at
+<https://knope.tech>; remeris follows it, and [differences.md](differences.md) lists where it does not. For the command line, see [usage.md](usage.md). For the project overview,
+see [../README.md](../README.md).
 
-Unknown keys, tables and step fields are ignored without a warning (Knope's behaviour, spec quirk Q1). A typo such
-as `label` for `labels` therefore has no effect. The one exception is `remeris --upgrade`, which refuses to rewrite
-a file that has keys it would drop.
+Unknown keys, tables and step fields are ignored without a warning (Knope's behaviour, spec quirk Q1). A typo such as `label` for `labels` therefore has no effect. The one
+exception is `remeris --upgrade`, which refuses to rewrite a file that has keys it would drop.
 
-A missing or unreadable `knope.toml` is not an error: remeris then uses the discovered packages and the default
-workflows described below.
+A missing or unreadable `knope.toml` is not an error: remeris then uses the discovered packages and the default workflows described below.
 
 ## Top-level keys
 
@@ -53,9 +50,8 @@ footers = ["Changelog-First-Note"]
 
 ### Versioned files
 
-An entry of `versioned_files` is a path, `{ path, dependency }` or `{ path, regex }`. The path is relative to the
-working directory and must exist. The format is chosen from the last path component (case-sensitive). `dependency` says
-whether the entry may name a dependency:
+An entry of `versioned_files` is a path, `{ path, dependency }` or `{ path, regex }`. The path is relative to the working directory and must exist. The format is chosen from the
+last path component (case-sensitive). `dependency` says whether the entry may name a dependency:
 
 | File name | `dependency` |
 | --- | --- |
@@ -72,10 +68,9 @@ whether the entry may name a dependency:
 | `pyproject.toml` | no |
 | `tauri.conf.json`, `tauri.macos.conf.json`, `tauri.windows.conf.json`, `tauri.linux.conf.json` | no |
 
-- `dependency = "name"` versions that dependency inside the file instead of the file's own package version. It is
-  an error on a format marked "no".
-- `regex` is a string or an array of strings. Each pattern finds the version in any text file, in a named group
-  `version`. Patterns use Go's RE2 syntax. `regex = []` counts as given (a regex file with no pattern).
+- `dependency = "name"` versions that dependency inside the file instead of the file's own package version. It is an error on a format marked "no".
+- `regex` is a string or an array of strings. Each pattern finds the version in any text file, in a named group `version`. Patterns use Go's RE2 syntax. `regex = []` counts as
+    given (a regex file with no pattern).
 - `dependency` and `regex` cannot be used together.
 - Any other file name is an error that lists the supported names.
 
@@ -94,8 +89,7 @@ versioned_files = [
 | `ignore_conventional_commits` | bool | Do not read conventional commits; use change files only. |
 | `ignore_conventional_merge_commits` | bool | Skip commits with more than one parent when reading conventional commits. |
 
-`PrepareRelease` still accepts `ignore_conventional_commits` as a deprecated step field; `remeris --upgrade` moves
-it to `[changes]`.
+`PrepareRelease` still accepts `ignore_conventional_commits` as a deprecated step field; `remeris --upgrade` moves it to `[changes]`.
 
 ## `[release_notes]`
 
@@ -125,8 +119,8 @@ owner = "knope-dev"
 repo = "knope"
 ```
 
-Without a `knope.toml`, remeris reads the first Git remote: a `github.com` remote sets `[github]`, and a
-`codeberg.org` remote sets `[gitea]`. A `knope.toml` without `[github]` stays without GitHub.
+Without a `knope.toml`, remeris reads the first Git remote: a `github.com` remote sets `[github]`, and a `codeberg.org` remote sets `[gitea]`. A `knope.toml` without `[github]`
+stays without GitHub.
 
 ## Workflows
 
@@ -139,8 +133,7 @@ help_text = "Prepare and publish a release"   # optional, shown in --help
 type = "PrepareRelease"
 ```
 
-`name` must match `^[A-Za-z0-9_-]+$`. Each `[[workflows.steps]]` table needs a `type` from the list below, and runs
-in order. Each workflow becomes a subcommand of `remeris`.
+`name` must match `^[A-Za-z0-9_-]+$`. Each `[[workflows.steps]]` table needs a `type` from the list below, and runs in order. Each workflow becomes a subcommand of `remeris`.
 
 ### Default workflows
 
@@ -157,8 +150,7 @@ With two or more packages the commit message is `chore: prepare releases`.
 
 ### Steps
 
-Meaning of each step and field: <https://knope.tech>. "Variables" below means the `variables` table described in the
-next section.
+Meaning of each step and field: <https://knope.tech>. "Variables" below means the `variables` table described in the next section.
 
 | `type` | Fields | What it does |
 | --- | --- | --- |
@@ -185,13 +177,13 @@ type = "BumpVersion"
 rule = "Minor"
 ```
 
-An unknown `type` is an error that lists the valid ones. In a dry run (`--dry-run`) steps log what they would do and
-change nothing; the issue steps use fake issues and read no credentials.
+An unknown `type` is an error that lists the valid ones. In a dry run (`--dry-run`) steps log what they would do and change nothing; the issue steps use fake issues and read no
+credentials.
 
 ## Variables
 
-`Command`, and the `title` and `body` of `CreatePullRequest`, substitute variables into their text. A `variables`
-table maps the text to replace (any string, such as `"$version"` or `"{version}"`) to a variable name:
+`Command`, and the `title` and `body` of `CreatePullRequest`, substitute variables into their text. A `variables` table maps the text to replace (any string, such as `"$version"`
+or `"{version}"`) to a variable name:
 
 | Variable | Value |
 | --- | --- |
@@ -209,29 +201,24 @@ template = "chore: Release {version}"
 variables = { "{version}" = "Version" }
 ```
 
-If the `variables` key is absent, `$version` means `Version` and `$changelog` means `ChangelogEntry`. If it is
-present, only the listed entries apply, and `variables = {}` turns substitution off. An unknown variable name is an
-error.
+If the `variables` key is absent, `$version` means `Version` and `$changelog` means `ChangelogEntry`. If it is present, only the listed entries apply, and `variables = {}` turns
+substitution off. An unknown variable name is an error.
 
-`Version` and `ChangelogEntry` need the packages, so a workflow that uses them (or has a `PrepareRelease`,
-`BumpVersion`, `Release` or `CreateChangeFile` step) fails if package discovery failed.
+`Version` and `ChangelogEntry` need the packages, so a workflow that uses them (or has a `PrepareRelease`, `BumpVersion`, `Release` or `CreateChangeFile` step) fails if package
+discovery failed.
 
 ## Package discovery
 
 If `knope.toml` declares no package, remeris looks for packages in the working directory, in this order:
 
-1. A Cargo workspace: `./Cargo.toml` with a `[workspace]` table and a `members` list (paths, not globs). One
-   package per member, named after its `package.name`, with its commit scope. `Cargo.lock` is added if it exists.
-2. npm workspaces: the `workspaces` patterns of `./package.json`. One package per matching directory with a
-   `package.json`, which must have a `name`.
-3. A Deno workspace: a root `deno.json` or `deno.jsonc` is required, its `workspace` key is optional. The root folder
-   comes first, then the members. A folder is a package when its `deno.json(c)` has a name and a version, or else its
-   `package.json` has both. Only the working directory is read, never a parent workspace.
-4. Otherwise, one package named `default` that holds every default file name that exists, in this order:
-   `Cargo.toml`, `Cargo.lock`, `deno.json`, `deno.lock`, `gleam.toml`, `go.mod`, `package.json`,
-   `package-lock.json`, `pom.xml`, `pubspec.yaml`, `pyproject.toml` and the four `tauri*.conf.json` names, plus
-   `CHANGELOG.md` as the changelog if it exists. With none of these, there is no package.
+1. A Cargo workspace: `./Cargo.toml` with a `[workspace]` table and a `members` list (paths, not globs). One package per member, named after its `package.name`, with its commit
+    scope. `Cargo.lock` is added if it exists.
+2. npm workspaces: the `workspaces` patterns of `./package.json`. One package per matching directory with a `package.json`, which must have a `name`.
+3. A Deno workspace: a root `deno.json` or `deno.jsonc` is required, its `workspace` key is optional. The root folder comes first, then the members. A folder is a package when its
+    `deno.json(c)` has a name and a version, or else its `package.json` has both. Only the working directory is read, never a parent workspace.
+4. Otherwise, one package named `default` that holds every default file name that exists, in this order: `Cargo.toml`, `Cargo.lock`, `deno.json`, `deno.lock`, `gleam.toml`,
+    `go.mod`, `package.json`, `package-lock.json`, `pom.xml`, `pubspec.yaml`, `pyproject.toml` and the four `tauri*.conf.json` names, plus `CHANGELOG.md` as the changelog if it
+    exists. With none of these, there is no package.
 
-The first three results are concatenated if several apply. A discovery error is raised only by a workflow that reads
-the packages, and by `--validate` and `--generate`; `--help` and workflows that need no package keep working.
-`remeris --generate` writes the discovered configuration as a `knope.toml` (see [usage.md](usage.md)).
+The first three results are concatenated if several apply. A discovery error is raised only by a workflow that reads the packages, and by `--validate` and `--generate`; `--help`
+and workflows that need no package keep working. `remeris --generate` writes the discovered configuration as a `knope.toml` (see [usage.md](usage.md)).

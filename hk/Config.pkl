@@ -1,3 +1,0 @@
-/// The one place the hk version is pinned for configs (`hk/Builtins.pkl` pins it for builtins); keep them in lockstep
-/// with the hk version in `mise.toml`.
-amends "package://github.com/jdx/hk/releases/download/v2.8.1/hk@2.8.1#/Config.pkl"

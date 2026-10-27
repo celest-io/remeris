@@ -1,8 +1,7 @@
 # deno.json fixtures
 
-Golden data for `deno_json_test.go`, copied from Knope's `crates/knope/tests/prepare_release/deno/{workspaces,file_priority}`
-(`in/` as `X.in.json*`, `out/` as `X.out.json*`). They are © Triax Technologies and Dylan Anthony, used under the MIT License,
-with the notice in `testdata/README.md` at the repository root.
+Golden data for `deno_json_test.go`, copied from Knope's `crates/knope/tests/prepare_release/deno/{workspaces,file_priority}` (`in/` as `X.in.json*`, `out/` as `X.out.json*`). They
+are © Triax Technologies and Dylan Anthony, used under the MIT License, with the notice in `testdata/README.md` at the repository root.
 
 Changes from Knope's files, all recorded in `testdata/deviations.md`:
 

@@ -2,10 +2,8 @@
 
 ## `script/`
 
-Golden tests for the `remeris` binary, run with
-[`testscript`](https://pkg.go.dev/github.com/rogpeppe/go-internal/testscript) from
-`cmd/remeris/main_test.go`. Each directory under `script/` is a suite; each `.txtar` file is one case,
-holding the input files, the commands and the expected output.
+Golden tests for the `remeris` binary, run with [`testscript`](https://pkg.go.dev/github.com/rogpeppe/go-internal/testscript) from `cmd/remeris/main_test.go`. Each directory under
+`script/` is a suite; each `.txtar` file is one case, holding the input files, the commands and the expected output.
 
 ```sh
 go test ./cmd/remeris                       # all scripts
@@ -32,48 +30,35 @@ UPDATE_SCRIPTS=1 go test ./cmd/remeris      # rewrite the files compared with cm
 | `issues` | Remeris' own scripts for the issue steps that use only Git (no Knope fixture; the forge steps are tested with fake servers in Go). `SelectIssueFromBranch` (`select_issue_from_branch{,_bad_name,_dry_run}`), `SwitchBranches` (`switch_branches_{create,dirty,dry_run,existing,no_issue}`) and `RebaseBranch` (`rebase_branch{,_dirty,_diverged,_dry_run,_missing}`, fast-forward only, F19.8). |
 | `prepare_release` | The `PrepareRelease` step. `changesets_*`, `enable_prerelease_*`, `second_prerelease`, `release_after_prerelease`, `override_*`, `scopes_*`, `multiple_packages`, `allow_empty`, `no_version_change`, `branching_history_*`, `cargo_*`, `changelog_*`, `custom_change_entries_all_custom`, `deno_*`, `gleam_toml`, `go_modules_*`, `handle_pre_versions_that_are_too_new`, `ignore_conventional_commits{,_toplevel}`, `inconsistent_versions`, `no_versioned_files`, `npm_*`, `override_version_multiple_packages`, `package_selection`, `prerelease_after_release`, `pubspec_yaml`, `pyproject_toml_*`, `readme_version`, `tauri_conf_json` and `verbose` are ported from Knope's `prepare_release` suite (`<dir>_<case>.txtar`); `no_packages_ready`, `stages_files`, `branching_history_merges_counted` (the history of `branching_history_merges_ignored` without `ignore_conventional_merge_commits`, to show the difference), `forge_variable` (it also checks the dry-run pull request data of F16.4, which no Knope script covers: Knope's only test of it, `integration_github`, needs real credentials) and `go_modules_major_version_directories_quiet` are ours. Scripts set `REMERIS_FAKE_DATE=2026-01-01` and write that date where Knope has `[DATE]`; `rstrip` (defined in `cmd/remeris/main_test.go`) removes trailing spaces from a dry run's output before it is compared. |
 
-`--help` is compared by content, not byte for byte: its layout comes from urfave/cli and differs from
-clap's (spec F3.1).
+`--help` is compared by content, not byte for byte: its layout comes from urfave/cli and differs from clap's (spec F3.1).
 
 ## Fixtures from Knope
 
-The fixtures ported from [knope-dev/knope](https://github.com/knope-dev/knope) (`crates/knope/tests/**`)
-are © Triax Technologies and Dylan Anthony, used under the MIT License:
+The fixtures ported from [knope-dev/knope](https://github.com/knope-dev/knope) (`crates/knope/tests/**`) are © Triax Technologies and Dylan Anthony, used under the MIT License:
 
-> Copyright (c) 2021 Triax Technologies
-> Copyright (c) 2022 Dylan Anthony
+> Copyright (c) 2021 Triax Technologies Copyright (c) 2022 Dylan Anthony
 >
-> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-> associated documentation files (the "Software"), to deal in the Software without restriction, including
-> without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-> copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
-> following conditions:
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without
+> restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to
+> whom the Software is furnished to do so, subject to the following conditions:
 >
-> The above copyright notice and this permission notice shall be included in all copies or substantial
-> portions of the Software.
+> The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 >
-> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
-> LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
-> EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-> IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
-> THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+> PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+> OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-A ported script starts with a comment naming its Knope source directory. Unit tests under `pkg/` also reuse a few
-Knope fixture files as golden data, such as `pkg/versioning/internal/jsonedit/testdata/` (from
-`prepare_release/{npm,multiple_packages,tauri_conf_json}`) and `pkg/versioning/versionedfile/testdata/deno_json/` (from
-`prepare_release/deno`) and `internal/tomlwrite/testdata/` (from `generate/*` and `upgrade/ignore_conventional_commits`); they
-carry the same credit.
+A ported script starts with a comment naming its Knope source directory. Unit tests under `pkg/` also reuse a few Knope fixture files as golden data, such as
+`pkg/versioning/internal/jsonedit/testdata/` (from `prepare_release/{npm,multiple_packages,tauri_conf_json}`) and `pkg/versioning/versionedfile/testdata/deno_json/` (from
+`prepare_release/deno`) and `internal/tomlwrite/testdata/` (from `generate/*` and `upgrade/ignore_conventional_commits`); they carry the same credit.
 
 ### Conversion rules
 
-- The `in/` files become txtar files, `out/` files go under `out/`, and `stdout.log` / `stderr.log` become
-  the files compared with `cmp`.
+- The `in/` files become txtar files, `out/` files go under `out/`, and `stdout.log` / `stderr.log` become the files compared with `cmp`.
 - `knope` is rewritten to `remeris` in expected output. The file name `knope.toml` is not (spec D1).
-- miette's graphics in `stderr.log` are reduced to the message and help lines, as rendered by
-  `internal/diag` (spec F3.3, D4).
+- miette's graphics in `stderr.log` are reduced to the message and help lines, as rendered by `internal/diag` (spec F3.3, D4).
 - Git setup from the Rust `mod.rs` becomes `exec git ...` commands.
-- A fixture that needs a feature that does not exist yet starts with `skip` and the milestones it needs.
-  Remove the `skip` line when they are done.
+- A fixture that needs a feature that does not exist yet starts with `skip` and the milestones it needs. Remove the `skip` line when they are done.
 
 ### Status of `crates/knope/tests/command/*`
 

@@ -108,11 +108,10 @@ Each format's pull request edits only its own section. Rows follow the table abo
 | An invalid JSON document | The message after `Error deserializing {path}:` is the text of the Go JSON error, not serde_json's. | Different JSON library. |
 | `package-lock.json` with a duplicated key | The last value wins, in the position of the first. | The JSON tree behaves like serde_json's map. |
 
-The rest is Knope's behaviour on purpose, quirks included: a dependency edit always rewrites the file and adds its diff,
-even when nothing matches or `packages` is missing; only entries of `packages` with a `name` field are matched (npm v7
-entries such as `node_modules/x` have none, and the legacy `dependencies` section is not touched); a matching
-`dependencies` or `devDependencies` member is replaced by the bare version whatever it held, so a leading `^` is lost;
-the `lockfileVersion` warning appears on every edit and also for a missing or float (`3.0`) value.
+The rest is Knope's behaviour on purpose, quirks included: a dependency edit always rewrites the file and adds its diff, even when nothing matches or `packages` is missing; only
+entries of `packages` with a `name` field are matched (npm v7 entries such as `node_modules/x` have none, and the legacy `dependencies` section is not touched); a matching
+`dependencies` or `devDependencies` member is replaced by the bare version whatever it held, so a leading `^` is lost; the `lockfileVersion` warning appears on every edit and also
+for a missing or float (`3.0`) value.
 
 ### tauri.conf.json
 
@@ -122,9 +121,8 @@ the `lockfileVersion` warning appears on every edit and also for a missing or fl
 | An invalid JSON document | The message after `Error deserializing {path}:` is the text of the Go JSON error, not serde_json's. | Different JSON library. |
 | `tauri.conf.json` with a duplicated top level `version` key | The last value wins, in the position of the first. Knope rejects the file at load time (`duplicate field \`version\``). Other duplicated keys keep the last value in both. | Knope reads the version through a derived struct, which refuses a repeated field; the JSON tree keeps the last value like serde_json's map. |
 
-The rest is Knope's behaviour on purpose: Tauri v2's `"version": "../package.json"` is rejected as not a version, the help
-text names `tauri.conf.json` for the platform variants too, the diff is the bare version, and `.json5` and `Tauri.toml`
-are not supported.
+The rest is Knope's behaviour on purpose: Tauri v2's `"version": "../package.json"` is rejected as not a version, the help text names `tauri.conf.json` for the platform variants
+too, the diff is the bare version, and `.json5` and `Tauri.toml` are not supported.
 
 ### pubspec.yaml
 
@@ -144,8 +142,8 @@ are not supported.
 | Spec F6.2 ("replace that line only", re-serialise when no line) | remeris splices the scalar's bytes only, in the first top-level `version` key, and appends a line for the unreachable no-key case. It never re-serialises. | See the first rows. |
 | A file without a top-level `version` | Never reached: the load fails first (as in Knope). The insert branch appends `version: {v}` on a new line at the end of a block mapping, with the file's line ending, instead of re-serialising the document. | The spec's re-serialise branch is unreachable after F7.2 validation. |
 
-The rest is Knope's behaviour: exactly one YAML document that is a mapping, a top-level `version` that is a string (`version: 1.0`
-is a float and fails), the diff is the bare version, and a dependency is ignored.
+The rest is Knope's behaviour: exactly one YAML document that is a mapping, a top-level `version` that is a string (`version: 1.0` is a float and fails), the diff is the bare
+version, and a dependency is ignored.
 
 ### pom.xml
 
@@ -240,7 +238,10 @@ Spec F20.4. Knope uses `deno_config` 0.97 (`WorkspaceDirectory::discover`); the 
 
 ## --validate
 
-Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workflow as a dry run with the logs off, on a copy of the state each, collects one `Problem with workflow {name}` per failing workflow, in declaration order, under `There are problems with the defined workflows`, and exits 1. Configuration errors and package errors come first, `--override-version` and `--prerelease-label` are applied before the workflows run, and a dry run reads no credentials and prompts for nothing. These behave the same.
+Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workflow as a dry run with the logs off, on a copy of the state each, collects one
+`Problem with workflow {name}` per failing workflow, in declaration order, under `There are problems with the defined workflows`, and exits 1. Configuration errors and package
+errors come first, `--override-version` and `--prerelease-label` are applied before the workflows run, and a dry run reads no credentials and prompts for nothing. These behave the
+same.
 
 | Case | Change | Reason |
 | --- | --- | --- |
@@ -313,7 +314,8 @@ Audited against `main.rs` and `workflow.rs` of Knope: the mode runs every workfl
 
 ## M11 Git branch operations
 
-`LocalBranches`, `BranchExists`, `CreateBranch`, `HasUncommittedChanges` and `SwitchTo` (spec F19.7, F19.8). The git CLI backend is the reference; the go-git fallback (used only when `git` is not on PATH) differs in the cases below.
+`LocalBranches`, `BranchExists`, `CreateBranch`, `HasUncommittedChanges` and `SwitchTo` (spec F19.7, F19.8). The git CLI backend is the reference; the go-git fallback (used only
+when `git` is not on PATH) differs in the cases below.
 
 | Case | Change | Reason |
 | --- | --- | --- |

@@ -1,8 +1,12 @@
 [global]
-line-length = 120
+line-length = 180
+flavor = "mkdocs"
 
-# docs/spec.md is the implementers' specification and testdata/*.md hold long table rows: hard-wrapping them would
-# make the diffs unreadable, so the line length is not checked there.
+[MD013]
+line-length = 180
+reflow = true
+reflow-mode = "normalize"
+
 [per-file-ignores]
-"docs/spec.md" = ["MD013"]
-"testdata/*.md" = ["MD013"]
+# GitHub renders the PR template as the PR body, so it has no title heading
+".github/pull_request_template.md" = ["MD041"]
