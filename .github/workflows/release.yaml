@@ -1,0 +1,92 @@
+name: Release
+# When the "release" PR made by prepare-release.yaml is squash- or rebase-merged into main, its commit
+# lands on main with a message that starts with "chore: prepare release". That push creates the GitHub
+# release and the v* tag. The tag push then triggers push-artifact.yaml, which builds and uploads the
+# binaries. A push trigger, not pull_request: the run is on main, so the release environment can be
+# limited to main (docs/releasing.md).
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+# Least privilege for the default token: it only checks the repo out (read). The release itself is
+# created with the minted App token below, so the tag it creates triggers push-artifact.yaml. A tag
+# created with the default GITHUB_TOKEN would NOT trigger that downstream workflow.
+permissions:
+  contents: read
+jobs:
+  release:
+    # startsWith, not contains: a squash-merged PR lists its commit messages in the body. The first
+    # step then checks through the API that this commit really is a merged release PR.
+    if: "startsWith(github.event.head_commit.message, 'chore: prepare release')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The App secrets live in this environment (docs/releasing.md), restricted to main.
+    environment: release
+    permissions:
+      contents: read
+      pull-requests: read  # the PR lookup of the first check, with the default token
+    steps:
+      - name: Mint GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.RELEASE_BOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-metadata: read
+      # The commit message is not enough: anyone could write that title. Require that the pushed commit
+      # is the merge of exactly one PR from the release branch of this repository, into main, opened by
+      # the App. Fail closed: if the App slug or the lookup is missing, nothing is released.
+      - name: Check the commit is a merged release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APP_SLUG" ]; then
+            echo "The App slug is unknown: refusing to release" >&2
+            exit 1
+          fi
+          # The PR association of a new commit can lag by a few seconds.
+          prs='[]'
+          for _ in 1 2 3 4 5 6; do
+            prs="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls")"
+            [ "$(jq length <<<"$prs")" -gt 0 ] && break
+            sleep 5
+          done
+          if [ "$(jq length <<<"$prs")" -ne 1 ]; then
+            echo "Expected exactly one pull request for ${GITHUB_SHA}, found $(jq length <<<"$prs")" >&2
+            exit 1
+          fi
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg author "${APP_SLUG}[bot]" '
+            .[0] | .head.ref == "release" and .head.repo.full_name == $repo and .base.ref == "main"
+              and .merged_at != null and .user.login == $author
+          ' <<<"$prs" >/dev/null || {
+            echo "Commit ${GITHUB_SHA} is not the merge of a release PR opened by ${APP_SLUG}[bot]" >&2
+            exit 1
+          }
+      # The pushed commit: the release tag points at it.
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install mise
+        uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492  # v5.0.1
+        with:
+          cache: false
+      # Bootstrap: remeris releases itself with the binary built from the commit being released.
+      # To use the last released binary instead, see "Bootstrap" in docs/releasing.md.
+      - name: Build remeris from this commit
+        run: |
+          mise run build
+          echo "${GITHUB_WORKSPACE}/build" >> "$GITHUB_PATH"
+      - name: Create release and tag
+        run: remeris release --verbose
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

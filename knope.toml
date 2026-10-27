@@ -1,0 +1,92 @@
+# Release configuration of remeris itself, read by remeris (see docs/releasing.md).
+#
+# The binary gets its version from the tag through `-ldflags -X` (mise-tasks/build, mise-tasks/dist), so
+# no source file needs it. The VERSION file exists only for the `release` workflow: Release publishes a
+# version that is newer than the last tag, and without a versioned file a package has no version other
+# than its tags, so Release (run after the release PR merges) would find nothing to publish.
+[package]
+changelog = "CHANGELOG.md"
+versioned_files = [{ path = "VERSION", regex = "(?m)^(?<version>\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?)$" }]
+
+# --- prepare-release-bot ---------------------------------------------------
+# Run on every push to main. Computes the next version from commits, updates the changelog on a
+# `release` branch, and opens/updates a PR. Merging that PR is what ships the release (see the
+# `release` workflow).
+[[workflows]]
+name = "prepare-release-bot"
+
+[[workflows.steps]]
+command = "git switch -C release"
+type = "Command"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+allow_empty = true
+
+# PrepareRelease's edits (the changelog above all) have not been through the repository formatters
+# (for example, a blank line after the `# Changelog` heading). hk fixes only the changed files.
+[[workflows.steps]]
+command = "hk fix --no-stage"
+type = "Command"
+
+# Create the prepare-release commit through the GitHub API so GitHub signs it (Verified). A local
+# `git commit` from the bot App cannot be verified, and main requires signed commits. The script
+# force-resets the remote `release` branch, commits the working-tree changes on top and opens or
+# updates the PR.
+[[workflows.steps]]
+command = ".github/scripts/prepare-release-commit.sh \"$version\""
+type = "Command"
+
+# --- prepare-release -------------------------------------------------------
+# Plain-git variant for local use (`remeris prepare-release`). Same result as the bot workflow, but
+# with an ordinary commit and the CreatePullRequest step.
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+command = "git switch -C release"
+type = "Command"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+allow_empty = true
+
+[[workflows.steps]]
+command = "git commit -m \"chore: prepare release $version\""
+type = "Command"
+
+[[workflows.steps]]
+command = "git push --force --set-upstream origin release"
+type = "Command"
+
+[[workflows.steps]]
+base = "main"
+type = "CreatePullRequest"
+
+[workflows.steps.title]
+template = "chore: prepare release $version"
+
+[workflows.steps.body]
+template = "Merging this PR will tag and release `$version`.\n\n$changelog"
+
+# --- release ---------------------------------------------------------------
+# Run when the `release` PR merges. Creates the GitHub release and the `v*` tag, which fires
+# push-artifact.yaml to build and upload the binaries.
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "Release"
+
+# --- document-change -------------------------------------------------------
+# Optional helper: `remeris document-change` writes a change file for changes that a conventional
+# commit does not capture.
+[[workflows]]
+name = "document-change"
+
+[[workflows.steps]]
+type = "CreateChangeFile"
+
+[github]
+owner = "celest-io"
+repo = "remeris"

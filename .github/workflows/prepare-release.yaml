@@ -1,0 +1,104 @@
+name: Prepare release
+# On every push to main, recompute the next version from Conventional Commits and open or update the
+# "release" PR with the changelog. No tag is created here: merging the PR does that (release.yaml).
+# Run it by hand (from main) to refresh the PR, or with a version to force that version (the first
+# release is 0.0.1). A later push to main recomputes the version, so merge a forced PR before that.
+# See docs/releasing.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release instead of the computed one, without the v (for example 0.0.1). Leave empty to compute it.
+        required: false
+        type: string
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+permissions: {}
+jobs:
+  prepare-release:
+    # Only from main. Skip the commit produced by merging the release PR itself, or the push would
+    # prepare the same release again before the tag exists. The head commit of that push is the
+    # release commit (squash or rebase merge: its message starts with the PR title) or the merge
+    # commit of the PR (a merge commit: "Merge pull request #N from <owner>/release"). Allow only
+    # squash and rebase merges on main anyway (docs/releasing.md). startsWith, not contains: a
+    # squash-merged PR lists its commit messages in the body.
+    if: >-
+      github.ref == 'refs/heads/main'
+      && !startsWith(github.event.head_commit.message, 'chore: prepare release')
+      && !(startsWith(github.event.head_commit.message, 'Merge pull request #')
+           && contains(github.event.head_commit.message, format(' from {0}/release', github.repository_owner)))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The App secrets live in this environment (docs/releasing.md), restricted to main.
+    environment: release
+    # Everything that writes uses the App token below; the default token only needs to exist.
+    permissions:
+      contents: read
+    steps:
+      - name: Mint GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.RELEASE_BOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-metadata: read
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+      - name: Configure git identity
+        run: |
+          user_id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git config --global user.name "${APP_SLUG}[bot]"
+          git config --global user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+          gh auth setup-git
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+      - name: Install mise
+        uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492  # v5.0.1
+        with:
+          cache: false
+      # Bootstrap: remeris releases itself with the binary built from the commit being released.
+      # To use the last released binary instead, see "Bootstrap" in docs/releasing.md.
+      - name: Build remeris from this commit
+        run: |
+          mise run build
+          echo "${GITHUB_WORKSPACE}/build" >> "$GITHUB_PATH"
+      - name: Install ghcommit
+        # Used by the prepare-release-bot workflow to create the prepare-release commit through the
+        # GitHub API, so GitHub signs it (Verified) under the release-bot App identity. The binary is
+        # pinned by SHA-256 (the linux_amd64 line of the release's checksums.txt), so a changed or
+        # swapped release asset is rejected. Update the version and the hash together.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # renovate: datasource=github-releases depName=planetscale/ghcommit
+          GHCOMMIT_VERSION: v0.1.78
+          GHCOMMIT_SHA256: 97b1db204e334a9cc90c7b1d522cc3a9dca8c7b4ca1837862f1e8b77de04807e
+        run: |
+          set -euo pipefail
+          gh release download "$GHCOMMIT_VERSION" --repo planetscale/ghcommit --pattern ghcommit_linux_amd64 --dir /tmp/ghcommit
+          echo "${GHCOMMIT_SHA256}  /tmp/ghcommit/ghcommit_linux_amd64" | sha256sum --check -
+          mkdir -p "$HOME/.local/bin"
+          install -m 0755 /tmp/ghcommit/ghcommit_linux_amd64 "$HOME/.local/bin/ghcommit"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Prepare release PR
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          OVERRIDE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "$OVERRIDE_VERSION" ]; then
+            args+=(--override-version "$OVERRIDE_VERSION")
+          fi
+          remeris prepare-release-bot --verbose "${args[@]}"

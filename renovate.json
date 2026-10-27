@@ -38,6 +38,16 @@
       "depNameTemplate": "jdx/hk",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "ghcommit version in the prepare-release workflow",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/prepare-release\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*GHCOMMIT_VERSION: (?<currentValue>v\\S+)"
+      ]
     }
   ]
 }

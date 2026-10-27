@@ -39,6 +39,7 @@ A repository without a `knope.toml` already has these three workflows with the s
 
 - [docs/usage.md](docs/usage.md): command line, output, exit codes, environment variables and credentials.
 - [docs/configuration.md](docs/configuration.md): the `knope.toml` that remeris reads.
+- [docs/releasing.md](docs/releasing.md): how remeris releases itself, the GitHub App to set up, cutting v0.0.1 and verifying a download.
 - [docs/differences.md](docs/differences.md): where remeris differs from Knope.
 - [docs/spec.md](docs/spec.md): the specification, the source of truth for behaviour.
 
