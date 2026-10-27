@@ -5,6 +5,7 @@
 depends on.
 
 **Scope:**
+
 - **Phase 1 (parity):** rebuild Knope's features in Go, one at a time (milestones M0–M12; M0–M11 are parity). Two foundations go beyond
   Knope from the start because the rest builds on them: full SemVer 2.0.0 (F1) and extension hooks for Phase 2.
 - **Phase 2 (extensions):** pre-release channels, signed commits (git or GitHub App), more changelog sources, and
@@ -64,7 +65,7 @@ edge cases, and acceptance criteria.
 
 ### 0.1 How Knope is built
 
-```
+```text
 main ─► config.Load() ─► ConfigSource{Default|File|Hybrid}
      ─► build CLI from config (workflows become subcommands)
      ─► create State (packages loaded, versioned files parsed, git tags read)
@@ -82,7 +83,7 @@ Keep this split in Go. It keeps the core easy to unit-test with no filesystem or
 
 ### 0.2 Proposed Go layout
 
-```
+```text
 cmd/remeris/main.go            # entry point
 internal/app/                  # readykit pattern: GlobalOptions/WorkflowOptions, DefaultXxx(), LoadConfig[T] (F3.1)
 internal/cli/                  # command tree built from config, flags, run/validate/generate/upgrade
@@ -192,7 +193,7 @@ Knope accepts only a subset of SemVer (`M.m.p` or `M.m.p-label.N`). Remeris impl
 [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html) grammar from the start, because it is the base for the
 pre-release channel work (E1).
 
-```
+```text
 version     := core ["-" prerelease] ["+" build]
 core        := numeric "." numeric "." numeric            ; uint64, no leading zeros ("0" is fine)
 prerelease  := pre-id *("." pre-id)
@@ -226,6 +227,7 @@ numerically, two alphanumeric ids compare in ASCII order, numeric is lower than 
 ids are equal the longer list is higher. Build metadata is ignored.
 
 Which comparison to use where:
+
 - Ordering, `Latest()`, "is the tag already released" (F14), bump calculations → `Compare`.
 - The "inconsistent versions" check across a package's files (F7.2) → `Equal`, so `1.2.3` vs `1.2.3+b1` is
   reported (Knope could not express build metadata at all).
@@ -245,6 +247,7 @@ The rule: if there are at least 2 identifiers and the last one is numeric, it is
 produced by a bump are always `core-label.N` with no build metadata.
 
 **Differences from Knope (record in `testdata/deviations.md`):**
+
 - Accepted now, rejected by Knope: `1.2.3-rc4`, `1.2.3-rc.4.5`, `1.2.3+build.7`, `1.2.3-alpha.beta.1`. Tags like
   these were silently skipped by Knope and now count as releases.
 - Rejected now, accepted by Knope: leading zeros (`01.2.3` → Knope read it as `1.2.3`; `1.2.3-rc.01`).
@@ -268,6 +271,7 @@ type Rule struct {
 Fix/Custom→Patch. It is `Patch` when there are no changes.
 
 `bump_stable(v, rule)`:
+
 | rule | major ≥ 1 | major == 0 |
 | --- | --- | --- |
 | Major | `M+1.0.0` | `0.m+1.0` |
@@ -280,12 +284,14 @@ State: `stable *Core` and `prereleases map[Core]map[Label]Version` (Core = major
 key** (Go: sort keys when needed). There is always at least one label per entry.
 
 **`FromTags(prefix *string, tags []string)`**: tags must already be in **newest-first order** (see F9.3).
+
 - The pattern is `"v"`, or `"{prefix}/v"` when a prefix is given. Only tags starting with the pattern are used.
 - For each matching tag, remove the pattern (first occurrence only) and try to parse a Version (skip it on error):
   - Stable: set `stable` and **stop** (only pre-releases newer than the latest stable matter).
   - Pre: `update(version)`.
 
 **`update(version)`**:
+
 - Stable `new`: if `stable >= new` do nothing. Otherwise set `stable = new` and **clear all pre-releases**.
 - Pre `(s, pre)`: if a pre with the same `s` and label already exists and is `>= pre` (by `Compare`), do nothing.
   Otherwise insert or overwrite `prereleases[s][label(pre)] = pre`.
@@ -294,6 +300,7 @@ key** (Go: sort keys when needed). There is always at least one label per entry.
 pre-release in its map (`Compare`; Knope used the largest label string). Otherwise return `stable`. Otherwise return nothing.
 
 **`CalculateNewVersion(rule)`**:
+
 | rule | stable exists | result |
 | --- | --- | --- |
 | Stable(r) | yes | `bump_stable(stable, r)` |
@@ -302,18 +309,21 @@ pre-release in its map (`Compare`; Knope used the largest label string). Otherwi
 | Release | any | largest pre-release stable key, else error `PreReleaseNotFound` (`No prerelease version found, but a Release rule was requested`) |
 
 `calculatePre(label, r)`:
+
 1. `base = bump_stable(stable, r)` if stable exists, else the largest pre-release stable key, else `0.0.0`.
 2. `n = counter + 1` if `prereleases[base][label]` exists and has a counter; `0` if it exists without a counter
    (so `1.2.4-beta` is followed by `1.2.4-beta.0`, which is higher by SemVer precedence); else `0`.
 3. Return `base-label.n`.
 
 Examples to test (from the docs and code):
+
 - `1.2.3`, Pre(rc, Patch) → `1.2.4-rc.0`. Then with `1.2.4-rc.0` tagged → `1.2.4-rc.1`.
 - Stable `1.2.3`, tags `1.2.4-rc.0`, then a Minor change with Pre(alpha) → `1.3.0-alpha.0`.
 - `0.1.2` + Major → `0.2.0`. `0.2.0` + Minor → `0.2.1`.
 - BumpVersion `Release` on `1.2.3-rc.4` → `1.2.3`.
 
 ### Acceptance (F1)
+
 - Port every unit test in `semver/*.rs` and `package_versions.rs` as a Go table test (adjusting the few that
   expect Knope's subset errors, see F1.1).
 - Add SemVer 2.0.0 conformance tests: the valid/invalid examples and the precedence chain from the spec
@@ -365,6 +375,7 @@ Unknown keys: Knope's serde structs do **not** use `deny_unknown_fields`, so **u
 | `ignore_go_major_versioning` | bool | false | |
 
 Validation when loading (in this order):
+
 1. `[package]` and `[packages]` both present → `You cannot define both 'packages' and 'package'`, with source-span
    labels on both definitions. `[packages]` present but empty → `The 'packages' key is defined but does not contain any packages`.
 2. Each versioned file: `regex` present → Format = RegexFile. Otherwise the **file name** (last path component,
@@ -378,7 +389,7 @@ Package names: `[package]` gives the **Default** name (shown as `default`, no ta
 
 ### F2.3 Config sources
 
-```
+```text
 Load():
   if knope.toml can't be read → ConfigSource.Default(generate())         # F20
   else parse → ConfigSource.File(cfg) → fillInGaps():
@@ -424,6 +435,7 @@ koanf does the loading and decoding. Two of its defaults don't fit `knope.toml`,
 If `knope.toml` is missing, skip koanf entirely and go to `ConfigSource.Default` (F20).
 
 ### Acceptance (F2)
+
 - Fixtures: `tests/prepare_release/{invalid_versioned_files,missing_versioned_files,unknown_versioned_file_format}`, and the `package`/`packages` conflict.
 
 ---
@@ -434,7 +446,7 @@ Source: `crates/knope/src/main.rs`
 
 ### F3.1 Command line
 
-```
+```text
 remeris [--dry-run] [-v|--verbose] [--generate | --upgrade | --validate] [<workflow> [workflow flags]]
 remeris --help | --version
 ```
@@ -459,6 +471,7 @@ remeris --help | --version
 
 1. **Typed options struct with defaults.** Runtime options live in plain structs with `mapstructure` tags whose
    names match the flag names, plus a constructor for defaults:
+
    ```go
    // internal/app/options.go
    type GlobalOptions struct {
@@ -479,6 +492,7 @@ remeris --help | --version
        PrereleaseLabel string   `mapstructure:"prerelease-label"`
    }
    ```
+
 2. **Flags declare their env vars** through `Sources: cli.EnvVars(...)`, as in readykit:
    `--prerelease-label` → `cli.EnvVars("REMERIS_PRERELEASE_LABEL", "KNOPE_PRERELEASE_LABEL")`,
    `--github-app-id` → `REMERIS_GITHUB_APP_ID`, `--github-installation-id` → `REMERIS_GITHUB_INSTALLATION_ID`,
@@ -487,6 +501,7 @@ remeris --help | --version
    read directly, never through a flag, so it doesn't show up in `--help` defaults or process listings.
    The flag wins over the env vars (urfave's precedence).
 3. **One generic loader**, copied from readykit's `app.LoadConfig` with one fix:
+
    ```go
    // internal/app/config.go
    func LoadConfig[T any](cmd *cli.Command, cfg *T) error {
@@ -498,6 +513,7 @@ remeris --help | --version
    // command lineage, so readykit's cmd.Name prefix only works for the root command.
    func commandPath(cmd *cli.Command) string { /* join Lineage() names root→cmd with "." */ }
    ```
+
    Only flags that were set (on the command line or through their env var) reach koanf, so values not set keep the
    defaults from the constructor. Workflow names are validated against `^[A-Za-z0-9_-]+$` at config load
    time, because a `.` in a workflow name would break the koanf key path. Knope allows any string, so this is a
@@ -565,11 +581,13 @@ the remeris docs will be written later. Keep `URL()`, `Labels()` and `SourceCode
 spans in the TOML index, F2.4) so snippets and links can be turned on later without touching every error.
 
 Rendering:
-```
+
+```text
 Error: {message}
   help: {help}
   ╰─▶ {related message}      # one line per nested error, indented per level
 ```
+
 Golden `stderr.log` files from Knope contain miette's ASCII graphics. The fixture conversion script reduces them to
 the message and help lines, and tests compare only those.
 
@@ -586,6 +604,7 @@ func Run(w Workflow, s RunType[State]) error {
     for _, step := range w.Steps { s, err = step.Run(s); if err != nil { return WorkflowError{w.Name, err} } }
 }
 ```
+
 Steps run in order. Stop at the first error. State moves from step to step.
 
 ### F4.2 Steps (TOML `type = "..."`)
@@ -640,6 +659,7 @@ string (so unused, invalid variables never error). Otherwise look up the value a
 replacements can change text produced by earlier ones. Copy this.
 
 Variables:
+
 - **`Version`**: needs exactly one package (`Too many packages defined` if more, `No packages to operate on` if none).
   Value = `package.LatestVersion()`, else error `Could not determine version of package`.
 - **`ChangelogEntry`**: same single-package rule. If `PendingActions` has a `CreateRelease`, use the first one's
@@ -668,6 +688,7 @@ Default `release` workflow command: `git commit -m "chore: prepare release $vers
 `["git","commit","-m","chore: prepare release 1.2.3"]`.
 
 ### Acceptance (F5)
+
 - Fixtures `tests/command/*` (variables, shell mode, default variables, disabled defaults).
 
 ---
@@ -720,6 +741,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
 **diff** string, and **dependency** support.
 
 #### `Cargo.toml` (TOML, keep formatting)
+
 - Read: `package.version` (string). If absent, `workspace.package.version`. Else error
   `{path} was missing required property 'package.version' or 'workspace.package.version'`.
   Error `Invalid TOML in {path}` on parse failure.
@@ -731,21 +753,25 @@ For each format: **read** (where the version comes from), **write** (what is edi
 - Helpers: `NameFromDocument` returns `package.name`. `ContainsDependency(doc, d)` checks any of the three tables.
 
 #### `Cargo.lock` (TOML, keep formatting)
+
 - Read: none (`This file can't contain a version`). It must have a dependency (F7.2 fills in a default).
 - Warn if the top-level `version` is not 3 or 4 (`Unsupported version of Cargo.lock: …` / `Unknown version of Cargo.lock…`).
 - Write: for each `[[package]]` with `name == d`, set/insert `version`. Diff `{name} = {v}`, joined with `", "`.
 - Errors: missing `[[package]]` array, or a package without a string `name`.
 
 #### `gleam.toml`
+
 - Read top-level `version`. Write/insert top-level `version`. Diff `version = {v}`. No dependency support.
 
 #### `pyproject.toml`
+
 - Read `project.version` (PEP 621) and `tool.poetry.version`. If both exist they must be equal
   (`Found conflicting versions {project} and {poetry} in {path}`). If neither: `No versions were found in {path}`.
 - Write: **replace the text between the quotes** at each version's byte span. Every other byte is kept.
   Diff = `{v}` (version only).
 
 #### `go.mod`
+
 - Parse the first line starting with `module `: `module <path>[/vN] [// v<full-version>]`. `major` = N when the
   path's last segment is `vN`.
 - Read: if the module comment has a version, use it. Otherwise take it from **git tags**:
@@ -760,7 +786,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
     - If the module has no `/vN` and mode != BumpMajor → `Will not bump Go modules to 2.0.0`.
     - If the old major is set and parent ends with `v{oldMajor}` → `Cannot bump major versions of directory-based go modules`.
     - Otherwise set `/v{newMajor}` on the module path.
-  - Rebuild the line: `module {path}` + (`/v{N}` if N>1) + ` // v{version}`. Replace the original line in the raw text.
+  - Rebuild the line: `module {path}` + (`/v{N}` if N>1) + `// v{version}`. Replace the original line in the raw text.
 - `Write()` returns **two** actions: `WriteToFile` (diff = version) **and** `AddTag`:
   `tag = "{prefix}/v{version}"`, where prefix = parent dir without a trailing `v{major}` and `/`. At the root it is
   `v{version}`.
@@ -768,6 +794,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
   `BumpMajor` (used when the version is **overridden**).
 
 #### `package.json`
+
 - Read: top-level `version` (must parse, else a deserialise error). Help:
   `knope expects the package.json file to be an object with a top level 'version' property`.
 - Write (no dependency): parse the raw text into an **ordered** map and set `version` (inserted at the end if
@@ -780,6 +807,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
 - Diffs are joined with `", "`.
 
 #### `package-lock.json`
+
 - Read top-level `version` (``{path} did not have a `version` field``, help ``Either add a `version` field or specify a `dependency` to update``).
 - Warn if `lockfileVersion` is not 2 or 3.
 - Write (no dependency): set top-level `version` and `packages[""].version`. Diff `version = {v}`.
@@ -788,6 +816,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
 - Serialise pretty with 2 spaces, no trailing newline.
 
 #### `deno.json` / `deno.jsonc`
+
 - Parse as JSONC. Read `version` (missing or invalid → no version).
 - Write (no dependency): Knope sets `version` and re-serialises the whole file as plain pretty JSON. **Quirk Q6:**
   comments and formatting are lost, even though the docs say they are kept. **Decision:** with `hujson`, patch only
@@ -796,6 +825,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
 - Write with a dependency: **no-op** (deno.lock owns dependency versions).
 
 #### `deno.lock`
+
 - Only lockfile `"version": "5"` is supported. Versions 1–4 or missing → `Lockfile version {v} in {path} requires npm package metadata which is not supported yet`.
   Other values → `Unsupported lockfile version {v} in {path}`.
 - Write needs dependency `d`. Algorithm:
@@ -824,6 +854,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
      `tests/prepare_release/deno`.
 
 #### `pubspec.yaml`
+
 - Read top-level `version` (YAML).
 - Write: replace only the bytes of the top-level `version` scalar (found from the position yaml.v3 reports for the
   first top-level `version` key), so comments, quote style, line endings and nested `version:` keys stay. Quoted values
@@ -833,6 +864,7 @@ For each format: **read** (where the version comes from), **write** (what is edi
   replacing any earlier diff.
 
 #### `pom.xml`
+
 - The root element must be `<project>` (`{path} was missing required property project`). Read `project > version` text.
 - Write: set the text of `<version>`, or insert `<version>` right after `<artifactId>` (or at the end). Diff
   `project.version = {v}`.
@@ -841,9 +873,11 @@ For each format: **read** (where the version comes from), **write** (what is edi
   behaviour. Refresh the fixtures to match, and record it as an intended deviation.
 
 #### `tauri.conf.json` (+ `.macos`, `.windows`, `.linux` variants)
+
 - Read top-level `version`. Write: ordered-map set `version`, pretty, no trailing newline. Diff `{v}`.
 
 #### Regex files (`{ path, regex }`)
+
 - Each pattern must compile (`Invalid regex pattern '{re}' for {path}: {err}`) and must contain the named group
   `version` (`Regex pattern '{re}' must contain at least one named capture group called 'version'`).
 - Read: **every** pattern must match (`Regex '{re}' did not match any content in {path}`). The captured `version` of
@@ -860,6 +894,7 @@ Allowed with `dependency`: Cargo.toml, package.json, package-lock.json, deno.jso
 (required). All others → `Dependencies are not supported in {file_name} files`.
 
 ### Acceptance (F6)
+
 - Port the unit tests in each `versioned_file/*.rs`.
 - Fixtures: `tests/prepare_release/{cargo,npm,deno,gleam_toml,go_modules,pubspec_yaml,pyproject_toml,tauri_conf_json,readme_version}`, `tests/bump_version/*`.
 
@@ -871,7 +906,7 @@ Sources: `knope-versioning/src/package.rs`, `crates/knope/src/step/releases/pack
 
 ### F7.1 Loading
 
-```
+```text
 AllVersionedFiles = for each package, for each versioned_file config: read the file, then versionedfile.New(config, content, gitTags)
 for each package:
     validated, versionFromFiles = validateVersionedFiles(pkg.configs, AllVersionedFiles)
@@ -886,7 +921,9 @@ Note: the same path listed in two packages is parsed **twice** into `AllVersione
 still apply by path through the `SetVersion` chaining.
 
 ### F7.2 `validateVersionedFiles`
+
 For each config, in order:
+
 1. Find the parsed file with the same path (the error `Versioned file not found` means a bug).
 2. Dependency validation:
    - Cargo.lock with no dependency: default it to the `package.name` of the first non-dependency `Cargo.toml` in the
@@ -899,11 +936,13 @@ For each config, in order:
 4. Return the validated configs and the first version (if any).
 
 ### F7.3 Package version
+
 `LatestVersion()` = `versions.Latest()`. So a package's "current version" is the newest of: files version, latest
 stable tag, and pre-release tags after it.
 
 ### F7.4 Setting a version
-```
+
+```text
 SetVersion(version, goVersioning, allFiles):
     for each file in allFiles:
         for each config in pkg.configs where config.Path == file.Path(): file = file.SetVersion(version, config.Dependency, goVersioning)
@@ -911,6 +950,7 @@ SetVersion(version, goVersioning, allFiles):
 ```
 
 ### F7.5 Tag format (`ReleaseTag`)
+
 - Default package: `v{version}`. Named package: `{name}/v{version}`.
 - `IsReleaseTag(tag, pkg)` = the tag has the package prefix and the rest parses as a Version.
 
@@ -923,7 +963,7 @@ Source: `step/releases/semver.rs`
 TOML: `rule = "Major"|"Minor"|"Patch"|"Release"` or `rule = "Pre"` with `label = "rc"`.
 `Pre` maps to `Rule{Pre, label, stable: Patch}`.
 
-```
+```text
 for each package:
     if pkg.overrideVersion != nil { v, gv = *override, BumpMajor }
     else { v = pkg.versions.CalculateNewVersion(rule); gv = pkg.goVersioning }   // error PreReleaseNotFound for Release w/o pre
@@ -936,6 +976,7 @@ No package → nothing happens (no error). `BumpVersion` does **not** stage file
 changelog.
 
 ### Acceptance (F8)
+
 - Fixtures `tests/bump_version/*`.
 
 ---
@@ -982,6 +1023,7 @@ Both backends must pass the same contract test suite (`internal/git/contract_tes
 repositories. The go-git run sets `PATH` to an empty dir to force the fallback.
 
 ### F9.1 `AllTagsOnBranch`
+
 1. Map commit OID → the tag names pointing at it (tags peeled to commits, both annotated and lightweight), in
    reference-iteration order.
 2. Walk from HEAD using libgit2's default revwalk order (**reverse chronological by commit time**; Knope sets no
@@ -990,6 +1032,7 @@ repositories. The go-git run sets `PATH` to an empty dir to force the fallback.
 Result: tags **newest first**. `git log --format=%H` from HEAD, joined with `git for-each-ref refs/tags --format='%(objectname) %(*objectname) %(refname:strip=2)'`, gives the same result.
 
 ### F9.2 `CommitMessagesAfterTag(tag)`
+
 - If the tag is given and exists: collect **all ancestors** of the tag's commit (including it) into an exclude set.
   If it is missing, log at debug and use all commits.
 - Walk from HEAD. Keep the commits not in the exclude set. Record the full message, the number of parents and
@@ -1002,20 +1045,24 @@ the **last stable** release. Pre-releases don't reset the commit window, so `1.3
 every change since `1.2.x`.
 
 ### F9.3 `FirstCommitsForFiles(paths)`
+
 Walk commits topologically **in reverse** (oldest first). For each commit, for each path not found yet: if the
 commit's tree has the path, record `GitInfo` from that commit. Paths never found → nil. Equivalent to
 `git log --diff-filter=A --format=... -- path` (take the oldest). Errors are swallowed and give an empty result.
 
 ### F9.4 `AddFiles` = `git add` of all paths (the index is written). No-op when empty. Paths that were removed must
+
 be staged as deletions too (libgit2 `add_all` does this for tracked deleted files; with the CLI use `git add -A -- <paths>`).
 
 ### F9.5 `CreateTag(name)`
+
 Knope calls `repo.tag(name, HEAD, signature, "", force=false)`. That makes an **annotated tag with an empty
 message**, using the configured committer (`user.name` and `user.email` must be set, else
 `Could not determine Git committer…`). Go: `git tag -a <name> -m ""` (use `--cleanup=verbatim` so an empty message is
 allowed). It fails if the tag already exists.
 
 ### F9.6 Misc
+
 - `HeadCommitSHA`: full 40-char SHA.
 - `CurrentBranch`: fails with `Not on the tip of a Git branch.` when HEAD is detached. **Quirk Q3:** Knope returns
   the full ref name (`refs/heads/main`). See F18 and F19 for where this leaks.
@@ -1029,7 +1076,8 @@ Sources: `knope-versioning/src/changes/{mod,conventional_commit}.rs`. Knope uses
 its grammar.
 
 ### F10.1 Parsing (on `strings.TrimSpace(message)`)
-```
+
+```text
 first line := type ["(" scope ")"] ["!"] ": " description
 type       := 1+ chars, not whitespace, "(", ")", ":" or "!"   (git-conventional: a "noun")
 body       := optional paragraphs after a blank line
@@ -1038,13 +1086,16 @@ footers    := the final paragraph, if EVERY line in it is a footer:
               token := "BREAKING CHANGE" | "BREAKING-CHANGE" | [A-Za-z0-9-]+  (no spaces)
               a value may continue onto following lines that are not footers
 ```
+
 - Messages that don't parse are **not changes at all**. Their footers are ignored as well.
 - `breaking` = `!` present OR any footer token is `BREAKING CHANGE` / `BREAKING-CHANGE`.
 - Type comparison (`feat`, `fix`) and footer-token comparison are **case-insensitive** (unicase).
 - Pick a Go library carefully, or hand-write the parser. Test it against `git-conventional`'s own test cases.
 
 ### F10.2 From commit to changes
+
 Inputs: commits (oldest first), package `scopes`, and `sections` (F12.1).
+
 1. If the commit has a scope and `scopes` is set: skip the commit unless some scope matches, compared **ASCII
    case-insensitively**. Commits with no scope always count.
 2. For each footer:
@@ -1063,6 +1114,7 @@ Note: custom **types** (such as `docs:` listed in `extra_changelog_sections.type
 commits. They only apply to change files. Only custom **footers** apply to commits.
 
 ### Acceptance (F10)
+
 - Port the unit tests in `conventional_commit.rs`. Fixtures `tests/prepare_release/{scopes,verbose,...}`.
 
 ---
@@ -1072,6 +1124,7 @@ commits. They only apply to change files. Only custom **footers** apply to commi
 Sources: the changesets crate (`change.rs`, `changeset.rs`, `versioning.rs`), `step/create_change_file.rs`
 
 ### F11.1 Change file format (`.changeset/<id>.md`)
+
 ```markdown
 ---
 <package-name>: <change-type>
@@ -1080,7 +1133,9 @@ Sources: the changesets crate (`change.rs`, `changeset.rs`, `versioning.rs`), `s
 
 <summary: markdown, usually starting with "# Title">
 ```
+
 Parsing:
+
 1. The first line trimmed must be `---` (`MissingFrontMatter`).
 2. Then lines until one that trims to `---`: each is `name: type` (split on the **first** `:`, trim both sides).
    A line without `:` → `InvalidFrontMatter`. Names are used as written: **no quote stripping**. Duplicate names:
@@ -1096,6 +1151,7 @@ package, **sort changes by unique_id** (plain string compare, so uppercase comes
 Map to a package: find the release whose `package_name == pkg.name` (`default` for the single `[package]`).
 
 ### F11.2 Change file → `Change`
+
 - `summary` = the first non-empty line of the trimmed summary, with leading `#` and space characters removed.
 - `details` = the remaining lines, leading blank lines skipped, joined with `\n`. Empty → nil.
 - Type: major → Breaking, minor → Feature, patch → Fix, custom → `Custom(ChangeType(s))`.
@@ -1103,11 +1159,13 @@ Map to a package: find the release whose `package_name == pkg.name` (`default` f
 - Source: `ChangeFile{id}` (displayed as `changeset {id}.md`).
 
 ### F11.3 `UniqueId.normalize(summary)`
+
 For each character: ASCII alphanumeric → lowercase it. `' '`, `'_'` or `'-'` → `_`, but only if the previous
 output character was not `_` from this rule. Anything else is dropped (and does not reset the underscore flag).
 Example: `` `[i carry your heart with me(i carry it in]` `` → `i_carry_your_heart_with_mei_carry_it_in`.
 
 ### F11.4 `CreateChangeFile` step
+
 1. Dry run → log `Would create a new change file` and return.
 2. Packages: if there is exactly 1, use it. Otherwise MultiSelect `Which packages does this change affect?`
    (at least one: `At least one package must be selected`).
@@ -1117,13 +1175,15 @@ Example: `` `[i carry your heart with me(i carry it in]` `` → `i_carry_your_he
    `What type of change is this?` for the default package.
 4. Text prompt `What is a short summary of this change?`, help `This will be used as a header in the changelog`.
 5. Create `.changeset/` if it is missing. Write `.changeset/{normalize(summary)}.md` with this content:
-   ```
+
+   ```text
    ---
    {pkg}: {type}      # one line per package (Knope: HashMap order, i.e. random; Go: use selection order)
    ---
 
    # {summary}
    ```
+
    (the file ends with a newline). Overwrites a file with the same name if one exists.
 
 ---
@@ -1133,7 +1193,9 @@ Example: `` `[i carry your heart with me(i carry it in]` `` → `i_carry_your_he
 Sources: `knope-versioning/src/release_notes/*`, `knope-config/src/changelog_section.rs`
 
 ### F12.1 Sections
+
 Defaults, in order:
+
 | name | source |
 | --- | --- |
 | `Breaking Changes` | Breaking |
@@ -1142,7 +1204,8 @@ Defaults, in order:
 | `Notes` | footer `Changelog-Note` |
 
 `convertSections(extra)`:
-```
+
+```text
 defaults := the default list above
 sections := []
 for each {name, footers, types} in extra (in order):
@@ -1152,11 +1215,13 @@ for each {name, footers, types} in extra (in order):
     sections = append(sections, (name, sources))
 return remaining defaults (in original order) + sections
 ```
+
 So custom sections always come **after** the remaining defaults. Overriding a default source moves it to the new
 section.
 
 ### F12.2 Rendering a release (`CreateRelease`)
-```
+
+```text
 notes := ""
 for (name, sources) in sections:
     cs := changes whose type is in sources, STABLE-sorted so that no-details comes before has-details
@@ -1168,6 +1233,7 @@ for (name, sources) in sections:
         if next exists: notes += "\n" if next has no details else "\n\n"
 title := "{version} ({YYYY-MM-DD, UTC today})"
 ```
+
 The notes are at "H1 level": sections use `##` and complex changes use `###`. Input change order: commit changes
 (oldest commit first), **then** changeset changes (sorted by id).
 
@@ -1175,8 +1241,10 @@ The notes are at "H1 level": sections use `##` and complex changes use `###`. In
 `### {summary}\n\n{details}`, simple → `- {summary}`.
 
 ### F12.3 Change templates (`[release_notes].change_templates`)
+
 Variables: `$summary`, `$details`, `$commit_author_name`, `$commit_hash`, `$pr_number`, `$pr_author_login`.
 A template **applies** only if every variable it contains can be filled:
+
 - `$commit_author_name` / `$commit_hash` need GitInfo.
 - `$pr_author_login` / `$pr_number` need the PR fields (F16.4).
 - `$details` needs details.
@@ -1187,21 +1255,26 @@ Forge-data check: if any template contains `$pr_author_login` or `$pr_number` (c
 PrepareRelease needs `[github]` (F13.2).
 
 ### F12.4 Changelog writing
+
 `Changelog{path, content, releaseHeaderLevel}`:
+
 - `releaseHeaderLevel`: take the **second** line starting with `#`. If it starts with `##` → H2, else if it starts
   with `#` → H1. If there is no second header → H2. (The first `#` line is assumed to be the title.)
 - `WithRelease(release)`:
-  ```
+
+  ```text
   body := release.notes, with one extra "#" added to each line starting with "#" when the level is H2
   new  := "{level} {title}\n\n{body}"
   insert `new + "\n\n"` right before the first line that parses as a release title (F12.5 parseTitle)
   (checks every line, header level ignored); if there is none, append `new` at the end
   keep the trailing newline: if the original ended with "\n" or was empty, make sure the output ends with "\n"
   ```
+
   Each original line is copied with `\n` added (so CRLF becomes LF). Returns `new` as the diff, and the action is
   `WriteToFile{diff: "\n" + new + "\n"}`.
 
 ### F12.5 Reading a release from a changelog (`GetRelease(version)`)
+
 - `parseTitle(line)`: whitespace tokens. tok0 ∈ {`#`, `##`}, tok1 = a Version. Other tokens may contain a `(YYYY-MM-DD)` date.
 - Scan for a line starting with `"{level} {version}"` that parses with the same level and an equal version.
   Title = the line with leading `#` removed, trimmed (for example `1.2.3 (2023-01-01)`).
@@ -1209,6 +1282,7 @@ PrepareRelease needs `[github]` (F13.2).
   remove one `#` from lines starting with `##`. Join with `\n`. Empty → not found.
 
 ### F12.6 Actions produced for a package release
+
 `[WriteToFile(changelog) if changelog is configured, CreateRelease(Release{title, version, notes, package})]`.
 
 ---
@@ -1217,7 +1291,7 @@ PrepareRelease needs `[github]` (F13.2).
 
 Source: `step/releases/mod.rs::prepare_release`, `package.rs`
 
-```
+```text
 if no packages → error "No packages to operate on"   (code package::no_defined_packages)
 needsForge := first template variable needing forge data (F12.3)
 changeset  := ChangeSet.FromDirectory(".changeset") if the dir exists, else empty   // parse errors → CouldNotReadChangeSet
@@ -1240,6 +1314,7 @@ if REAL run && !allow_empty && len(PendingActions)==0 → error "No packages are
 ```
 
 ### F13.1 `gatherChanges(pkg)`
+
 - `ignore` = step `ignore_conventional_commits` (log the deprecation **warning** when it is set) OR
   `[changes].ignore_conventional_commits`.
 - commits = ignore ? none : `CommitMessagesAfterTag(lastStableTag(pkg))` (F9.2). With `[changes].ignore_conventional_merge_commits`,
@@ -1250,29 +1325,34 @@ if REAL run && !allow_empty && len(PendingActions)==0 → error "No packages are
 - Implement both as `changes.Source` values (Phase 2 hook, E3), run in that fixed order in Phase 1.
 
 ### F13.2 Pre-releases
+
 - `prerelease_label` comes from the step, overridden at runtime by `--prerelease-label` / `REMERIS_PRERELEASE_LABEL` (or `KNOPE_PRERELEASE_LABEL`).
 - Change files are **kept** for pre-releases so that the final release picks them up again.
 - Commits are always counted from the last **stable** tag, so each pre-release changelog entry lists **all** changes
   since that stable release.
 
 ### F13.3 Changesets shared between packages
+
 One change file can name several packages. The `RemoveFile` action is created for each package, and duplicates are
 removed by the dedupe step. A remove error is **ignored**, because another package may have deleted the file already.
 
 ### F13.4 Executing actions (`execute(actions, stageToGit)`)
+
 In order:
+
 - `WriteToFile`: dry run → `Would add the following to {path}: {diff}`. Real → write the file (bytes as given, no
   newline added).
 - `RemoveFile`: dry run → `Would delete {path}`. Real → remove the file, ignoring errors.
 - The path of every write and remove goes onto the staging list, in order.
 - `AddTag` and `CreateRelease` are **returned** (they become the new `PendingActions`).
-- If `stageToGit`: dry run logs `Would add files to git:` and then `  {path}` for each path (only if there are any).
+- If `stageToGit`: dry run logs `Would add files to git:` and then `{path}` for each path (only if there are any).
   Real → `git add` (F9.4).
 
 The action order in the dry-run output is therefore: versioned files (in the order parsed) → go.mod `AddTag` is not
 printed → change-file deletes → changelog writes → staging list. Check against `tests/prepare_release/changesets/happy/dryrun_stdout.log`.
 
 ### Acceptance (F13)
+
 All of `tests/prepare_release/*` (more than 40 scenarios): allow_empty, branching_history, enable_prerelease,
 second_prerelease, release_after_prerelease, prerelease_after_release, handle_pre_versions_that_are_too_new,
 override_version(+multiple), override_prerelease_label, scopes, multiple_packages, package_selection,
@@ -1284,7 +1364,7 @@ no_version_change, custom_change_entries, ignore_conventional_commits(_toplevel)
 
 Source: `step/releases/mod.rs::release`
 
-```
+```text
 if len(PendingActions)==0:                                  // Release run WITHOUT PrepareRelease in this workflow
     for pkg in packages:
         rel := findPreparedRelease(pkg); if nil continue
@@ -1302,6 +1382,7 @@ for action in PendingActions (drain):
 ```
 
 `findPreparedRelease(pkg)`:
+
 1. `current := pkg.LatestVersion()`. None → skip.
 2. `lastTag := PackageVersions.FromTags(pkg, AllGitTags).Latest()`. If `lastTag == current` → nothing to release.
 3. Release = `changelog.GetRelease(current)` if found. Otherwise `Release{title: current.String(), notes: "", ...}`
@@ -1312,6 +1393,7 @@ flag = `version.IsPrerelease()`. With forges configured, **no local tag is creat
 `target_commitish` = HEAD SHA.
 
 ### Acceptance (F14)
+
 - Fixtures `tests/git_release/*`, `tests/default_workflows/*`.
 
 ---
@@ -1321,6 +1403,7 @@ flag = `version.IsPrerelease()`. With forges configured, **no local tag is creat
 Sources: `integrations/http.rs`, `app_config.rs`, `prompt.rs`
 
 ### F15.1 Client
+
 - `User-Agent: Remeris`.
 - Retry: exponential backoff, **up to 5 retries** on transient errors (connect errors, 5xx, 408, 429). Honour
   `Retry-After` (seconds or HTTP date).
@@ -1336,6 +1419,7 @@ Sources: `integrations/http.rs`, `app_config.rs`, `prompt.rs`
   parameters.
 
 ### F15.2 Credential store
+
 Directory: `os.UserConfigDir()/remeris/` (Knope used `…/knope/`, the same base as Rust `dirs::config_dir()`). One file
 per key, holding the raw value. **Migration:** when a key is missing from `remeris/`, read it from `knope/` and copy it
 into `remeris/`, so existing Knope users are not prompted again.
@@ -1397,7 +1481,9 @@ Errors: wrap `*github.ErrorResponse` / `*github.RateLimitError` / `*github.Abuse
 `ApiRequestError` message (`Trouble communicating with GitHub while {activity}: {status} with body: {message}`).
 
 ### F16.1 Auth
+
 Token sources, in order:
+
 1. **GitHub App** (E2, available from M7 because it is just another token source): when an App ID and a private key
    are configured (F3.1 flags/env vars), use `github.com/jferrl/go-githubauth` to mint an installation token.
    `githubauth.NewApplicationTokenSource(appID, pem)` → `githubauth.NewInstallationTokenSource(installationID, appTS)`
@@ -1413,12 +1499,16 @@ Token sources, in order:
 - Log at debug which source was used (`Using GitHub App installation {id}` / `Using GITHUB_TOKEN`), never the token.
 
 ### F16.2 Create release
+
 The wire payload (built by go-github from `RepositoryRelease`) must be:
+
 ```json
 {"tag_name": "...", "name": "...", "body": "... (omitted when empty)", "prerelease": false,
  "generate_release_notes": <body empty>, "draft": <assets configured>, "target_commitish": "<HEAD sha, omitted if unknown>"}
 ```
+
 With assets:
+
 1. Resolve assets: glob → every match (name = file name), or the explicit list (name = `name`, else the file name).
 2. For each: read the file (`Could not read asset file {path}: … Release has been created but not published!`), then
    upload it with `UploadReleaseAsset` (content type `application/octet-stream`).
@@ -1428,16 +1518,17 @@ Dry run:
 `Would create a {release|prerelease} on GitHub with name {name} and tag {tag}[ at commit {sha}] and {body:\n<notes> | autogenerated body}`,
 then `Would upload assets to GitHub:` and `- {name} from {path}` for each asset.
 
-### F16.3 Create or update PR, see F18.
+### F16.3 Create or update PR, see F18
 
 ### F16.4 PR info enrichment (for `$pr_number` / `$pr_author_login`)
+
 Dry run: log `Would fetch Pull Request info from GitHub repo {owner}/{repo} for {n} changes`, and set each change
 that has GitInfo to `pr_number=1234`, `pr_author_login="some-user"`.
 Real: for each change with GitInfo, `ListPullRequestsWithCommit` with the short hash (Knope sends
 `X-GitHub-Api-Version: 2026-03-10`; go-github sets its own API version header). Take the first PR: `number` and `user.login`. Errors for one commit → warn and continue.
 Nothing found → debug log.
 
-### F16.5 Issues, see F19.1.
+### F16.5 Issues, see F19.1
 
 ---
 
@@ -1453,6 +1544,7 @@ also replaced by `[REDACTED]` in every error message the package produces.
 
 **The `host` is trusted, but hardened (decision):** it is a required key of `[gitea]`, so unlike GitHub's `api_url` it needs
 no confirmation on the command line. When a client is built (a real run only; a dry run prints `host` as written):
+
 - it must be a URL with a scheme: otherwise `remeris::gitea::invalid_host`, as for userinfo (`user:pw@`), a query or a
   fragment, spaces and control characters. The message never repeats a host that may hold a password;
 - the scheme is `https`; `http` is accepted only for `localhost` and other loopback addresses
@@ -1508,6 +1600,7 @@ name too, in the dry-run text, the lookup and the `head` of the new pull request
 ## F19: Issue steps
 
 ### F19.1 `SelectGitHubIssue { labels? }`
+
 - Dry run: needs `[github]` (`NotConfigured`). Logs `Would query configured GitHub instance for issues with labels a, b`
   (or `with any labels`), then `Would prompt user to select an issue and move workflow to IssueSelected state.` Sets
   the fake issue `{key:"123", summary:"Test issue"}`.
@@ -1523,9 +1616,11 @@ name too, in the dry-run text, the lookup and the `head` of the new pull request
   Select `Select an Issue` with items `"{key}: {summary}"`. Log `Selected item : {issue}`.
 
 ### F19.2 `SelectGiteaIssue { labels? }`
+
 The same flow with the Gitea API (F17). Dry-run text says `Gitea instance`. Fake issue `{123, "Test issue"}`.
 
 ### F19.3 `SelectJiraIssue { status }`
+
 - Needs `[jira]`. Dry run: `Would query configured Jira instance for issues with status {status}` + the prompt line,
   and the fake issue `{FAKE-123, Test issue}`.
 - Real: auth = `Basic base64("{email}:{jira_token}")` (both from the credential store, F15.2).
@@ -1536,12 +1631,14 @@ The same flow with the Gitea API (F17). Dry-run text says `Gitea instance`. Fake
   shown) → Select. Quote `status` in the JQL (`status = "In Progress"`) so multi-word statuses work; Knope did not.
 
 ### F19.4 `TransitionJiraIssue { status }`
+
 Needs a selected issue (`NoIssueSelected`, help `You must use the SelectJiraIssue step before TransitionJiraIssue in the same workflow`)
 and `[jira]`. Dry run: `Would transition currently selected issue to status {status}`. Real:
 `GET {url}/rest/api/3/issue/{key}/transitions` → find the transition whose `name == status` (exact match), else
 `Transition` error. Then `POST` the same URL with `{"transition": {"id": id}}`. Log `{key} transitioned to {status}`.
 
 ### F19.5 `SelectIssueFromBranch`
+
 - Dry run: log `Would attempt to parse current branch name to select current issue` and set `{123, Fake Issue}`.
 - Real: split the branch name on `-`. If the first part parses as an integer → GitHub-style `{key: n, summary: rest joined "-"}`.
   Otherwise the second part must be an integer → Jira-style `{key: "{p0}-{p1}", summary: rest}`. Else `Bad branch name`.
@@ -1550,11 +1647,14 @@ and `[jira]`. Dry run: `Would transition currently selected issue to status {sta
   GitHub-style branch never matches. Go uses the short name.
 
 ### F19.6 `branchNameFromIssue`
+
 `strings.ReplaceAll(fmt.Sprintf("%s-%s", key, asciiLower(summary)), " ", "-")`. Only spaces are replaced. Other
 characters are kept (they may be invalid in Git refs, and Knope does not clean them either).
 
 ### F19.7 `SwitchBranches`
+
 Needs a selected issue. Dry run: `Would switch to or create a branch named {name}`. Real:
+
 - The local branch exists → `Found existing branch named {name}, switching to it.` → checkout.
 - Otherwise `Creating a new branch called {name}` → Select `Which branch do you want to base off of?` from the local
   branches → create the branch at the chosen branch's commit → checkout.
@@ -1562,12 +1662,14 @@ Needs a selected issue. Dry run: `Would switch to or create a branch named {name
   `Uncommitted changes`. Checkout is a forced checkout of HEAD after setting HEAD to the branch.
 
 ### F19.8 `RebaseBranch { to }`
+
 **What Knope actually does** (its docs and log text say otherwise): it calls libgit2 `repo.rebase(branch = to,
 upstream = None, onto = HEAD)` and finishes it. That never replays a commit. After it refuses a dirty tree it sets
 `refs/heads/<to>` to HEAD's commit and switches to `to`, so the commits that are only on `to` are lost. "Don't forget
 to push!" means push `to`. Knope has no tests for this step.
 
 **Decision (D6, revised by the user in the M11 kickoff, tracking issue #96):** fast-forward only, on both Git backends.
+
 - Dry run: `Would rebase current branch onto {to}` (Knope's wording). It checks nothing and opens no Git.
 - Real: `Git.Rebase(ctx, to)`. HEAD must be on a branch, the working tree must be clean (`Uncommitted changes`) and
   `to` must be an existing local branch (remotes are not checked). When `to` has commits that are not in the current
@@ -1585,15 +1687,18 @@ to push!" means push `to`. Knope has no tests for this step.
 Sources: `config/mod.rs::{generate, generate_workflows}`, `config/package.rs::find_in_working_dir`
 
 ### F20.1 Package discovery (`findInWorkingDir`)
+
 Run all three detectors and concatenate the results: **Cargo workspace members**, then **npm workspaces**, then
 **Deno workspaces**. If any found packages, return them. Otherwise build a single default package:
 `versioned_files` = every name from the F6.1 table that exists in the CWD (in table order), and
 `changelog = "CHANGELOG.md"` if that file exists. No files at all → no packages.
 
 ### F20.2 Cargo workspace
+
 Read `./Cargo.toml`; a missing (unreadable) file means no packages, but a file that is not valid TOML is an error
 (`Could not parse TOML in Cargo.toml: {err}`, code `workspace::toml`). If it has `workspace.members` (an array of **literal** strings, no glob support; a non-string
 → `The Cargo workspace members array should contain only strings`):
+
 - `workspace` must be a standard table (an inline `workspace = { ... }` is not a workspace), and `members` an array.
   An empty array is no workspace. A member that is empty, absolute or has a `..` component is an error (deviation from
   Knope); manifests are read only if regular files of at most 8 MiB.
@@ -1607,6 +1712,7 @@ Read `./Cargo.toml`; a missing (unreadable) file means no packages, but a file t
   - There is no changelog.
 
 ### F20.3 npm workspaces
+
 Read `./package.json` `workspaces` (an array of strings; the object form `{packages: [...]}` and non-string entries
 give nothing). Expand each pattern (in order, F-glob semantics; a `!negation` is a literal pattern that matches
 nothing; a pattern that does not compile is `Could not process workspaces glob pattern {p} in package.json: {e}`,
@@ -1616,6 +1722,7 @@ Patterns that leave the project lexically (`..`, absolute, NUL, and on Windows b
 errors; symbolic links are still followed, as in Knope. A `package.json` over 8 MiB is an error
 (`remeris::workspace::too_large`). Once all patterns are expanded, each workspace W must have a
 string `name`, else `Could not find a name in {path}` (`remeris::workspaces::npm_no_name`). For each workspace W:
+
 - `versioned_files` = `[W/package.json]`, plus `{package-lock.json, dependency: W.name}` if the root lock exists
   (yarn and pnpm locks are ignored), plus `{O/package.json, dependency: W.name}` for every other workspace O that has
   W.name as a key of `dependencies` or `devDependencies` (not peer or optional dependencies).
@@ -1623,7 +1730,9 @@ string `name`, else `Could not find a name in {path}` (`remeris::workspaces::npm
 - `scopes = [W.name]`.
 
 ### F20.4 Deno workspaces
+
 Knope uses `deno_config`'s workspace discovery. Simplified version for Go (differences in `testdata/deviations.md`):
+
 - Only the working directory is looked at: no walk up to a parent workspace, and the `workspaces` of a root
   `package.json` stay with the npm detector (F20.3).
 - The root `deno.json` or `deno.jsonc` must exist (`deno.json` wins when both do; one that does not parse is an
@@ -1651,7 +1760,8 @@ Knope uses `deno_config`'s workspace discovery. Simplified version for Go (diffe
 Check against `tests/prepare_release/deno/*` and `tests/generate/*`.
 
 ### F20.5 Default workflows (`hasForge`, `packages`)
-```
+
+```text
 release (help "Prepare and create a new release (update changelog, bump version, create release)"):
   PrepareRelease
   Command `git commit -m "chore: prepare release $version"`   ← `"chore: prepare releases"` when ≥2 packages
@@ -1664,21 +1774,26 @@ get-version (help "Get the current version of the project")      ← only when E
 ```
 
 ### F20.6 Forge detection (only when there is **no** `knope.toml`)
+
 First remote URL:
+
 - Contains `github.com`: split on `/`. owner = the second-to-last part without a `git@github.com:` prefix. repo =
   the last part without `.git`.
 - Otherwise, a known Gitea host (`codeberg.org`): `TryFromRemote` (F17). Knope tests `remote.contains(host)`;
   remeris requires the parsed host to equal the known host and drops the userinfo (testdata/deviations.md).
 
 ### F20.7 `--generate` output
+
 Serialise:
-```
+
+```text
 [changes]            (only when ignore_conventional_commits = true)
 [package] or [packages.<name>]   (package for the one unnamed default package; a named package is always [packages.<name>], unlike Knope)
 [[workflows]] ...
 [github] / [gitea]   (when set)
 [jira] / [release_notes]   (remeris only, when set: Knope's writer drops them)
 ```
+
 `Config.Document()` (`internal/config/document.go`) builds this with `internal/tomlwrite`. Formatting must match the
 golden files in `tests/generate/*/out/knope.toml`. Details: inline arrays on one line, versioned files as bare strings,
 or `{ path = "...", dependency = "..." }` / `{ path, regex }` tables, which are written inline when the array also holds
@@ -1743,10 +1858,12 @@ Knope supports one pre-release label at a time, chosen per run (`prerelease_labe
 no notion of an ordered progression, so nothing stops going from `rc` back to `alpha`.
 
 Sketch:
+
 ```toml
 [release]
 channels = ["alpha", "beta", "rc"]   # ordered, lowest first; any SemVer alphanumeric identifiers
 ```
+
 - `remeris release --channel beta` (env `REMERIS_CHANNEL`) replaces `--prerelease-label` when `channels` is set. The
   label must be one of the channels.
 - **Promotion rule:** for the same base version, a channel lower than the latest existing pre-release is an error
@@ -1785,6 +1902,7 @@ during the spike); `x509` is CLI-only. If signing fails, the step fails; it neve
 **`sign = "github"`: GitHub App, commits made through the API.** GitHub signs commits created through the API by
 an App and shows them as Verified, as long as the author/committer are not overridden (confirm this, and the exact
 conditions, in a spike before building on it). Flow, all through go-github with the App installation token (F16.1):
+
 1. Precondition: the local branch must equal the remote branch (`git fetch` then compare SHAs). Otherwise fail:
    `Local branch is not in sync with origin; push or pull first`.
 2. Read the staged changes (`git diff --cached --name-status -z`). For each added/modified file:
@@ -1813,7 +1931,9 @@ type Source interface {
     Changes(ctx context.Context, pkg PackageInfo, since ReleaseRef) ([]Change, error)
 }
 ```
+
 Config:
+
 ```toml
 [changes]
 sources = ["conventional_commits", "changesets"]          # default; order = order in the changelog
@@ -1823,7 +1943,9 @@ ignore_conventional_commits = true                        # still works: removes
 labels = { major = ["breaking"], minor = ["feature", "enhancement"], patch = ["bug", "fix"] }
 skip_labels = ["no-changelog"]
 ```
+
 Candidate sources:
+
 | Source | Change from | Notes |
 | --- | --- | --- |
 | `conventional_commits` | commit messages | Phase 1 (F10) |
@@ -1840,26 +1962,32 @@ and drop others with the same commit hash or PR number. Controlled by `dedupe = 
 
 Knope already releases several packages from one repo with their own versions and `{name}/v{version}` tags. Two
 gaps:
+
 1. `Version` and `ChangelogEntry` only work with a single package (`Too many packages defined`), so with several
    packages you can't put versions in commit messages, PR titles or commands.
 2. Commits are assigned to packages only by conventional-commit scope.
 
 Sketch:
+
 - **Qualified variables.** A variable value can name a package:
+
   ```toml
   variables = { "$api_version" = { variable = "Version", package = "api" },
                 "$web_notes"   = { variable = "ChangelogEntry", package = "web" } }
   ```
+
   The plain string form (`"Version"`) keeps Knope's single-package rule.
 - **Per-package iteration.** `Command` and `CreatePullRequest` get `for_each = "released_package"` (only packages
   released in this run, i.e. with a pending `CreateRelease`) or `for_each = "package"` (all packages). Inside the
   loop these default variables apply: `$package`, `$version`, `$changelog`, `$tag`. Example:
+
   ```toml
   [[workflows.steps]]
   type = "Command"
   for_each = "released_package"
   command = "npm publish --workspace $package"
   ```
+
 - **Aggregate variables** for multi-package text: `ReleasedPackages` (`api@1.2.0, web@0.4.1`) and `ReleaseNotes` (each
   released package as `## {package} {version}` followed by its notes, ready for a PR body). The default multi-package
   commit message becomes `chore: prepare releases $released_packages` (opt-in, to keep parity by default).

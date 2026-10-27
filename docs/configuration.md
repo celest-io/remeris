@@ -54,7 +54,8 @@ footers = ["Changelog-First-Note"]
 ### Versioned files
 
 An entry of `versioned_files` is a path, `{ path, dependency }` or `{ path, regex }`. The path is relative to the
-working directory and must exist. The format is chosen from the last path component (case-sensitive). `dependency` says whether the entry may name a dependency:
+working directory and must exist. The format is chosen from the last path component (case-sensitive). `dependency` says
+whether the entry may name a dependency:
 
 | File name | `dependency` |
 | --- | --- |

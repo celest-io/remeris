@@ -1,0 +1,8 @@
+[global]
+line-length = 120
+
+# docs/spec.md is the implementers' specification and testdata/*.md hold long table rows: hard-wrapping them would
+# make the diffs unreadable, so the line length is not checked there.
+[per-file-ignores]
+"docs/spec.md" = ["MD013"]
+"testdata/*.md" = ["MD013"]
