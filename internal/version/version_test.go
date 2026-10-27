@@ -22,8 +22,8 @@ func TestFullAndServiceVersion(t *testing.T) {
 		},
 		"injected": {
 			set: func() {
-				Version, Revision, Branch, BuildUser = "v1.2.3", "abc123", "main", "ci"
-				BuildDate, BuildNumber, GoVersion = "2026-10-03_12:00:00", "42", "go1.27.1"
+				Version, Revision, Branch, BuildUser = testModuleVersion, testRevision, "main", "ci"
+				BuildDate, BuildNumber, GoVersion = testBuildDate, "42", testGoVersion
 			},
 			wantFull:    "v1.2.3 [main/abc123.42] (Go: go1.27.1, User: ci, Date: 2026-10-03_12:00:00)",
 			wantService: "main/abc123.42",
