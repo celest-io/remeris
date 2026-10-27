@@ -67,15 +67,13 @@ if [[ -f CHANGELOG.md ]]; then
 fi
 body="Merging this PR will tag and release \`v${version}\`."$'\n\n'"${changelog_entry}"
 
-pulls_url="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls"
-auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json")
-open_prs=$(curl --fail --silent --show-error --max-time 10 "${auth[@]}" \
-  "${pulls_url}?head=${GITHUB_REPOSITORY%%/*}:${branch}&base=${base}&state=open")
-open_pr=$(jq -r '.[0].number // empty' <<<"$open_prs")
+# gh reads the token from the environment, so it never appears in a command line.
+export GH_TOKEN="$GITHUB_TOKEN"
+pulls_path="repos/${GITHUB_REPOSITORY}/pulls"
+open_pr=$(gh api --method GET "$pulls_path" -f head="${GITHUB_REPOSITORY%%/*}:${branch}" -f base="$base" -f state=open \
+  --jq '.[0].number // empty')
 if [[ -n "$open_pr" ]]; then
-  jq -n --arg title "$title" --arg body "$body" '{$title, $body}' |
-    curl --fail --silent --show-error --max-time 10 "${auth[@]}" -X PATCH --data @- "${pulls_url}/${open_pr}" >/dev/null
+  gh api --method PATCH "${pulls_path}/${open_pr}" -f title="$title" -f body="$body" >/dev/null
 else
-  jq -n --arg title "$title" --arg body "$body" --arg head "$branch" --arg base "$base" '{$title, $body, $head, $base}' |
-    curl --fail --silent --show-error --max-time 10 "${auth[@]}" -X POST --data @- "$pulls_url" >/dev/null
+  gh api --method POST "$pulls_path" -f title="$title" -f body="$body" -f head="$branch" -f base="$base" >/dev/null
 fi

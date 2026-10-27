@@ -19,11 +19,21 @@ concurrency:
 permissions: {}
 jobs:
   prepare-release:
-    # Only from main. Skip the commit produced by merging the release PR itself.
-    # startsWith, not contains: a squash-merged PR lists its commit messages in the body.
-    if: "github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore: prepare release')"
+    # Only from main. Skip the commit produced by merging the release PR itself, or the push would
+    # prepare the same release again before the tag exists. The head commit of that push is the
+    # release commit (squash or rebase merge: its message starts with the PR title) or the merge
+    # commit of the PR (a merge commit: "Merge pull request #N from <owner>/release"). Allow only
+    # squash and rebase merges on main anyway (docs/releasing.md). startsWith, not contains: a
+    # squash-merged PR lists its commit messages in the body.
+    if: >-
+      github.ref == 'refs/heads/main'
+      && !startsWith(github.event.head_commit.message, 'chore: prepare release')
+      && !(startsWith(github.event.head_commit.message, 'Merge pull request #')
+           && contains(github.event.head_commit.message, format(' from {0}/release', github.repository_owner)))
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The App secrets live in this environment (docs/releasing.md), restricted to main.
+    environment: release
     # Everything that writes uses the App token below; the default token only needs to exist.
     permissions:
       contents: read
@@ -66,24 +76,20 @@ jobs:
           echo "${GITHUB_WORKSPACE}/build" >> "$GITHUB_PATH"
       - name: Install ghcommit
         # Used by the prepare-release-bot workflow to create the prepare-release commit through the
-        # GitHub API, so GitHub signs it (Verified) under the release-bot App identity.
+        # GitHub API, so GitHub signs it (Verified) under the release-bot App identity. The binary is
+        # pinned by SHA-256 (the linux_amd64 line of the release's checksums.txt), so a changed or
+        # swapped release asset is rejected. Update the version and the hash together.
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
           # renovate: datasource=github-releases depName=planetscale/ghcommit
           GHCOMMIT_VERSION: v0.1.78
+          GHCOMMIT_SHA256: 97b1db204e334a9cc90c7b1d522cc3a9dca8c7b4ca1837862f1e8b77de04807e
         run: |
           set -euo pipefail
-          case "$(uname -m)" in
-            x86_64) arch=amd64 ;;
-            aarch64|arm64) arch=arm64 ;;
-            *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
-          esac
-          asset="ghcommit_linux_${arch}"
-          gh release download "$GHCOMMIT_VERSION" --repo planetscale/ghcommit \
-            --pattern "$asset" --pattern checksums.txt --dir /tmp/ghcommit
-          ( cd /tmp/ghcommit && grep " ${asset}\$" checksums.txt | sha256sum -c - )
+          gh release download "$GHCOMMIT_VERSION" --repo planetscale/ghcommit --pattern ghcommit_linux_amd64 --dir /tmp/ghcommit
+          echo "${GHCOMMIT_SHA256}  /tmp/ghcommit/ghcommit_linux_amd64" | sha256sum --check -
           mkdir -p "$HOME/.local/bin"
-          install -m 0755 "/tmp/ghcommit/${asset}" "$HOME/.local/bin/ghcommit"
+          install -m 0755 /tmp/ghcommit/ghcommit_linux_amd64 "$HOME/.local/bin/ghcommit"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Prepare release PR
         env:
