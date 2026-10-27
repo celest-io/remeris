@@ -17,7 +17,7 @@
       "groupName": "go toolchain"
     },
     {
-      "description": "hk: the version in mise.toml and the Pkl package URLs in hk.pkl move together",
+      "description": "hk: the version in mise.toml and the Pkl package URLs in hk/Config.pkl and hk/Builtins.pkl move together",
       "matchPackageNames": [
         "hk",
         "jdx/hk"
@@ -28,9 +28,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "hk Pkl package URLs in hk.pkl",
+      "description": "hk Pkl package URLs in hk/Config.pkl and hk/Builtins.pkl",
       "managerFilePatterns": [
-        "/(^|/)hk\\.pkl$/"
+        "/(^|/)hk/(Config|Builtins)\\.pkl$/"
       ],
       "matchStrings": [
         "github\\.com/jdx/hk/releases/download/v(?<currentValue>[^/]+)/hk@"

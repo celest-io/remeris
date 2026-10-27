@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Run every hk check on all files (hygiene, gomod tidy, golangci-lint, zizmor)"
+#MISE description="Run every hk check on all files (hygiene, YAML, Markdown, mise, gomod tidy, golangci-lint, jactionlint)"
 set -euo pipefail
 
 hk check --all
