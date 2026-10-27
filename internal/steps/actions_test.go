@@ -138,3 +138,75 @@ func TestExecuteActionsWriteError(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// TestExecuteAndStageIgnoresRemovalErrors pins Knope's behaviour (package.rs: "Ignore errors since we remove
+// changesets per-package"): a removal that fails, or whose file is already gone, is not an error and the path is
+// still staged (spec F13.3).
+func TestExecuteAndStageIgnoresRemovalErrors(t *testing.T) {
+	const (
+		shared   = "shared-change.md"
+		busyDir  = "busy-dir"
+		inBusy   = "busy-dir/child.md"
+		gonePath = "already-gone.md"
+	)
+	tests := map[string]struct {
+		setup      func(t *testing.T)
+		actions    []action.Action
+		wantStaged []string
+		wantGone   []string
+	}{
+		"already missing": {
+			actions:    []action.Action{action.RemoveFile(gonePath)},
+			wantStaged: []string{gonePath},
+		},
+		"change file shared by several packages": {
+			setup: func(t *testing.T) {
+				t.Helper()
+				if err := os.WriteFile(shared, []byte(oneLine), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+			// Without Dedupe the second removal finds the file gone.
+			actions:    []action.Action{action.RemoveFile(shared), action.RemoveFile(shared)},
+			wantStaged: []string{shared, shared},
+			wantGone:   []string{shared},
+		},
+		"removal fails": {
+			setup: func(t *testing.T) {
+				t.Helper()
+				if err := os.MkdirAll(busyDir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(inBusy, []byte(oneLine), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+			// A non-empty directory cannot be removed, whoever runs the test.
+			actions:    []action.Action{action.RemoveFile(busyDir), action.RemoveFile(gonePath)},
+			wantStaged: []string{busyDir, gonePath},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+			g := &recordingGit{}
+
+			_, err := steps.ExecuteAndStage(t.Context(), g, false, tc.actions)
+
+			if err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if strings.Join(g.staged, ",") != strings.Join(tc.wantStaged, ",") {
+				t.Errorf("staged = %v, want %v", g.staged, tc.wantStaged)
+			}
+			for _, p := range tc.wantGone {
+				if _, err := os.Stat(p); !os.IsNotExist(err) {
+					t.Errorf("%s should be removed", p)
+				}
+			}
+		})
+	}
+}
