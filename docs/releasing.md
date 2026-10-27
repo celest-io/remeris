@@ -11,7 +11,7 @@ set up once, how to cut the first release (v0.0.1), and how users verify a downl
 | 1 | `prepare-release.yaml` | On every push to `main` (and by hand), runs `remeris prepare-release-bot`. It computes the next version from the conventional commits since the last tag, writes `CHANGELOG.md` and `VERSION` on a `release` branch, and opens or updates the `release` pull request. |
 | 2 | you | Review the PR (the changelog is its body) and merge it. |
 | 3 | `release.yaml` | On the push of the squashed or rebased release commit to `main`, runs `remeris release`: it creates the GitHub release and the `vX.Y.Z` tag at that commit. |
-| 4 | `push-artifact.yaml` | The tag push builds the archives, signs and attests them, and uploads them to the release. |
+| 4 | `push-artifact.yaml` | The tag push builds the archives, signs and attests them, uploads them to the release, then signs and uploads the packslip bundle. |
 
 Design points:
 
@@ -54,7 +54,10 @@ version information injected like `mise run build` does:
 - `SHA256SUMS` for all archives;
 - `SHA256SUMS.sigstore.json`, a keyless [cosign](https://docs.sigstore.dev/cosign/signing/overview/) (3.x) signature bundle of `SHA256SUMS`, made with the GitHub OIDC identity of
     the workflow;
-- a GitHub build provenance attestation for every archive (stored by GitHub, not a release asset).
+- a GitHub build provenance attestation for every archive (stored by GitHub, not a release asset);
+- `packslip.sigstore.json`, the signed [packslip](https://packslip.dev) release bundle that mise's `packslip:` backend verifies. It records the project, the version, and the
+    platform, format, executable (`remeris`), size and digest of every archive, and links the attestations above. packslip reads the platform and the format from the archive names
+    (`linux|darwin|windows`, `amd64|arm64`, `.tar.gz|.zip`), so those names must keep this shape.
 
 The build is reproducible: the same commit, Go toolchain and GNU tools give byte-identical archives. The build date is the commit time (`SOURCE_DATE_EPOCH`, by default
 `git log -1 --format=%ct`), the build user and branch are the fixed strings `release`, the build number stays `unknown`, and the archives have sorted entries, fixed owners, modes
@@ -64,6 +67,22 @@ and `DIST_TARGETS` (for example `"linux/amd64 windows/arm64"`) limits the platfo
 `push-artifact.yaml` has two jobs. The `build` job (read-only token) checks that the tagged commit is on `main` and that the tag matches `VERSION`, builds, and records the SHA-256
 of `SHA256SUMS` and the list of archives. The `publish` job holds the write permissions but checks out and runs nothing from the repository: it checks the downloaded files against
 what the build job recorded, signs, attests, and uploads exactly the listed archives, `SHA256SUMS` and the bundle.
+
+Three more jobs make the packslip bundle, each with the least permission it needs:
+
+| Job | Permissions | What it does |
+| --- | --- | --- |
+| `resolve` | `contents: read` | Dispatch only. Checks that the run is on `main`, that the `tag` input is `v` plus a SemVer version, that the tagged commit is on `main` and that the tag matches `VERSION` (the checks the `build` job makes on a tag push), and outputs the tag and its commit. |
+| `packslip` | `contents: read`, `id-token: write` | Downloads the archives, `SHA256SUMS` and its bundle from the release, verifies them (below), runs `jdx/packslip` (pinned to the commit of v1.11.1) with `bin: remeris`, `attest: link` and `upload: false`, and keeps `packslip.sigstore.json` as a workflow artifact. It cannot change the release. |
+| `publish-packslip` | `contents: write` | Downloads that artifact and runs `gh release upload ... --clobber`. It signs nothing. |
+
+The `packslip` job signs only what it checked: `SHA256SUMS.sigstore.json` must verify with the identity of this workflow at `refs/tags/<tag>`, every archive must match `SHA256SUMS`
+(and the list must be the archives found), and every archive must have its build provenance attestation from this workflow at that tag. It then signs the downloaded files, not a
+second download. `attest: link` instead of `true` because the `publish` job already attested the archives: an attestation made by the packslip job would describe the run of the
+packslip job, not the build of the tag, and `attestations: write` is not needed.
+
+`build` and `publish` run only on a tag push. The `if` of the `packslip` job runs it after a successful `publish` (tag push) or a successful `resolve` (dispatch), never after a
+failure.
 
 ## One-time setup
 
@@ -109,6 +128,9 @@ for a `v*` tag". It is trustworthy only if just the release workflow can create 
 - **Tags `v*`**: restrict creation, update and deletion to the App (bypass actor), and add "block deletions" and "block force pushes". The tag push is what starts the artifact
     build, so it must come only from the release workflow.
 - **Actions**: Settings, Actions, General: workflow permissions "Read repository contents" by default. The workflows declare their own permissions.
+- **Who can run `push-artifact.yaml` by hand**: anyone with write access can start a workflow_dispatch run. The `resolve` job refuses any ref but `main`, and `main` needs
+    reviewed pull requests, so the file that signs is a reviewed one. Keep it so: the packslip signature names this workflow file, and mise and packslip remember that file as the
+    signer. Do not rename it, and do not move the signing to another workflow file, without a plan for the users who pinned the signer.
 - **Releases**: leave "immutable releases" **off** for this repository. `push-artifact.yaml` attaches the archives after the release exists, and an immutable release rejects
     that. (The alternative is a draft release that is published after the upload, which needs a change to the workflows.)
 
@@ -126,7 +148,8 @@ first release must be `0.0.1` whatever lands first.
     without a version and would recompute (and overwrite) the forced release PR. A run that is still going can replace the PR content right after you reviewed it. If a push slipped
     in, run the workflow again with `0.0.1` and review again.
 5. `release.yaml` runs on the push of the squashed release commit to `main`: it creates the `v0.0.1` GitHub release with the changelog as notes, and the tag.
-6. `push-artifact.yaml` runs on the tag, and attaches the archives, `SHA256SUMS` and `SHA256SUMS.sigstore.json` to the release.
+6. `push-artifact.yaml` runs on the tag, and attaches the archives, `SHA256SUMS`, `SHA256SUMS.sigstore.json` and `packslip.sigstore.json` to the release. (The real v0.0.1 predates
+    the packslip jobs: it gets its bundle with [the manual run](#add-the-bundle-to-an-existing-release).)
 7. [Verify](#verify-a-download) one download.
 
 The merge of the release PR pushes a commit that `prepare-release.yaml` skips (see the loop guard). From then on the version is computed from the commits since the last tag. The
@@ -137,6 +160,8 @@ If something fails halfway:
 - **Release job failed, no release:** re-run the failed `release.yaml` run (including when its PR check failed: nothing was released). `remeris release` publishes the release for
     a `VERSION` that has no tag.
 - **Release exists, no archives:** re-run `push-artifact.yaml` from the Actions tab; `gh release upload` refuses to overwrite, so delete the partial assets first.
+- **Archives exist, no `packslip.sigstore.json`** (the packslip jobs failed, or the release is older than the packslip support, like v0.0.1): run the workflow by hand, see
+    [Add the bundle to an existing release](#add-the-bundle-to-an-existing-release). Re-running only the failed packslip jobs of the tag run also works, and the upload overwrites.
 - **Wrong version in the PR:** run **Prepare release** again with the right version, or close the PR and delete the `release` branch (as the App, or as an administrator who lifts
     the ruleset for the moment).
 
@@ -163,6 +188,50 @@ gh attestation verify remeris_v0.0.1_linux_amd64.tar.gz --repo celest-io/remeris
 To pin one version in step 1, replace the regular expression by `--certificate-identity https://github.com/celest-io/remeris/.github/workflows/push-artifact.yaml@refs/tags/v0.0.1`.
 Build provenance attestations need a public repository (or GitHub Enterprise Cloud for a private one). After extracting, `remeris --version` prints the tag, the revision and the
 build date. Because the build is reproducible, building the tag yourself with `mise run dist -- v0.0.1` on Linux with the same Go version gives the same archive hashes.
+
+## Install with mise and verify with packslip
+
+mise installs remeris from the GitHub release when its `packslip:` backend is used. mise checks `packslip.sigstore.json` before it unpacks anything: the signature must be a GitHub
+Actions run of `celest-io/remeris`, the signed project and version must be the requested ones, and the archive must have the signed digest and size.
+
+```sh
+mise use -g packslip:github.com/celest-io/remeris
+```
+
+TODO (fill in after the first release with a `packslip.sigstore.json` exists, and copy the value to the README and to [usage.md](usage.md)): the signer fingerprint, `ps1_` and 26
+characters. Take it from the first bundle, on a release you trust, with `packslip pin packslip.sigstore.json`, and publish it where it does not depend on the release (the README).
+Until it is filled in, do not pin a fingerprint, and do not copy one from elsewhere. A user then records it apart from the release, for example with
+`packslip install github.com/celest-io/remeris --pin ps1_...`.
+
+To check a download by hand with the [packslip CLI](https://packslip.dev/docs/install/):
+
+```sh
+V=v0.0.1
+curl -fsSLO "https://github.com/celest-io/remeris/releases/download/${V}/packslip.sigstore.json"
+curl -fsSLO "https://github.com/celest-io/remeris/releases/download/${V}/remeris_${V}_linux_amd64.tar.gz"
+packslip verify packslip.sigstore.json --artifact "remeris_${V}_linux_amd64.tar.gz"   # add --pin ps1_... once the fingerprint is published
+packslip show packslip.sigstore.json                                                  # the platforms, formats and executables the bundle records (verifies nothing)
+gh attestation verify "remeris_${V}_linux_amd64.tar.gz" --repo celest-io/remeris      # the linked build provenance, which packslip verify does not fetch
+```
+
+`packslip verify` with no trust flags requires a run of `celest-io/remeris` as the signer, in any workflow and at any ref. To require this workflow at a tag, add
+`--identity-prefix https://github.com/celest-io/remeris/.github/workflows/push-artifact.yaml@refs/tags/ --issuer https://token.actions.githubusercontent.com`. A bundle added by
+hand (next section) is signed at `refs/heads/main`, so it fails that stricter check, and so does mise with its `workflow` tool option (it accepts tag runs only, unless it names
+another ref).
+
+### Add the bundle to an existing release
+
+The releases made before the packslip support have no bundle (v0.0.1 is the first one). To add it without releasing again, once this workflow is on `main`: Actions,
+**Push artifact**, **Run workflow**, branch `main`, and enter the tag (`v0.0.1`) in `tag`; or `gh workflow run push-artifact.yaml --ref main -f tag=v0.0.1`.
+
+The run executes only the `resolve`, `packslip` and `publish-packslip` jobs. It refuses a ref other than `main`, a tag that is not `v` plus a SemVer version, a tagged commit that
+is not on `main`, and a tag that differs from the `VERSION` of that commit. It signs only the archives that are on the release and that verify against the `SHA256SUMS` signed by
+the tag run, with their attestations (the packslip job fails otherwise), and then uploads the bundle with `--clobber`, so running it again replaces the bundle. It builds nothing
+and uploads no archive.
+
+The consequences to know: the bundle is signed by the workflow at `refs/heads/main`, not at the tag, and it records `main`'s run as the signer while the `source.commit` is the
+tagged commit. Default consumers (mise without options, `packslip verify` with no trust flags) accept it, because they check the repository and not the ref. The workflow file is
+the same as for a tag run, so signer continuity in mise holds.
 
 ## Bootstrap
 

@@ -9,6 +9,15 @@ differences are listed in
 
 ## Install
 
+With [mise](https://mise.jdx.dev) and its [packslip](https://packslip.dev) backend, which checks the signed release bundle (`packslip.sigstore.json`) before it unpacks anything:
+
+```sh
+mise use -g packslip:github.com/celest-io/remeris
+```
+
+TODO: the signer fingerprint (`ps1_...`) to pin is filled in here after the first release carrying `packslip.sigstore.json` exists. Do not copy one from anywhere else. See
+[docs/releasing.md](docs/releasing.md#install-with-mise-and-verify-with-packslip) for how to get it and for the other ways to verify a download.
+
 With Go:
 
 ```sh
@@ -39,7 +48,7 @@ A repository without a `knope.toml` already has these three workflows with the s
 
 - [docs/usage.md](docs/usage.md): command line, output, exit codes, environment variables and credentials.
 - [docs/configuration.md](docs/configuration.md): the `knope.toml` that remeris reads.
-- [docs/releasing.md](docs/releasing.md): how remeris releases itself, the GitHub App to set up, cutting v0.0.1 and verifying a download.
+- [docs/releasing.md](docs/releasing.md): how remeris releases itself, the GitHub App to set up, cutting v0.0.1, installing with mise and verifying a download.
 - [docs/differences.md](docs/differences.md): where remeris differs from Knope.
 - [docs/spec.md](docs/spec.md): the specification, the source of truth for behaviour.
 
