@@ -1,1 +1,179 @@
 # Changelog
+
+## 0.0.1 (2026-10-27)
+
+### Features
+
+- add build version package
+- add diagnostics, renderer and brand constants
+- add steps, state, run type and runner
+- add templates and variable resolution
+- add command step and unimplemented step stubs
+- load knope.toml with koanf and a toml index
+- add global and workflow options with lineage-aware loader
+- add root command, workflow subcommands and remeris binary
+- add full SemVer 2.0.0 Version type
+- add bump rules, stable core and pre-release label view
+- add PackageVersions, the version history of a package
+- add action package and versioned file core model
+- add regex versioned files
+- add a TOML index with key lookup
+- edit TOML values in place
+- insert keys under dotted-key parents
+- add ordered JSON editor matching serde_json pretty output
+- add the Cargo.toml format
+- add pyproject.toml format
+- add the package.json format
+- add the go.mod format
+- add Git interface and CLI backend with AllTagsOnBranch
+- add go-git fallback backend for AllTagsOnBranch
+- add the pure Package with validation and set version
+- validate packages and build their configs
+- load packages, versioned files and git tags into the state
+- implement BumpVersion and the file action executor
+- resolve Version and apply --override-version
+- parse conventional commits like git-conventional
+- add Change, ChangeType and the commits to changes conversion
+- add changelog sections and convertSections
+- add the change file format
+- convert change files into changes
+- add CommitMessagesAfterTag and FirstCommitsForFiles
+- add Prompter interface on huh v2 with a scripted fake
+- render release notes and change templates
+- write and read changelogs
+- apply changes to a package and produce its release actions
+- stage files with AddFiles on both backends
+- add the CreateChangeFile step
+- load changelogs and change templates, stage files in the executor
+- add the PrepareRelease step
+- resolve the ChangelogEntry variable
+- create annotated tags at HEAD
+- find a release prepared by an earlier workflow
+- record whether a [gitea] table is configured
+- create Git tags in the Release step
+- read the current branch and the first remote
+- add retrying transport and API error diagnostics
+- add the credential store with Knope migration
+- accept api_url and upload_url in [github]
+- add the GitHub App options
+- build the GitHub client from an auth chain
+- trust a GitHub API URL only from the command line or the environment
+- add a glob package with the semantics of Rust's glob crate
+- create releases and upload their assets
+- keep whether assets were a glob or a list
+- create GitHub releases in the Release step
+- find the pull request of a commit
+- enrich changes with pull request info
+- create or update a pull request
+- add the CreatePullRequest step
+- find the default package at the root when knope.toml has none
+- detect GitHub from the first remote without knope.toml
+- add the Gitea client with header auth and a hardened transport
+- create releases
+- publish releases on Gitea
+- create or update pull requests
+- create Gitea pull requests
+- detect Gitea from a codeberg.org remote
+- add Cargo.lock
+- add gleam.toml
+- add package-lock.json
+- add tauri.conf.json
+- add pom.xml with a surgical version edit
+- add pubspec.yaml
+- add deno.json and deno.jsonc
+- port the deno_semver subset that deno.lock needs
+- read and print deno.lock v5 like deno_lockfile
+- add deno.lock
+- discover Cargo workspace packages
+- discover npm workspace packages
+- discover Deno workspace packages
+- find Deno package.json dependency edges
+- add a TOML writer that prints like toml_writer
+- map the configuration to a TOML document
+- create a file exclusively and atomically
+- add --generate
+- replace a file atomically
+- add --upgrade
+- add changes.ignore_conventional_merge_commits
+- write and keep ignore_conventional_merge_commits
+- select the issue from the current branch
+- add the Jira client in internal/forge/jira
+- select a GitHub issue
+- list issues with Knope's GraphQL query
+- add SelectGiteaIssue
+- add branch listing, creation, dirty check and switch
+- add fast-forward only Rebase to the Git interface
+- add SelectJiraIssue and TransitionJiraIssue
+- implement SwitchBranches
+- implement RebaseBranch
+- fill unknown build info from runtime/debug
+- trace Knope's version debug lines
+- trace package loading, version choice and prepared releases
+
+### Fixes
+
+- match Knope's parse order and document the new package
+- make PackageVersions copies independent and refuse counter overflow
+- keep deno.jsonc out of default detection
+- reject duplicate group names and split lines like Rust
+- accept a UTF-8 byte order mark
+- insert at the start of a document with a byte order mark
+- parse and print numbers exactly like serde_json
+- match Knope's Cargo.toml errors and record deviations
+- accept a plus sign in a go.mod major suffix
+- harden the backend and widen the contract suite
+- open linked worktrees and shallow clones with go-git
+- match Knope's read errors and isolate validate runs
+- drop BumpVersion's pending actions, as Knope does
+- apply overrides when validating and keep commas in override values
+- reject invalid UTF-8 and cover parsing edge cases
+- skip commits whose message is not UTF-8, like Knope
+- keep context cause, drop accessible mode, sort scripted multiselect
+- show why the input failed beneath the message
+- stage file and directory swaps with the go-git backend
+- read the fake release date only in the test hook
+- refuse an empty committer identity in the CLI backend
+- keep the environment and option-like names out of tag creation
+- count a tag with other build metadata as released
+- log a step without fields by its type alone
+- apply insteadOf to the first remote, like libgit2
+- list only remotes with a URL, like libgit2
+- treat an empty remote url as none with every git version
+- match reqwest's status text and retry broken connections
+- keep a found Knope credential when copying it fails
+- check the GitHub App options only with [github]
+- upload to {host}/api/uploads/ when only api_url is set
+- send credentials only to the configured GitHub hosts
+- wrap two-factor and redirection errors like status errors
+- treat an empty stored token as none
+- refuse special files as assets and show list paths as written
+- report the discovery error only to workflows that need packages
+- fall back to the default package when no workspace member is usable
+- read no remote outside a repository
+- do not store a blank token
+- harden host errors and token scrubbing
+- do not escape <, > and & in the release body
+- end the pull request search on an empty page
+- read pom.xml version text from the original bytes
+- rename the pubspec BOM constant
+- replace the pubspec diff and tighten its fuzz oracle
+- end deno.json line comments at LF, cap nesting, test escapes
+- add Key methods and correct the print-order docs
+- remove deno.lock keys like serde_json and pin the edge cases
+- fail on a root Cargo.toml that does not parse
+- harden Cargo workspace discovery
+- match stars in polynomial time like the glob crate
+- harden npm workspace reading
+- do not loop forever on symlinked directories under **
+- harden Deno workspace discovery
+- expand each path once, limit pattern size, clearer too-many-directories error
+- make Doc not a Value, drop String, limit nesting
+- keep the name of a lone package in the document
+- keep --prerelease-label out of the generated file
+- refuse an upgrade that would drop keys or replace a read-only file
+- report unknown flags like clap and keep --validate from hiding an unknown workflow
+- scrub before cutting, unwrap quoted values, post transitions once
+- align go-git branch operations with the git CLI
+- make Rebase a compare-and-set and refuse aliases
+- print existing pre-releases as they are
+- accept build metadata and hyphens in the VERSION pattern
