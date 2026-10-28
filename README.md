@@ -60,3 +60,11 @@ A repository without a `knope.toml` already has these three workflows with the s
 - [docs/spec.md](docs/spec.md): the specification, the source of truth for behaviour.
 
 Contributors: see [CLAUDE.md](CLAUDE.md) for the commands and the code layout.
+
+## Community
+
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to set up, the spec-first rule, tests, commits and pull requests.
+- [SUPPORT.md](SUPPORT.md): where to ask questions (GitHub Discussions) and where to report bugs (Issues).
+- [SECURITY.md](SECURITY.md): how to report a vulnerability privately and how to verify a release.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): the Contributor Covenant 2.1.
+- [docs/maintaining.md](docs/maintaining.md): the repository settings that maintainers apply.
