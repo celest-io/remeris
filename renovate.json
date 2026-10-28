@@ -1,13 +1,96 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Automerge is off everywhere: main requires signed commits, a human approval and a code owner review (docs/maintaining.md), and the release pipeline trusts what is merged.",
+    "Renovate cannot regenerate mise.lock: the mise-lock job of ci.yml fails a pull request with a stale lockfile and says how to fix it."
+  ],
   "extends": [
     "config:recommended",
     "helpers:pinGitHubActionDigests"
   ],
+  "dependencyDashboard": true,
   "labels": [
     "dependencies"
   ],
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "timezone": "UTC",
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "automerge": false,
+  "platformAutomerge": false,
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "ignorePaths": [
+    "**/testdata/**",
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/examples/**",
+    "**/__tests__/**",
+    "**/test/**",
+    "**/tests/**",
+    "**/__fixtures__/**"
+  ],
+  "vulnerabilityAlerts": {
+    "description": "Security updates are not held back by the schedule or the release age",
+    "addLabels": [
+      "security"
+    ],
+    "schedule": [
+      "at any time"
+    ],
+    "minimumReleaseAge": null,
+    "automerge": false
+  },
   "packageRules": [
+    {
+      "description": "Go modules: minor and patch updates in one pull request (majors stay separate)",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "go modules (non-major)"
+    },
+    {
+      "description": "GitHub Actions: pinned digests and new versions in one pull request",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github actions"
+    },
+    {
+      "description": "mise tools in mise.toml and mise.claude.toml (mise.lock needs a manual step, see docs/maintaining.md)",
+      "matchManagers": [
+        "mise"
+      ],
+      "groupName": "mise tools"
+    },
+    {
+      "description": "website/ npm packages, non-major (harmless while the directory does not exist)",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchFileNames": [
+        "website/**"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "website npm packages (non-major)"
+    },
     {
       "description": "Go toolchain: go.mod and mise.toml move together",
       "matchPackageNames": [
