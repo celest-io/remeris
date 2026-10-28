@@ -7,6 +7,18 @@ remeris [global options] [workflow [workflow options]]
 `remeris --help` lists the workflows and `remeris <workflow> --help` shows the options of one. `--version` (`-V`) prints the version. Remeris reads `knope.toml` in the working
 directory; see [configuration.md](configuration.md).
 
+## Install
+
+With [mise](https://mise.jdx.dev), which verifies the signed release bundle of the GitHub release before it installs:
+
+```sh
+mise use -g packslip:github.com/celest-io/remeris        # or without -g, to record it in the mise.toml of the project
+mise use -g packslip:github.com/celest-io/remeris@0.0.1  # an exact version also skips mise's minimum release age (24 hours by default)
+```
+
+TODO: the signer fingerprint to pin is filled in here after the first release with a `packslip.sigstore.json` exists. Until then do not pin one. The archives of every release can
+also be downloaded and [verified by hand](releasing.md#verify-a-download), or built with `go install github.com/celest-io/remeris/cmd/remeris@latest`.
+
 ## Workflows
 
 Each workflow in `knope.toml` is a subcommand with the same name. Without a `knope.toml`, the workflows `release`, `document-change` and `get-version` exist, and `--generate`

@@ -2,6 +2,7 @@ name: Push artifact
 # remeris's `release` workflow creates the GitHub release and the `v*` tag. That tag push lands here:
 # build the archives for every platform, sign and attest them, and attach them to the release that was
 # already created. The build job holds no write permission; the publish job never runs repository code.
+# Last, the publish job signs a packslip bundle (packslip.sigstore.json) for mise's packslip backend.
 on:
   push:
     tags:
@@ -12,7 +13,9 @@ concurrency:
 permissions: {}
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: the archives are reproducible only for the same tar, gzip, zip and Go, and "latest" moves
+    # to a new image (and new tool versions) without a change of this file. Move it with a reviewed change.
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -110,3 +113,17 @@ jobs:
           read -r -a files <<<"$FILES"
           cd dist
           gh release upload "$GIT_TAG" "${files[@]}" SHA256SUMS SHA256SUMS.sigstore.json
+      # The packslip is this release's signed inventory (https://packslip.dev): the digest and size of every archive, its
+      # platform and format, the executable inside it (remeris), and the identity of this workflow, which signs it with the
+      # OIDC token of this job. mise's packslip backend checks a download against it. It is made last, once the assets exist
+      # on the release, from the verified local archives (no checkout, no repository code). attest: link, not true: the
+      # step "Attest build provenance" above already attested these exact files, and a second attestation in this job would
+      # only duplicate it; link points the packslip at that one. upload (default true) attaches packslip.sigstore.json to the
+      # release with --clobber, so re-running this job replaces the bundle.
+      - name: Sign the packslip
+        uses: jdx/packslip@3a4afb16b29d3ac639fcd35cbe99124184f71859  # v1.11.1
+        with:
+          tag: ${{ github.ref_name }}
+          artifacts: dist/remeris_*.tar.gz dist/remeris_*.tar.xz dist/remeris_*.zip
+          bin: remeris
+          attest: link
