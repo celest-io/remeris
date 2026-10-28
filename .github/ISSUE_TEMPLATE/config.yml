@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://github.com/celest-io/remeris/discussions/categories/q-a
+    about: Questions about using remeris belong in Discussions, category Q&A.
+  - name: Report a security vulnerability
+    url: https://github.com/celest-io/remeris/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.
+  - name: Read the documentation
+    url: https://github.com/celest-io/remeris/tree/main/docs
+    about: Usage, configuration, differences from Knope, the specification and releasing.
