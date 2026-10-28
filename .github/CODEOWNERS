@@ -1,0 +1,12 @@
+# Code owners are asked for review on every pull request that touches their paths (the main ruleset
+# requires a code owner review: see docs/maintaining.md). The last matching pattern wins.
+# The handle below must be confirmed by the maintainers; add a team (@celest-io/team) when there is one.
+
+*                        @yvigara
+
+# Sensitive areas: the release pipeline and what it trusts.
+/.github/workflows/      @yvigara
+/.github/scripts/        @yvigara
+/mise-tasks/dist         @yvigara
+/knope.toml              @yvigara
+/docs/releasing.md       @yvigara
