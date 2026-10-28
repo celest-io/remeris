@@ -195,7 +195,9 @@ waits for the schedule or the release age), and tick **Rebase** next to a pull r
 
 A change of a tool version in `mise.toml` also needs `mise.lock`, which Renovate cannot regenerate (the hosted Mend Renovate app does not run mise, and `postUpgradeTasks` are not
 available in it). The job `mise-lock` of `ci.yml` runs `mise lock --platform linux-x64,linux-arm64,macos-arm64` and fails the pull request, with an error annotation that names the
-command, when `mise.lock` differs. To fix a mise tool pull request:
+command, when `mise.lock` differs. The job pins the mise version (`version:` of `jdx/mise-action`, currently 2026.10.21) because the lockfile format changes between mise releases:
+write the lockfile with that version (`mise self-update` or `mise use -g mise@2026.10.21`), and change the pin together with the lockfile when you upgrade mise. To fix a mise tool
+pull request:
 
 ```sh
 git fetch origin
