@@ -79,7 +79,8 @@ the spec say which is which). So:
 - **Pull requests.** Open a draft pull request and mark it ready when it is. Its title is a conventional commit message too, because the merge uses it. Describe what changed and
     why, and link the issue.
 - **Checks.** The CI workflow (`.github/workflows/ci.yml`) runs on every pull request: the job `ci` runs `mise run ci` (build, lint and test), and the jobs `vet (windows)` and
-    `vet (darwin)` compile and vet the code for those systems. All of them must be green. Run `mise run ci` yourself before you push.
+    `vet (darwin)` compile and vet the code for those systems, and the job `mise-lock` checks that `mise.lock` matches `mise.toml` (after you change a tool version, run
+    `mise lock --platform linux-x64,linux-arm64,macos-arm64` and commit `mise.lock`). All of them must be green. Run `mise run ci` yourself before you push.
 - **Review and merge.** A maintainer reviews the pull request. Pull requests are merged with **squash** (the maintainers' settings in [docs/maintaining.md](docs/maintaining.md)
     allow nothing else), so keep the title right. Keep your branch up to date by rebasing or by using the "Update branch" button.
 - **Stacked pull requests.** When a change builds on another one, use the branch of the first as the base of the second, and retarget to `main` when the first one merges.
