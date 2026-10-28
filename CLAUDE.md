@@ -33,12 +33,15 @@ environment variable per name, `REMERIS_*` first (for example `REMERIS_PRERELEAS
 Tools are pinned in `mise.toml` and tasks are executable files in `mise-tasks/`. There is no Makefile.
 
 ```sh
-mise install        # Go, golangci-lint, hk, jactionlint, ryl, rumdl, shellcheck, cosign
+mise install        # Go, Node, golangci-lint, hk, jactionlint, ryl, rumdl, shellcheck, cosign
 mise run build      # build/remeris, with the version information injected
 mise run test       # go test ./...
 mise run lint       # hk check --all
 mise run fix        # hk fix --all: formatting and whatever golangci-lint can fix
 mise run ci         # build, lint, test: what CI runs
+mise run website-dev        # the documentation website (Blume), with hot reload
+mise run website-build      # npm ci and blume build into website/dist (the website job of CI)
+mise run website-validate   # blume doctor and blume validate: internal links, anchors, assets
 go test ./internal/config -run TestName   # one package or test
 ```
 
@@ -157,6 +160,7 @@ internal/version/   build information: variables set by ldflags -X (mise run bui
 internal/testnet/   test-only guard for TestMain: refuses non-loopback requests, clears forge tokens, empties HOME and config dirs
 internal/prompt/    Prompter interface (select, multi-select, input, password) on huh v2, and a scripted fake
 testdata/script/    golden tests; testdata/README.md explains the ported Knope fixtures
+website/            documentation site (Blume, static, for Cloudflare): reads docs/*.md as they are, plus website/docs/index.mdx; website/README.md
 pkg/versioning/     pure core (the knope-versioning equivalent): no file system, network, exec, env or clock
   semver/           full SemVer 2.0.0 Version: Parse, Compare, rules, bumps, PackageVersions
   action/           Action (WriteToFile, RemoveFile, AddTag, CreateRelease), Release, ReleaseTag: a leaf package

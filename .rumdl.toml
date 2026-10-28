@@ -10,3 +10,8 @@ reflow-mode = "normalize"
 [per-file-ignores]
 # GitHub renders the PR template as the PR body, so it has no title heading
 ".github/pull_request_template.md" = ["MD041"]
+
+# The docs are read on GitHub and on the website (Blume), and both slug headings the GitHub way (`--generate` becomes `---generate`).
+# The mkdocs flavor would otherwise collapse the hyphens and reject the anchors that work.
+[MD051]
+anchor-style = "github"

@@ -2,7 +2,7 @@
 
 remeris reads Knope's `knope.toml` from the working directory. This page lists what remeris reads from it. For what each setting means in practice, see the Knope documentation at
 <https://knope.tech>; remeris follows it, and [differences.md](differences.md) lists where it does not. For the command line, see [usage.md](usage.md). For the project overview,
-see [../README.md](../README.md).
+see [README](https://github.com/celest-io/remeris/blob/main/README.md).
 
 Unknown keys, tables and step fields are ignored without a warning (Knope's behaviour, spec quirk Q1). A typo such as `label` for `labels` therefore has no effect. The one
 exception is `remeris --upgrade`, which refuses to rewrite a file that has keys it would drop.

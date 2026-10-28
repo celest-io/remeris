@@ -1,8 +1,9 @@
 # Differences from Knope
 
 remeris reads Knope's `knope.toml`, `.changeset/` files and Git tags, writes the same file edits and changelogs, and aims to be a drop-in replacement for Knope 0.23.1. This page
-lists the differences that can matter to you. The complete list, with the reasons, is [testdata/deviations.md](../testdata/deviations.md); quirk (Q) and decision (D) numbers refer
-to the register at the end of [spec.md](spec.md).
+lists the differences that can matter to you. The complete list, with the reasons, is
+[testdata/deviations.md](https://github.com/celest-io/remeris/blob/main/testdata/deviations.md); quirk (Q) and decision (D) numbers refer to the register at the end of
+[spec.md](spec.md).
 
 See also [configuration.md](configuration.md) and [usage.md](usage.md).
 

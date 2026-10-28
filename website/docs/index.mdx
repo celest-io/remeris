@@ -1,0 +1,101 @@
+---
+title: remeris
+description: A release tool written in Go that reads Knope's configuration. A drop-in replacement for Knope.
+slug: index
+sidebar:
+  label: Home
+---
+
+**remeris** is a release tool written in Go. It reads Knope's `knope.toml`, `.changeset/` files and Git tag formats, writes the same file edits and changelog output, and prints the same messages. If your project releases with [Knope](https://github.com/knope-dev/knope), you can switch the binary and keep everything else.
+
+:::note
+Status: the first phase is a drop-in replacement for [Knope](https://github.com/knope-dev/knope) 0.23.1. Every step that Knope's `knope.toml` can use is implemented. The [differences](/docs/differences) are listed on their own page.
+:::
+
+<CardGroup cols={2}>
+  <Card title="Usage" href="/docs/usage" icon="rocket">
+    The command line, the output, exit codes, environment variables and credentials.
+  </Card>
+  <Card title="Configuration" href="/docs/configuration" icon="file">
+    The `knope.toml` that remeris reads: packages, workflows, steps and variables.
+  </Card>
+  <Card title="Differences from Knope" href="/docs/differences" icon="book-open">
+    Where remeris behaves differently, and why.
+  </Card>
+  <Card title="Releasing" href="/docs/releasing" icon="folder">
+    How remeris releases itself, and how to verify a download. For maintainers.
+  </Card>
+</CardGroup>
+
+## Install
+
+<Tabs>
+  <Tab title="mise">
+    With [mise](https://mise.jdx.dev) and its [packslip](https://packslip.dev) backend, which checks the signed release bundle (`packslip.sigstore.json`) before it unpacks anything:
+
+    ```sh
+    mise use -g packslip:github.com/celest-io/remeris
+    ```
+
+    The signer fingerprint of remeris is `ps1_p2ti4zisstvj4fgdichvcpnhhq` (it comes from the repository ID of `celest-io/remeris`, so it survives a rename). Releases from v0.0.2 on carry the bundle. See [Releasing](/docs/releasing#install-with-mise-and-verify-with-packslip) for the other ways to verify a download.
+  </Tab>
+  <Tab title="Go">
+    ```sh
+    go install github.com/celest-io/remeris/cmd/remeris@latest
+    ```
+  </Tab>
+  <Tab title="From source">
+    From a checkout, with [mise](https://mise.jdx.dev) (the build task injects the version information):
+
+    ```sh
+    mise install
+    mise run build   # writes build/remeris
+    ```
+  </Tab>
+</Tabs>
+
+## Quick start
+
+In a Git repository with a package file such as `Cargo.toml`, `package.json` or `pyproject.toml`, and no `knope.toml`:
+
+<Steps>
+  <Step title="Generate a configuration">
+    ```sh
+    remeris --generate
+    ```
+
+    Writes a `knope.toml` with the release, document-change and get-version workflows. A repository without a `knope.toml` already has these three workflows with the same defaults, so `--generate` only saves them to a file you can edit.
+  </Step>
+  <Step title="Record a change">
+    ```sh
+    remeris document-change
+    ```
+
+    Records a change file for the next release.
+  </Step>
+  <Step title="Preview the release">
+    ```sh
+    remeris release --dry-run
+    ```
+
+    Shows what a release would do, and changes nothing.
+  </Step>
+  <Step title="Release">
+    ```sh
+    remeris release
+    ```
+
+    Prepares and creates the release.
+  </Step>
+</Steps>
+
+## For contributors and implementers
+
+<CardGroup cols={2}>
+  <Card title="Specification" href="/docs/spec" icon="lightbulb">
+    The source of truth for behaviour: every feature, the algorithms, the Knope quirks to keep and the decisions to change.
+  </Card>
+  <Card title="Source code" href="https://github.com/celest-io/remeris" icon="folder">
+    The repository on GitHub, with the commands and the code layout in `CLAUDE.md`.
+  </Card>
+</CardGroup>
