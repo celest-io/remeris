@@ -64,9 +64,10 @@ The binaries are stripped (`-ldflags '-s -w'`: no symbol table, no DWARF), which
 
 The build is reproducible: the same commit, Go toolchain and GNU tools give byte-identical archives. The build date is the commit time (`SOURCE_DATE_EPOCH`, by default
 `git log -1 --format=%ct`), the build user and branch are the fixed strings `release`, the build number stays `unknown`, and the archives have sorted entries, fixed owners, modes
-and times; xz runs with `-9e -T1` (one thread, so the output does not depend on the number of CPUs; it does depend on the xz version, 5.4.5 here). The task needs GNU tools (`tar`,
-`xz`, `zip`, `date`, `sha256sum`), so run it on Linux, not on macOS. `DIST_DIR` changes the output directory and `DIST_TARGETS` (for example `"linux/amd64 windows/arm64"`) limits
-the platforms, which is handy to try the task locally.
+and times; xz runs with `-9e -T1` (one thread, so the output does not depend on the number of CPUs; it does depend on the xz version: the release job runs on `ubuntu-26.04`, which
+ships a newer xz than the 5.4.5 used for the measurements below, so the published archives are not byte-identical to a local build with another xz). The task needs GNU tools
+(`tar`, `xz`, `zip`, `date`, `sha256sum`), so run it on Linux, not on macOS. `DIST_DIR` changes the output directory and `DIST_TARGETS` (for example `"linux/amd64 windows/arm64"`)
+limits the platforms, which is handy to try the task locally.
 
 `push-artifact.yaml` has two jobs, both on the tag push. The `build` job (`contents: read`, pinned to `ubuntu-26.04`: the archives are reproducible only for the same image and tool
 versions, and `ubuntu-latest` moves without a change of the file) checks that the tagged commit is on `main` and that the tag matches `VERSION`, builds, and records the SHA-256 of
@@ -79,9 +80,9 @@ for that reason, and Renovate keeps the pin current.
 
 ## Archive size
 
-Measured on Linux with Go 1.27.1 and xz 5.4.5, from the commit of this change (the sizes grow slowly with the code). The binary is the file in the archive; "before" is what v0.0.1
-shipped (unstripped binary, `tar.gz` at `gzip -9`, `zip` for windows), "after" is what `mise run dist` makes now (stripped binary, `tar.xz` at `xz -9e` for linux and darwin, `zip`
-for windows).
+Measured on Linux with Go 1.27.1 and xz 5.4.5, from the commit of this change (the sizes grow slowly with the code; another xz version changes them by a few percent at most). The
+binary is the file in the archive; "before" is what v0.0.1 shipped (unstripped binary, `tar.gz` at `gzip -9`, `zip` for windows), "after" is what `mise run dist` makes now
+(stripped binary, `tar.xz` at `xz -9e` for linux and darwin, `zip` for windows).
 
 | Target | Binary before | Binary after | Archive before | Archive after | Archive saved |
 | --- | --- | --- | --- | --- | --- |
