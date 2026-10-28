@@ -15,8 +15,15 @@ With [mise](https://mise.jdx.dev) and its [packslip](https://packslip.dev) backe
 mise use -g packslip:github.com/celest-io/remeris
 ```
 
-TODO: the signer fingerprint (`ps1_...`) to pin is filled in here after the first release carrying `packslip.sigstore.json` exists. Do not copy one from anywhere else. See
-[docs/releasing.md](docs/releasing.md#install-with-mise-and-verify-with-packslip) for how to get it and for the other ways to verify a download.
+The signer fingerprint of remeris is `ps1_p2ti4zisstvj4fgdichvcpnhhq` (it comes from the repository ID of `celest-io/remeris`, so it survives a rename). Releases from v0.0.2 on
+carry the bundle. To require it with the [packslip CLI](https://packslip.dev/docs/install/):
+
+```sh
+packslip install github.com/celest-io/remeris --pin ps1_p2ti4zisstvj4fgdichvcpnhhq
+```
+
+mise remembers the signer it accepted (in its local state and in `mise.lock`) and refuses a later release signed by a weaker or different one. See
+[docs/releasing.md](docs/releasing.md#install-with-mise-and-verify-with-packslip) for the other ways to verify a download.
 
 With Go:
 
