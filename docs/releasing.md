@@ -64,7 +64,7 @@ The build is reproducible: the same commit, Go toolchain and GNU tools give byte
 and times, and no gzip name or time. The task needs GNU tools (`tar`, `gzip`, `zip`, `date`, `sha256sum`), so run it on Linux, not on macOS. `DIST_DIR` changes the output directory
 and `DIST_TARGETS` (for example `"linux/amd64 windows/arm64"`) limits the platforms, which is handy to try the task locally.
 
-`push-artifact.yaml` has two jobs, both on the tag push. The `build` job (`contents: read`, pinned to `ubuntu-24.04`: the archives are reproducible only for the same image and tool
+`push-artifact.yaml` has two jobs, both on the tag push. The `build` job (`contents: read`, pinned to `ubuntu-26.04`: the archives are reproducible only for the same image and tool
 versions, and `ubuntu-latest` moves without a change of the file) checks that the tagged commit is on `main` and that the tag matches `VERSION`, builds, and records the SHA-256 of
 `SHA256SUMS` and the list of archives. The `publish` job (`contents: write`, `id-token: write`, `attestations: write`) checks out and runs nothing from the repository: it checks
 the downloaded files against what the build job recorded, signs `SHA256SUMS`, attests the archives, and uploads exactly the listed archives, `SHA256SUMS` and its signature. Its

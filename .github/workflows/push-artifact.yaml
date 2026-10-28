@@ -15,7 +15,7 @@ jobs:
   build:
     # Not ubuntu-latest: the archives are reproducible only for the same tar, gzip, zip and Go, and "latest" moves
     # to a new image (and new tool versions) without a change of this file. Move it with a reviewed change.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       contents: read
