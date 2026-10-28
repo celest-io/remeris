@@ -50,19 +50,24 @@ The workflows of `knope.toml`:
 `mise run dist -- v0.0.1` (the task `mise-tasks/dist`) builds, for linux, darwin and windows on amd64 and arm64, with `CGO_ENABLED=0 go build -trimpath -buildvcs=false` and the
 version information injected like `mise run build` does:
 
-- `remeris_<tag>_<os>_<arch>.tar.gz`, or `.zip` for windows, holding `remeris` (`remeris.exe`), `LICENSE` and `README.md`;
+- `remeris_<tag>_<os>_<arch>.tar.xz`, or `.zip` for windows, holding `remeris` (`remeris.exe`), `LICENSE` and `README.md`;
 - `SHA256SUMS` for all archives;
 - `SHA256SUMS.sigstore.json`, a keyless [cosign](https://docs.sigstore.dev/cosign/signing/overview/) (3.x) signature bundle of `SHA256SUMS`, made with the GitHub OIDC identity of
     the workflow;
 - a GitHub build provenance attestation for every archive (stored by GitHub, not a release asset);
 - `packslip.sigstore.json`, the signed [packslip](https://packslip.dev) release bundle that mise's `packslip:` backend verifies. It records the project, the version, and the
     platform, format, executable (`remeris`), size and digest of every archive, and links the attestations above. packslip reads the platform and the format from the archive names
-    (`linux|darwin|windows`, `amd64|arm64`, `.tar.gz|.zip`), so those names must keep this shape.
+    (`linux|darwin|windows`, `amd64|arm64`, `.tar.xz|.zip`), so those names must keep this shape.
+
+The binaries are stripped (`-ldflags '-s -w'`: no symbol table, no DWARF), which is what makes the archives about 2.5 times smaller; see [Archive size](#archive-size).
+`mise run build` stays unstripped, for debugging. Stack traces of panics, `debug.ReadBuildInfo` and `remeris --version` are unaffected.
 
 The build is reproducible: the same commit, Go toolchain and GNU tools give byte-identical archives. The build date is the commit time (`SOURCE_DATE_EPOCH`, by default
 `git log -1 --format=%ct`), the build user and branch are the fixed strings `release`, the build number stays `unknown`, and the archives have sorted entries, fixed owners, modes
-and times, and no gzip name or time. The task needs GNU tools (`tar`, `gzip`, `zip`, `date`, `sha256sum`), so run it on Linux, not on macOS. `DIST_DIR` changes the output directory
-and `DIST_TARGETS` (for example `"linux/amd64 windows/arm64"`) limits the platforms, which is handy to try the task locally.
+and times; xz runs with `-9e -T1` (one thread, so the output does not depend on the number of CPUs; it does depend on the xz version: the release job runs on `ubuntu-26.04`, which
+ships a newer xz than the 5.4.5 used for the measurements below, so the published archives are not byte-identical to a local build with another xz). The task needs GNU tools
+(`tar`, `xz`, `zip`, `date`, `sha256sum`), so run it on Linux, not on macOS. `DIST_DIR` changes the output directory and `DIST_TARGETS` (for example `"linux/amd64 windows/arm64"`)
+limits the platforms, which is handy to try the task locally.
 
 `push-artifact.yaml` has two jobs, both on the tag push. The `build` job (`contents: read`, pinned to `ubuntu-26.04`: the archives are reproducible only for the same image and tool
 versions, and `ubuntu-latest` moves without a change of the file) checks that the tagged commit is on `main` and that the tag matches `VERSION`, builds, and records the SHA-256 of
@@ -72,6 +77,62 @@ last step runs `jdx/packslip` (pinned to the commit of v1.11.1) on the verified 
 not made a second time), signs the packslip with the OIDC identity of the job, and uploads `packslip.sigstore.json` to the release. The packslip step runs after the other assets
 are on the release and runs no repository code. Signing and uploading happen in the one job, so the packslip action is trusted with the job's write token: it is pinned to a commit
 for that reason, and Renovate keeps the pin current.
+
+## Archive size
+
+Measured on Linux with Go 1.27.1 and xz 5.4.5, from the commit of this change (the sizes grow slowly with the code; another xz version changes them by a few percent at most). The
+binary is the file in the archive; "before" is what v0.0.1 shipped (unstripped binary, `tar.gz` at `gzip -9`, `zip` for windows), "after" is what `mise run dist` makes now
+(stripped binary, `tar.xz` at `xz -9e` for linux and darwin, `zip` for windows).
+
+| Target | Binary before | Binary after | Archive before | Archive after | Archive saved |
+| --- | --- | --- | --- | --- | --- |
+| linux/amd64 | 33.5 MB | 23.2 MB | 16.0 MB (`.tar.gz`) | 6.1 MB (`.tar.xz`) | 62% |
+| linux/arm64 | 31.0 MB | 21.4 MB | 14.6 MB (`.tar.gz`) | 5.2 MB (`.tar.xz`) | 65% |
+| darwin/amd64 | 34.3 MB | 23.9 MB | 16.5 MB (`.tar.gz`) | 6.2 MB (`.tar.xz`) | 62% |
+| darwin/arm64 | 32.1 MB | 22.1 MB | 15.4 MB (`.tar.gz`) | 5.5 MB (`.tar.xz`) | 65% |
+| windows/amd64 | 34.1 MB | 24.0 MB | 16.4 MB (`.zip`) | 8.4 MB (`.zip`) | 49% |
+| windows/arm64 | 31.3 MB | 21.8 MB | 14.8 MB (`.zip`) | 7.4 MB (`.zip`) | 50% |
+
+Where the savings come from, for linux/amd64: stripping alone takes the gzip archive from 16.0 MB to 8.1 MB; xz in place of gzip takes it from 8.1 MB to 6.1 MB. `-ldflags=-s` and
+`-ldflags='-s -w'` give the same binary (`-s` implies no DWARF); `-w` alone keeps the symbol table and gives 25.9 MB.
+
+Windows stays `.zip` on purpose. A `.tar.xz` for windows would be about 25% smaller (6.3 MB against 8.4 MB for amd64), but Explorer and PowerShell's `Expand-Archive` open only zip
+files, and nothing here tests mise's extraction of `.tar.xz` on Windows. If that is checked, switching is a one-line change in `mise-tasks/dist` (and the `zip` patterns of the
+workflow).
+
+### What is in the binary
+
+The stripped linux/amd64 binary is 23.2 MB on disk: `.text` 10.1 MB, `.gopclntab` 8.6 MB, `.go.type` 2.9 MB, `.rodata` 0.7 MB, `.noptrdata` 0.8 MB (`size -A`). The unstripped
+binary adds 7.5 MB of DWARF, which `-s -w` removes. The `.gopclntab` (function tables and line numbers for stack traces and the garbage collector) and the type data are needed by
+the runtime, and grow with the amount of code. The sections are measured with `size -A`; the contributors with `go tool nm -size -sort size` summed per package family (bss is left
+out, it takes no space in the file). `go-size-analyzer` could not be run in the environment where this was measured, so there are no treemap numbers.
+
+| Rank | Contributor | Symbol bytes | Share of the symbols |
+| --- | --- | --- | --- |
+| 1 | Go runtime, reflect, sync and the other core std packages | 2.8 MB | 24% |
+| 2 | `net`, `net/http`, `crypto/tls` and `crypto` of the standard library | 1.9 MB | 17% |
+| 3 | go-git with its SSH, OpenPGP and x/crypto dependencies | 1.5 MB | 13% |
+| 4 | go-github (with go-querystring and oauth2) | 1.3 MB | 11% |
+| 5 | the terminal UI: huh, bubbletea, lipgloss, the charm and ansi libraries | 0.9 MB | 7% |
+| 6 | remeris itself | 0.9 MB | 7% |
+| 7 | configuration: koanf, go-toml, YAML, mergo | 0.5 MB | 4.5% |
+| 8 | urfave/cli | 0.2 MB | 1.6% |
+
+(The symbols total 11.5 MB; the shares do not add up to 100% because 1.3 MB are `go:func` closures data and small packages not listed. The other 11.7 MB of the file are the
+`.gopclntab` and the type data, which grow roughly in proportion to the code of each row.)
+
+What would shrink it further, none of it done here (no dependency or code change in this PR), in the order of the likely gain:
+
+1. Dropping go-git: it is only the fallback when the `git` command is missing. About 10 to 14% of the binary, about 1 MB of the xz archive.
+2. A thin GitHub client in place of go-github (the Gitea and Jira clients already are on `net/http`): about 10%.
+3. A lighter prompt library or hand-written prompts in place of the huh/bubbletea stack: about 5%.
+
+Considered and rejected:
+
+- UPX: xz already gives the same ratio, so the download does not shrink; it costs start-up time and memory, has macOS crash and antivirus false-positive reports, and conflicts
+    with the provenance of the binary.
+- `garble -tiny`: an obfuscating toolchain; panics lose their stack traces, and the gain (about 15% raw) is small after xz.
+- Removing the `.gopclntab`: the runtime needs it to walk stacks, and a linker patch that only drops function names breaks `log` and `testing`.
 
 ## One-time setup
 
@@ -177,14 +238,18 @@ cosign verify-blob SHA256SUMS \
 sha256sum --ignore-missing --check SHA256SUMS      # macOS: shasum -a 256 --ignore-missing --check SHA256SUMS
 
 # 3. Optional: check the build provenance attestation with the GitHub CLI.
-gh attestation verify remeris_v0.0.1_linux_amd64.tar.gz --repo celest-io/remeris \
+gh attestation verify remeris_v0.0.2_linux_amd64.tar.xz --repo celest-io/remeris \
   --signer-workflow celest-io/remeris/.github/workflows/push-artifact.yaml \
-  --source-ref refs/tags/v0.0.1
+  --source-ref refs/tags/v0.0.2
 ```
 
-To pin one version in step 1, replace the regular expression by `--certificate-identity https://github.com/celest-io/remeris/.github/workflows/push-artifact.yaml@refs/tags/v0.0.1`.
+The examples use `v0.0.2` and `.tar.xz`, the archive format of the first release after v0.0.1. The archives of v0.0.1 are `.tar.gz` (and `.zip` for windows), and their names
+otherwise follow the same pattern; everything else on this page applies to both.
+
+To pin one version in step 1, replace the regular expression by `--certificate-identity https://github.com/celest-io/remeris/.github/workflows/push-artifact.yaml@refs/tags/v0.0.2`.
 Build provenance attestations need a public repository (or GitHub Enterprise Cloud for a private one). After extracting, `remeris --version` prints the tag, the revision and the
-build date. Because the build is reproducible, building the tag yourself with `mise run dist -- v0.0.1` on Linux with the same Go version gives the same archive hashes.
+build date. Because the build is reproducible, building the tag yourself with `mise run dist -- v0.0.2` on Linux with the same Go version and the same xz version (the compressed
+bytes depend on it) gives the same archive hashes.
 
 ## Install with mise and verify with packslip
 
@@ -203,12 +268,12 @@ Until it is filled in, do not pin a fingerprint, and do not copy one from elsewh
 To check a download by hand with the [packslip CLI](https://packslip.dev/docs/install/):
 
 ```sh
-V=v0.0.1
+V=v0.0.2
 curl -fsSLO "https://github.com/celest-io/remeris/releases/download/${V}/packslip.sigstore.json"
-curl -fsSLO "https://github.com/celest-io/remeris/releases/download/${V}/remeris_${V}_linux_amd64.tar.gz"
-packslip verify packslip.sigstore.json --artifact "remeris_${V}_linux_amd64.tar.gz"   # add --pin ps1_... once the fingerprint is published
+curl -fsSLO "https://github.com/celest-io/remeris/releases/download/${V}/remeris_${V}_linux_amd64.tar.xz"
+packslip verify packslip.sigstore.json --artifact "remeris_${V}_linux_amd64.tar.xz"   # add --pin ps1_... once the fingerprint is published
 packslip show packslip.sigstore.json                                                  # the platforms, formats and executables the bundle records (verifies nothing)
-gh attestation verify "remeris_${V}_linux_amd64.tar.gz" --repo celest-io/remeris      # the linked build provenance, which packslip verify does not fetch
+gh attestation verify "remeris_${V}_linux_amd64.tar.xz" --repo celest-io/remeris      # the linked build provenance, which packslip verify does not fetch
 ```
 
 `packslip verify` with no trust flags requires a run of `celest-io/remeris` as the signer, in any workflow and at any ref. To require this workflow at a tag, add
@@ -231,7 +296,7 @@ This needs no earlier release, which is why v0.0.1 can be cut, and it tests the 
 that should ship the fix, and the build adds about a minute.
 
 Once a release exists, you can switch to the last released binary (a stable tool releasing the next version). Replace the build step in both workflows by a download that checks the
-checksum, for example for the latest release:
+checksum, for example for the latest release (the archives are `.tar.xz` from the release after v0.0.1; v0.0.1 has `.tar.gz`, so use `tar -xzf` for it):
 
 ```yaml
 - name: Install the released remeris
@@ -239,10 +304,10 @@ checksum, for example for the latest release:
     GH_TOKEN: ${{ github.token }}
   run: |
     set -euo pipefail
-    gh release download --repo celest-io/remeris --pattern 'remeris_*_linux_amd64.tar.gz' --pattern SHA256SUMS --dir /tmp/remeris
+    gh release download --repo celest-io/remeris --pattern 'remeris_*_linux_amd64.tar.xz' --pattern SHA256SUMS --dir /tmp/remeris
     ( cd /tmp/remeris && sha256sum --ignore-missing --check SHA256SUMS )
     mkdir /tmp/remeris/bin
-    tar -xzf /tmp/remeris/remeris_*_linux_amd64.tar.gz --strip-components=1 --directory /tmp/remeris/bin
+    tar -xJf /tmp/remeris/remeris_*_linux_amd64.tar.xz --strip-components=1 --directory /tmp/remeris/bin
     echo /tmp/remeris/bin >> "$GITHUB_PATH"
 ```
 

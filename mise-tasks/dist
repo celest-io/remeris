@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #MISE description="Build the release archives and SHA256SUMS into dist/ (usage: mise run dist -- v0.0.1)"
 # Cross-builds remeris for linux, darwin and windows on amd64 and arm64 with plain `go build` (CGO off, -trimpath, -buildvcs=false),
-# injecting the version information like mise-tasks/build. Output, for a version v0.0.1:
-#   dist/remeris_v0.0.1_<os>_<arch>.tar.gz (zip for windows), each holding remeris (remeris.exe), LICENSE and README.md
+# injecting the version information like mise-tasks/build, and strips the binaries (-s -w). Output, for a version v0.0.1:
+#   dist/remeris_v0.0.1_<os>_<arch>.tar.xz (zip for windows), each holding remeris (remeris.exe), LICENSE and README.md
 #   dist/SHA256SUMS
-# The output is reproducible: the same commit, Go toolchain and GNU tools give identical archives. For that, the build date is the commit
-# time (SOURCE_DATE_EPOCH, default `git log -1 --format=%ct`), the build user, branch and number are fixed (release, release, unknown), and
-# the archives have sorted entries, fixed owners, modes and times, and no gzip name or time.
-# Needs GNU tar, gzip, zip, date and sha256sum (Linux). Environment: DIST_DIR (default dist), DIST_TARGETS (space-separated os/arch pairs,
+# The output is reproducible: the same commit, Go toolchain and GNU tools (xz version included) give identical archives. For that, the build
+# date is the commit time (SOURCE_DATE_EPOCH, default `git log -1 --format=%ct`), the build user, branch and number are fixed (release,
+# release, unknown), and the archives have sorted entries, fixed owners, modes and times, and xz runs on one thread.
+# Needs GNU tar, xz, zip, date and sha256sum (Linux). Environment: DIST_DIR (default dist), DIST_TARGETS (space-separated os/arch pairs,
 # default all six), SOURCE_DATE_EPOCH.
 set -euo pipefail
 
@@ -31,7 +31,11 @@ ldflags_for() {
   revision="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
   build_date="$(date -u -d "@${epoch}" '+%Y-%m-%d_%H:%M:%S')"
   go_version="$(go version | awk '{print $3}')"
+  # -s -w drop the symbol table and the DWARF debug information (about 10 MB of 33 MB). Stack traces of panics, debug.ReadBuildInfo and the
+  # -X variables stay: the runtime reads its own pclntab, which -s -w keep. mise-tasks/build stays unstripped for debugging.
   flags=(
+    "-s"
+    "-w"
     "-X '${pkg}.Version=${tag}'"
     "-X '${pkg}.Revision=${revision}'"
     "-X '${pkg}.Branch=release'"
@@ -61,8 +65,9 @@ build_target() {
     touch -d "@${epoch}" "${stage}/${name}" "${stage}/${name}"/*
     (cd "$stage" && find "$name" | LC_ALL=C sort | TZ=UTC zip --quiet -X -@ "${out}/${name}.zip")
   else
+    # -T1: a single thread gives one output for a given xz version, whatever the number of CPUs (threaded blocks depend on it).
     tar --create --file - --directory "$stage" --sort=name --mtime="@${epoch}" --owner=0 --group=0 --numeric-owner "$name" |
-      gzip -n -9 >"${out}/${name}.tar.gz"
+      xz -9e -T1 >"${out}/${name}.tar.xz"
   fi
   rm -rf "$stage"
   echo "built ${name}"
@@ -83,7 +88,7 @@ main() {
   (
     cd "$out"
     shopt -s nullglob
-    archives=(*.tar.gz *.zip)
+    archives=(*.tar.xz *.zip)
     sha256sum -- "${archives[@]}" >SHA256SUMS
     sha256sum --check SHA256SUMS
   )
