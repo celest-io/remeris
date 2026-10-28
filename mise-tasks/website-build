@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Build the documentation website into website/dist (static HTML)"
+#MISE dir="{{config_root}}/website"
+set -euo pipefail
+
+npm ci
+npm run build

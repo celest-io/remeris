@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Serve the documentation website with hot reload (Blume dev server)"
+#MISE dir="{{config_root}}/website"
+set -euo pipefail
+
+if [ ! -d node_modules ]; then
+  npm ci
+fi
+npm run dev -- "$@"
