@@ -11,7 +11,7 @@ set up once, how to cut the first release (v0.0.1), and how users verify a downl
 | 1 | `prepare-release.yaml` | On every push to `main` (and by hand), runs `remeris prepare-release-bot`. It computes the next version from the conventional commits since the last tag, writes `CHANGELOG.md` and `VERSION` on a `release` branch, and opens or updates the `release` pull request. |
 | 2 | you | Review the PR (the changelog is its body) and merge it. |
 | 3 | `release.yaml` | On the push of the squashed or rebased release commit to `main`, runs `remeris release`: it creates the GitHub release and the `vX.Y.Z` tag at that commit. |
-| 4 | `push-artifact.yaml` | The tag push builds the archives, signs and attests them, uploads them to the release, then signs and uploads the packslip bundle. |
+| 4 | `push-artifact.yaml` | The tag push builds the archives, signs and attests them, uploads them to the release, then signs the packslip bundle and uploads it too. |
 
 Design points:
 
@@ -64,28 +64,14 @@ The build is reproducible: the same commit, Go toolchain and GNU tools give byte
 and times, and no gzip name or time. The task needs GNU tools (`tar`, `gzip`, `zip`, `date`, `sha256sum`), so run it on Linux, not on macOS. `DIST_DIR` changes the output directory
 and `DIST_TARGETS` (for example `"linux/amd64 windows/arm64"`) limits the platforms, which is handy to try the task locally.
 
-`push-artifact.yaml` has five jobs, and the `build` and `publish` jobs run on a tag push only. The `build` job (read-only token, pinned to `ubuntu-24.04`: the archives are
-reproducible only for the same image and tool versions, and `ubuntu-latest` moves without a change of the file) checks that the tagged commit is on `main` and that the tag matches
-`VERSION`, builds, and records the SHA-256 of `SHA256SUMS` and the list of archives. The `publish` job holds the write permissions but checks out and runs nothing from the
-repository: it checks the downloaded files against what the build job recorded, signs, attests, and uploads exactly the listed archives, `SHA256SUMS` and the bundle.
-
-Three more jobs make the packslip bundle, each with the least permission it needs. Their conditions matter, because a job whose `needs` chain contains a skipped job is skipped by
-default (the implicit `success()` looks at all the jobs up the chain), and on every run one of `resolve` and `build`/`publish` is skipped:
-
-| Job | Permissions | What it does |
-| --- | --- | --- |
-| `resolve` | `contents: read` | `if: github.event_name == 'workflow_dispatch'`. Checks that the run is on `main`, that the `tag` input is `v` plus a SemVer version, that the tagged commit is on `main` and that the tag matches `VERSION` (the checks the `build` job makes on a tag push), and outputs the tag and its commit. |
-| `packslip` | `contents: read`, `id-token: write` | `if: !cancelled() && ((push && publish succeeded) \|\| (dispatch && resolve succeeded))`: it runs after a successful `publish` on a tag push or a successful `resolve` on a dispatch, never after a failure. Downloads and verifies the release assets (below), runs `jdx/packslip` (pinned to the commit of v1.11.1) with `bin: remeris`, `attest: link` and `upload: false`, and keeps `packslip.sigstore.json` as a workflow artifact, with its SHA-256 as a job output. It cannot change the release. |
-| `publish-packslip` | `contents: write` | `if: !cancelled() && needs.packslip.result == 'success'`. Downloads that artifact, checks it against the SHA-256 of the `packslip` job, and runs `gh release upload ... --clobber`. It signs nothing. |
-
-The `packslip` job signs only what it checked, in this order. It downloads `SHA256SUMS` and `SHA256SUMS.sigstore.json` and runs `cosign verify-blob` with the identity of this
-workflow at `refs/tags/<tag>`, the commit of the tag and the `push` trigger. It then downloads exactly the files that `SHA256SUMS` lists, after checking each name against
-`^remeris_v...(linux|darwin|windows)_(amd64|arm64)\.(tar\.gz|tar\.xz|zip)$` (so a listed name is a plain file name, never a path), checks them with `sha256sum --check`, requires
-the files present to be the listed ones, and runs `gh attestation verify` on each with the same identity, the tag ref and the commit. So the selection does not depend on the
-archive format. It signs those downloaded files, not a second download. `attest: link` instead of `true` because the `publish` job already attested the archives: an attestation
-made by the packslip job would describe the run of the packslip job, not the build of the tag, and `attestations: write` is not needed.
-
-The `if` conditions of `packslip` and `publish-packslip` can only be checked by a real run of the workflow (both paths: a tag push and a dispatch).
+`push-artifact.yaml` has two jobs, both on the tag push. The `build` job (`contents: read`, pinned to `ubuntu-24.04`: the archives are reproducible only for the same image and tool
+versions, and `ubuntu-latest` moves without a change of the file) checks that the tagged commit is on `main` and that the tag matches `VERSION`, builds, and records the SHA-256 of
+`SHA256SUMS` and the list of archives. The `publish` job (`contents: write`, `id-token: write`, `attestations: write`) checks out and runs nothing from the repository: it checks
+the downloaded files against what the build job recorded, signs `SHA256SUMS`, attests the archives, and uploads exactly the listed archives, `SHA256SUMS` and its signature. Its
+last step runs `jdx/packslip` (pinned to the commit of v1.11.1) on the verified local archives with `bin: remeris` and `attest: link` (the attestation of the step before is linked,
+not made a second time), signs the packslip with the OIDC identity of the job, and uploads `packslip.sigstore.json` to the release. The packslip step runs after the other assets
+are on the release and runs no repository code. Signing and uploading happen in the one job, so the packslip action is trusted with the job's write token: it is pinned to a commit
+for that reason, and Renovate keeps the pin current.
 
 ## One-time setup
 
@@ -131,9 +117,9 @@ for a `v*` tag". It is trustworthy only if just the release workflow can create 
 - **Tags `v*`**: restrict creation, update and deletion to the App (bypass actor), and add "block deletions" and "block force pushes". The tag push is what starts the artifact
     build, so it must come only from the release workflow.
 - **Actions**: Settings, Actions, General: workflow permissions "Read repository contents" by default. The workflows declare their own permissions.
-- **Who can run `push-artifact.yaml` by hand**: anyone with write access can start a workflow_dispatch run, and the check that the run is on `main` is inside the workflow file itself.
-    So it is not a protection: someone with write access can push a branch with a modified copy of `push-artifact.yaml` and run it there, and that copy can sign a bundle for this
-    repository at `refs/heads/<branch>` (it cannot change a tag, which only the App can create). mise with default options and `packslip verify` with no trust flags check the
+- **What the packslip signature proves**: the workflow runs only on a `v*.*.*` tag, which only the App can create, so the real signatures are made at `refs/tags/<tag>`. But a
+    modified copy of `push-artifact.yaml` on a branch is not stopped by any check inside the workflow: someone with write access can push such a branch, add a trigger to the copy
+    and run it, and that copy can sign a bundle for this repository at `refs/heads/<branch>`. mise with default options and `packslip verify` with no trust flags check the
     repository, not the ref, and would accept such a bundle. Three things reduce this. Strict consumers pin the workflow at a tag (mise `workflow` option, `packslip verify
     --identity-prefix .../push-artifact.yaml@refs/tags/`, see below), and tags are restricted to the App. A ruleset should restrict who can create branches (or who can push a branch
     that changes `.github/workflows/`), for example to the maintainers. Immutable releases would stop anyone from replacing the assets of a published release, which also bounds this
@@ -157,7 +143,7 @@ first release must be `0.0.1` whatever lands first.
     in, run the workflow again with `0.0.1` and review again.
 5. `release.yaml` runs on the push of the squashed release commit to `main`: it creates the `v0.0.1` GitHub release with the changelog as notes, and the tag.
 6. `push-artifact.yaml` runs on the tag, and attaches the archives, `SHA256SUMS`, `SHA256SUMS.sigstore.json` and `packslip.sigstore.json` to the release. (The real v0.0.1 predates
-    the packslip jobs and is deliberately left without a bundle: mise installs start with the first release made by this workflow.)
+    the packslip step and is deliberately left without a bundle: mise installs start with the first release made by this workflow.)
 7. [Verify](#verify-a-download) one download.
 
 The merge of the release PR pushes a commit that `prepare-release.yaml` skips (see the loop guard). From then on the version is computed from the commits since the last tag. The
@@ -168,9 +154,11 @@ If something fails halfway:
 - **Release job failed, no release:** re-run the failed `release.yaml` run (including when its PR check failed: nothing was released). `remeris release` publishes the release for
     a `VERSION` that has no tag.
 - **Release exists, no archives:** re-run `push-artifact.yaml` from the Actions tab; `gh release upload` refuses to overwrite, so delete the partial assets first.
-- **Archives exist, no `packslip.sigstore.json`** (the packslip jobs failed, or the release is older than the packslip support; v0.0.1 stays without a bundle on purpose): run the
-    workflow by hand, see [Add the bundle to an existing release](#add-the-bundle-to-an-existing-release). Re-running only the failed packslip jobs of the tag run also works, and
-    the upload overwrites.
+- **Archives exist, no `packslip.sigstore.json`** (only the last step of the `publish` job failed; v0.0.1 has no bundle on purpose and stays so): the upload step of the archives
+    has already run, and `gh release upload` refuses to overwrite, so a plain re-run of the `publish` job fails at that step. Delete the archives, `SHA256SUMS` and
+    `SHA256SUMS.sigstore.json` from the release page (a partial set is also fine to delete), then re-run the `publish` job of the tag run. It downloads the same `dist` artifact
+    (kept 7 days), signs and attests again (a second, identical attestation is harmless), uploads everything and the packslip. The packslip upload itself uses `--clobber`, so a
+    re-run replaces a bundle. After the 7 days, re-run the whole workflow: the build is reproducible, so the archives have the same hashes.
 - **Wrong version in the PR:** run **Prepare release** again with the right version, or close the PR and delete the `release` branch (as the App, or as an administrator who lifts
     the ruleset for the moment).
 
@@ -225,24 +213,8 @@ gh attestation verify "remeris_${V}_linux_amd64.tar.gz" --repo celest-io/remeris
 
 `packslip verify` with no trust flags requires a run of `celest-io/remeris` as the signer, in any workflow and at any ref. To require this workflow at a tag, add
 `--identity-prefix https://github.com/celest-io/remeris/.github/workflows/push-artifact.yaml@refs/tags/ --issuer https://token.actions.githubusercontent.com`; in mise, use the
-`workflow` tool option, which accepts tag runs only unless it names another ref. Strict consumers should do this: a bundle signed by a run on a branch (a manual run, or a modified
-copy of the workflow, see the ruleset notes) passes the default policy but fails these checks.
-
-### Add the bundle to an existing release
-
-v0.0.1 predates the packslip support and is deliberately left without a bundle. For a later release whose packslip jobs failed, the bundle can be added without releasing again,
-once this workflow is on `main`: Actions, **Push artifact**, **Run workflow**, branch `main`, and enter the tag (`v0.0.2`, for example) in `tag`; or
-`gh workflow run push-artifact.yaml --ref main -f tag=v0.0.2`.
-
-The run executes only the `resolve`, `packslip` and `publish-packslip` jobs. It refuses a ref other than `main`, a tag that is not `v` plus a SemVer version, a tagged commit that
-is not on `main`, and a tag that differs from the `VERSION` of that commit. It signs only the files that the `SHA256SUMS` signed by the tag run lists, if they match it and have
-their attestations (the packslip job fails otherwise), and then uploads the bundle with `--clobber`, so running it again replaces the bundle. It builds nothing and uploads no
-archive.
-
-The consequences to know: the bundle is signed by the workflow at `refs/heads/main`, not at the tag, and it records `main`'s run as the signer while the `source.commit` is the
-tagged commit. Default consumers (mise without options, `packslip verify` with no trust flags) accept it, because they check the repository and not the ref; consumers that pin the
-workflow at a tag refuse it. The workflow file is the same as for a tag run, so signer continuity in mise holds. Prefer a re-run of the failed jobs of the tag run when it is
-possible: that bundle is signed at the tag.
+`workflow` tool option, which accepts tag runs only unless it names another ref. Strict consumers should do this: a bundle signed by a run on a branch (a modified copy of the
+workflow, see the ruleset notes) passes the default policy but fails these checks.
 
 ## Bootstrap
 
