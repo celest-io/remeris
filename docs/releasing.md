@@ -260,10 +260,12 @@ Actions run of `celest-io/remeris`, the signed project and version must be the r
 mise use -g packslip:github.com/celest-io/remeris
 ```
 
-TODO (fill in after the first release with a `packslip.sigstore.json` exists, and copy the value to the README and to [usage.md](usage.md)): the signer fingerprint, `ps1_` and 26
-characters. Take it from the first bundle, on a release you trust, with `packslip pin packslip.sigstore.json`, and publish it where it does not depend on the release (the README).
-Until it is filled in, do not pin a fingerprint, and do not copy one from elsewhere. A user then records it apart from the release, for example with
-`packslip install github.com/celest-io/remeris --pin ps1_...`.
+The signer fingerprint of remeris is `ps1_p2ti4zisstvj4fgdichvcpnhhq`. It was printed by `packslip pin packslip.sigstore.json` (packslip 1.11.1) on the bundle of v0.0.2, the first
+release with a bundle, which was checked first with `packslip verify` (signed by `push-artifact.yaml@refs/tags/v0.0.2`, repository `celest-io/remeris`) and installed with mise. It
+is derived from the issuer and the ID of the signing repository, not from the workflow or the tag, so it stays the same for every release and survives a rename of the repository (a
+repository that later takes the old name gets a different one). It is published here and in the README, apart from the releases, so that a user does not have to trust the first
+release they see: `packslip install github.com/celest-io/remeris --pin ps1_p2ti4zisstvj4fgdichvcpnhhq`. A different fingerprint means the release was signed from another
+repository: do not install it. To print it again, run `packslip pin packslip.sigstore.json` on a release you trust. Note that `packslip show` does not print it.
 
 To check a download by hand with the [packslip CLI](https://packslip.dev/docs/install/):
 
@@ -271,7 +273,7 @@ To check a download by hand with the [packslip CLI](https://packslip.dev/docs/in
 V=v0.0.2
 curl -fsSLO "https://github.com/celest-io/remeris/releases/download/${V}/packslip.sigstore.json"
 curl -fsSLO "https://github.com/celest-io/remeris/releases/download/${V}/remeris_${V}_linux_amd64.tar.xz"
-packslip verify packslip.sigstore.json --artifact "remeris_${V}_linux_amd64.tar.xz"   # add --pin ps1_... once the fingerprint is published
+packslip verify packslip.sigstore.json --artifact "remeris_${V}_linux_amd64.tar.xz"   # add --pin ps1_p2ti4zisstvj4fgdichvcpnhhq to require the signer fingerprint
 packslip show packslip.sigstore.json                                                  # the platforms, formats and executables the bundle records (verifies nothing)
 gh attestation verify "remeris_${V}_linux_amd64.tar.xz" --repo celest-io/remeris      # the linked build provenance, which packslip verify does not fetch
 ```

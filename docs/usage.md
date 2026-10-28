@@ -13,11 +13,13 @@ With [mise](https://mise.jdx.dev), which verifies the signed release bundle of t
 
 ```sh
 mise use -g packslip:github.com/celest-io/remeris        # or without -g, to record it in the mise.toml of the project
-mise use -g packslip:github.com/celest-io/remeris@0.0.1  # an exact version also skips mise's minimum release age (24 hours by default)
+mise use -g packslip:github.com/celest-io/remeris@0.0.2  # an exact version also skips mise's minimum release age (24 hours by default)
 ```
 
-TODO: the signer fingerprint to pin is filled in here after the first release with a `packslip.sigstore.json` exists. Until then do not pin one. The archives of every release can
-also be downloaded and [verified by hand](releasing.md#verify-a-download), or built with `go install github.com/celest-io/remeris/cmd/remeris@latest`.
+The signer fingerprint to pin is `ps1_p2ti4zisstvj4fgdichvcpnhhq`: `packslip install github.com/celest-io/remeris --pin ps1_p2ti4zisstvj4fgdichvcpnhhq` and
+`packslip verify packslip.sigstore.json --pin ps1_p2ti4zisstvj4fgdichvcpnhhq` refuse a release signed by another repository. Releases from v0.0.2 on carry the bundle; v0.0.1 has
+none. The archives of every release can also be downloaded and [verified by hand](releasing.md#verify-a-download), or built with
+`go install github.com/celest-io/remeris/cmd/remeris@latest`.
 
 ## Workflows
 
