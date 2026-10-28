@@ -75,3 +75,28 @@ jobs:
             echo "::error file=mise.lock::mise.lock is out of date. Run 'mise lock --platform linux-x64,linux-arm64,macos-arm64' and commit mise.lock (see CLAUDE.md)."
             exit 1
           fi
+
+  # The documentation website (website/, built with Blume from docs/ and website/docs/). It runs on every push and pull request on
+  # purpose: a path-filtered job never reports when the filter does not match, so it could not be a required check. The npm cache
+  # keeps it cheap. No deploy step: Cloudflare builds and publishes the site from Git (see website/README.md).
+  website:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+      # Installs only Node from mise.toml; the Go tools are not needed here.
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492  # v5.0.1
+        with:
+          install_args: node
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('website/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      - run: mise run website-build
+      # Internal links, anchors and assets only: external links are not checked, they would make CI flaky.
+      - run: mise run website-validate
