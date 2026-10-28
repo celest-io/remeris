@@ -169,3 +169,51 @@ For the maintainers, when a new contributor shows up:
 - Aim to answer a new issue, discussion or pull request within a week, and say so when you cannot. Close issues that need a reply that never comes after a polite reminder.
 - Move questions from issues to Discussions (label `question`, then close), and ideas to Discussions, Ideas.
 - Thank people, in the pull request and in the release notes.
+
+## 11. Issue triage
+
+The issue forms add `needs-triage` and either `bug` or `enhancement`. A maintainer goes through the issues with `label:needs-triage` (Issues, filter `is:open label:needs-triage`)
+at least weekly:
+
+1. **Is it a security problem?** Ask the reporter to delete the details, close the issue as not planned, and point to [SECURITY.md](../SECURITY.md). Hide the comment that holds
+    the details.
+2. **Is it a question?** Convert it to a discussion (**Convert to discussion** in the right column of the issue, category Q&A) or label it `question`, answer, and close it.
+3. **Duplicate?** Close it as a duplicate (**Close as duplicate** in the close menu) and link the original.
+4. **Can it be reproduced?** Ask for what is missing from the form (version, `knope.toml`, `--verbose` output without tokens). Try to reproduce it with the version given.
+5. **Compare with Knope.** If Knope 0.23.1 does the same, check [docs/differences.md](differences.md), [testdata/deviations.md](../testdata/deviations.md) and the Quirks register
+    and Decisions at the end of [spec.md](spec.md). Parity is the default: a report that matches Knope and the spec is a request for a change (`enhancement`, discussed first), not
+    a bug.
+6. **Label it:** `bug`, `enhancement` or `documentation`; add `breaking` if the fix changes behaviour that users rely on; add `good first issue` or `help wanted` when it is
+    suitable, and write down the files to touch and the test to add. Remove `needs-triage`.
+7. **Answer within a week** (see the checklist above), even if the answer is "not now".
+
+Pull requests: check the title (conventional commit), the checks, that the spec and the deviations file are updated, then review.
+
+## 12. Welcome post for Discussions
+
+Post it in the **Announcements** category after the settings above are in place, and pin it (**Pin discussion**, from the three dots menu). Adapt the text to the current state of
+the project.
+
+Title: `Welcome to the remeris community`
+
+```markdown
+Welcome, and thank you for being here.
+
+remeris is a release tool written in Go. It starts as a drop-in replacement for [Knope](https://github.com/knope-dev/knope): it reads `knope.toml`, `.changeset/` files and Git
+tags, writes the same file edits and changelogs, and prints the same messages. Where it differs on purpose, [docs/differences.md](https://github.com/celest-io/remeris/blob/main/docs/differences.md)
+says so.
+
+**Where to go**
+
+- **Q&A:** how do I configure or use remeris?
+- **Ideas:** a proposal you want to talk about before it becomes an issue.
+- **Show and tell:** your workflows and `knope.toml` files.
+- **Issues:** bugs and feature requests, with the forms.
+- **Security:** please do not post vulnerabilities here; use the private reporting described in [SECURITY.md](https://github.com/celest-io/remeris/blob/main/SECURITY.md).
+
+**Contributing:** [CONTRIBUTING.md](https://github.com/celest-io/remeris/blob/main/CONTRIBUTING.md) explains the setup (`mise install`), the spec-first rule, the tests and the pull
+request flow. Issues labelled `good first issue` are a good start.
+
+Please be kind: we follow the [Code of Conduct](https://github.com/celest-io/remeris/blob/main/CODE_OF_CONDUCT.md). remeris is maintained by volunteers, so answers may take a few
+days.
+```
