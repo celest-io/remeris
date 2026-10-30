@@ -29,9 +29,9 @@ maintainers: how the site is put together, how to work on it, and how to host it
 Node comes from `mise.toml` (Node 24, the current LTS; Blume needs 22.19 or newer). From the repository root:
 
 ```sh
-mise run website-dev        # dev server with hot reload, http://localhost:4321
-mise run website-build      # npm ci, then blume build into website/dist
-mise run website-validate   # blume doctor and blume validate (internal links, anchors, assets; no network)
+mise run website:dev        # dev server with hot reload, http://localhost:4321
+mise run website:build      # npm ci, then blume build into website/dist
+mise run website:validate   # blume doctor and blume validate (internal links, anchors, assets; no network)
 ```
 
 `cd website && npx blume preview` serves `dist/` the way a static host would (redirects included). CI runs the build and the validation on every pull request and push to `main`
@@ -41,8 +41,8 @@ check. The npm cache keeps it cheap.
 The first build downloads the fonts (Inter and IBM Plex Mono, from Google Fonts) and bundles them into `dist/`. Without network access the build still succeeds and warns
 `No data found for font family`, and the site then uses the system fonts.
 
-Upgrading Blume: change the exact version in `package.json`, run `npm install` in `website/`, commit `package-lock.json`, then run `mise run website-build` and
-`mise run website-validate`. Pin it exactly (no `^`): Blume is young and its minor versions change behaviour. Group the Renovate updates of `website/package.json` into one pull
+Upgrading Blume: change the exact version in `package.json`, run `npm install` in `website/`, commit `package-lock.json`, then run `mise run website:build` and
+`mise run website:validate`. Pin it exactly (no `^`): Blume is young and its minor versions change behaviour. Group the Renovate updates of `website/package.json` into one pull
 request.
 
 ## Hosting on Cloudflare

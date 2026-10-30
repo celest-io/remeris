@@ -97,6 +97,6 @@ jobs:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ hashFiles('website/package-lock.json') }}
           restore-keys: npm-${{ runner.os }}-
-      - run: mise run website-build
+      - run: mise run website:build
       # Internal links, anchors and assets only: external links are not checked, they would make CI flaky.
-      - run: mise run website-validate
+      - run: mise run website:validate

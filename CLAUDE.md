@@ -39,9 +39,9 @@ mise run test       # go test ./...
 mise run lint       # hk check --all
 mise run fix        # hk fix --all: formatting and whatever golangci-lint can fix
 mise run ci         # build, lint, test: what CI runs
-mise run website-dev        # the documentation website (Blume), with hot reload
-mise run website-build      # npm ci and blume build into website/dist (the website job of CI)
-mise run website-validate   # blume doctor and blume validate: internal links, anchors, assets
+mise run website:dev        # the documentation website (Blume), with hot reload
+mise run website:build      # npm ci and blume build into website/dist (the website job of CI)
+mise run website:validate   # blume doctor and blume validate: internal links, anchors, assets
 go test ./internal/config -run TestName   # one package or test
 ```
 
