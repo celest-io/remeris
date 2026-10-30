@@ -1,7 +1,7 @@
 # remeris website
 
 The documentation site of remeris, <https://remeris.dev>, built with [Blume](https://useblume.dev) (an Astro based documentation framework) into static HTML. This file is for
-maintainers: how the site is put together, how to work on it, and how to host it on Cloudflare.
+maintainers: how the site is put together, how to work on it, and how to host it on Cloudflare Workers.
 
 ## How it is built
 
@@ -47,80 +47,60 @@ request.
 
 ## Hosting on Cloudflare
 
-The site is static, so the Git integration of Cloudflare builds and publishes it; there is no deploy job in CI. Two products can host it. Cloudflare Pages is described first
-because the Blume documentation names it and its settings match a static build exactly; Workers with static assets is the alternative (c).
+The site is static and runs as a Cloudflare Worker with static assets (Cloudflare Pages is not used: Cloudflare is steering new projects to Workers). `wrangler.jsonc` points the
+Worker at `dist/` and attaches the domains `remeris.dev` and `www.remeris.dev`; Workers Builds builds and deploys from Git. There is no deploy job in CI.
 
-### (a) Cloudflare Pages with the Git integration
+### (a) Create the Worker with Workers Builds
 
-In the Cloudflare dashboard (the labels below are from memory and may have moved):
+Dashboard labels below are from memory and may have moved.
 
-1. **Workers & Pages**, then **Create**, then the **Pages** tab, then **Connect to Git**. Authorize the Cloudflare GitHub application for `celest-io/remeris` (only that repository
-    is enough), select it and choose **Begin setup**.
-2. Project name: `remeris` (the project gets `remeris.pages.dev`). Production branch: `main`.
-3. Build settings:
+1. Add `remeris.dev` to the Cloudflare account and point the registrar's name servers at Cloudflare. `wrangler.jsonc` attaches the custom domains on deploy, and that fails when
+    the zone is not on the account, so do this first.
+2. **Workers & Pages**, then **Create**, then **Import a repository**. Authorize the Cloudflare GitHub application for `celest-io/remeris` (that repository only).
+3. Worker name: `remeris` (it must equal `name` in `wrangler.jsonc`, or the build fails with a name mismatch). Production branch: `main`.
+4. Build settings:
 
     | Setting | Value |
     | --- | --- |
-    | Framework preset | None |
+    | Root directory | `website` |
     | Build command | `npm run build` |
-    | Build output directory | `dist` |
-    | Root directory (advanced) | `website` |
+    | Deploy command | `npx wrangler deploy` |
 
-    The build output directory is relative to the root directory, so with the root directory `website` it is `dist`, which is `website/dist` in the repository. If the dashboard
-    turns out to take the path from the repository root, enter `website/dist`. Cloudflare installs the dependencies by itself when it finds a `package-lock.json` (it runs
-    `npm clean-install`); leave the install command empty.
-4. Environment variables (production and preview): `NODE_VERSION` = `24.22.1`, the version in `mise.toml`. Cloudflare's build image does not read `mise.toml`, so this one has to
-    be kept in step by hand (see section (h)). `NODE_VERSION` must be 22.19 or newer for Blume.
-5. Optional, under **Build watch paths** (the build configuration): include `website/*` and `docs/*`, so that a change to Go code does not rebuild the site. Cloudflare's build is
-    not a GitHub required check, so a skipped build cannot block a merge.
-6. **Save and Deploy.** The first build takes a few minutes. Check the `remeris.pages.dev` address before touching DNS.
+    Workers Builds installs the dependencies itself from `package-lock.json`. `wrangler` is a pinned dev dependency, so `npx` runs that version.
+5. Build variables: `NODE_VERSION` = `24.22.1`, the version in `mise.toml`. Cloudflare's build image does not read `mise.toml`, so keep this one in step by hand. Blume needs 22.19
+    or newer. Optionally add `WRANGLER_SEND_METRICS` = `false` to turn off Wrangler's telemetry.
+6. Optionally, under **Build watch paths**, include `website/*` and `docs/*`, so a change to Go code does not rebuild the site. The Cloudflare build is not a GitHub required
+    check, so a skipped build cannot block a merge.
+7. **Save and Deploy.** The first deploy creates the Worker, the `remeris.workers.dev` address (if the account has a `workers.dev` subdomain) and the two custom domains, with
+    their DNS records and certificates.
+
+To deploy by hand instead: `cd website && npm ci && npm run build && npx wrangler login && npm run deploy`.
 
 ### (b) The domain remeris.dev
 
-DNS must be on Cloudflare (the zone `remeris.dev` added to the account, with the registrar's name servers pointing at the Cloudflare ones). Then:
+The routes in `wrangler.jsonc` are Custom Domains: Cloudflare creates the proxied DNS records and the certificates itself, and the Worker answers at both names. Then:
 
-1. In the Pages project, **Custom domains**, then **Set up a custom domain**, enter `remeris.dev`. Cloudflare creates the DNS record itself: `remeris.dev` as a `CNAME` to
-    `remeris.pages.dev`, **Proxied** (orange cloud). An apex `CNAME` is allowed because Cloudflare flattens it. Do the same for `www.remeris.dev` if you want it to answer at all.
-2. Redirect `www` to the apex: **Rules**, then **Redirect Rules**, create a rule (the "Redirect from WWW to root" template exists): when the hostname equals `www.remeris.dev`,
-    redirect to `concat("https://remeris.dev", http.request.uri.path)`, status 301, preserve the query string. The `www` DNS record must be proxied for the rule to see the request:
-    a `CNAME` `www` to `remeris.dev`, Proxied, works (a placeholder `A` record to `192.0.2.1`, proxied, does too). A `_redirects` file cannot do this: it matches paths, not
-    hostnames.
-3. **SSL/TLS**, then **Overview**: set the encryption mode to **Full (strict)**. Pages serves the origin itself behind Cloudflare, so this mostly documents the intent. Turn on
-    **Always Use HTTPS** (SSL/TLS, Edge Certificates). `.dev` is on the browser HSTS preload list for the whole TLD, so browsers refuse plain HTTP to `remeris.dev` anyway, and
-    `headers.extra` also sends `Strict-Transport-Security`.
-4. Wait until the certificate status of the custom domain is **Active** and open `https://remeris.dev`. `deployment.site` in `blume.config.ts` is already `https://remeris.dev`, so
-    the canonical URLs, the sitemap and `llms.txt` use it. Cloudflare Pages exposes only the URL of the current deployment (`CF_PAGES_URL`), which changes with each deploy, so the
-    explicit `site` is required.
+1. Redirect `www` to the apex: **Rules**, then **Redirect Rules**, create a rule (the "Redirect from WWW to root" template exists): when the hostname equals `www.remeris.dev`,
+    redirect to `concat("https://remeris.dev", http.request.uri.path)`, status 301, preserve the query string. Redirect Rules run before the Worker. A `_redirects` file cannot do
+    this: it matches paths, not hostnames. (Instead of the rule, delete the `www.remeris.dev` route from `wrangler.jsonc` if `www` should not answer at all.)
+2. **SSL/TLS**, then **Overview**: set the encryption mode to **Full (strict)**. Turn on **Always Use HTTPS** (SSL/TLS, Edge Certificates). `.dev` is on the browser HSTS preload
+    list for the whole TLD, so browsers refuse plain HTTP to `remeris.dev` anyway, and `headers.extra` also sends `Strict-Transport-Security`.
+3. Wait until the certificate status is **Active** and open `https://remeris.dev`. `deployment.site` in `blume.config.ts` is already `https://remeris.dev`, so the canonical URLs,
+    the sitemap and `llms.txt` use it.
 
-### (c) The alternative: Workers with static assets
+### (c) `wrangler.jsonc`
 
-Cloudflare now steers new projects towards Workers with static assets (Pages stays supported). Blume documents this path: a static build deploys as static assets, and its
-`cloudflare()` adapter is not used. Create `website/wrangler.jsonc` (it is not committed here: a Wrangler file in the project root may be read by a Pages build too, and this shape
-was written from memory and not run):
-
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "remeris",
-  "compatibility_date": "2026-10-01",
-  "assets": {
-    "directory": "./dist",
-    // Blume writes each page as <route>/index.html and links to it without a trailing slash;
-    // Cloudflare's default (auto-trailing-slash) would answer /docs/usage with a 307 to /docs/usage/.
-    "html_handling": "drop-trailing-slash",
-    "not_found_handling": "404-page"
-  }
-}
-```
-
-Then either deploy by hand (`cd website && npm ci && npm run build && npx wrangler deploy`) or use **Workers Builds** (**Workers & Pages**, **Create**, **Import a repository**)
-with root directory `website`, build command `npm run build`, deploy command `npx wrangler deploy`, and the same `NODE_VERSION` variable. Custom domains for a Worker are added
-under the Worker's **Settings**, **Domains & Routes**. `html_handling` and `not_found_handling` are the documented names, and `drop-trailing-slash` comes from Blume's deployment
-guide; everything else here was not tried.
+- `assets.directory` is `./dist`, the Blume output.
+- `html_handling: "drop-trailing-slash"`: Blume writes each page as `<route>/index.html` and links to it without a trailing slash; Cloudflare's default would answer `/docs/usage`
+    with a redirect to `/docs/usage/`. The value comes from Blume's deployment guide.
+- `not_found_handling: "404-page"` serves Blume's `404.html` with a 404 status.
+- There is no `main`: it is a Worker without code, so static requests are served by the assets layer and are not billed.
+- `compatibility_date` is the date the file was written; moving it forward is optional.
+- `npx wrangler deploy --dry-run` (in `website/`, after a build) reads the file and the assets without uploading anything; use it to check a change.
 
 ### (d) `_headers` and `_redirects`
 
-Both files are written into `dist/` by `npm run build`, and both are read by Pages and by Workers static assets (checked in the build output, not on Cloudflare):
+Both files are written into `dist/` by `npm run build`, and Workers static assets read both (checked in the build output, not on Cloudflare):
 
 - **`dist/_headers`** comes from Blume (UTF-8 content types for `.md` and `.txt`, the discovery `Link` header, CORS for the `.well-known` files) plus `headers.extra`:
     `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera, microphone, geolocation and
@@ -134,42 +114,39 @@ Both files are written into `dist/` by `npm run build`, and both are read by Pag
 
 ### (e) Blume's `cloudflare()` adapter
 
-Not needed. `deployment: cloudflare()` (from `blume/deploy`, with `@astrojs/cloudflare` installed) switches the build to server output on Workers, and exists for features that run
-on a server: the assistant, the MCP server and server-side search. This site has none of them, so `blume doctor` reports `Output: static`, and `blume build` writes plain files that
-either hosting product serves. Do not add the adapter unless one of those features is added.
+Not needed. `deployment: cloudflare()` (from `blume/deploy`, with `@astrojs/cloudflare` installed) switches the build to server output with a Worker script, and exists for features
+that run on a server: the assistant, the MCP server and server-side search. This site has none of them, so `blume doctor` reports `Output: static`, and `blume build` writes plain
+files that the assets-only Worker serves. Do not add the adapter unless one of those features is added; the configuration then changes too.
 
 ### (f) Previews and branches
 
-With the Pages Git integration every push to a branch other than `main` builds a **preview deployment** at `<hash>.remeris.pages.dev`, and the branch has a stable alias
-`<branch>.remeris.pages.dev` (slashes in the branch name become dashes). The Cloudflare GitHub application comments on the pull request with the link and sets a commit status.
-Preview deployments are on by default for all branches (**Settings**, **Builds**, **Branch control**, to restrict them). `site` is fixed to `https://remeris.dev`, so a preview's
-canonical URLs and sitemap point to production; that is harmless, and Pages is documented to send `noindex` for `*.pages.dev` previews (not verified). With Workers Builds,
-non-production branches upload a preview version instead, and its URL is in the pull request comment.
+With Workers Builds, a push to a branch other than `main` runs the build and uploads a **preview version** of the Worker (the non-production branch build command,
+`npx wrangler versions upload`, is set in the Worker's **Settings**, **Builds**). The Cloudflare GitHub application comments on the pull request with the preview URL. `site` is
+fixed to `https://remeris.dev`, so a preview's canonical URLs and sitemap point to production; that is harmless. Restrict or disable branch builds under **Settings**, **Builds**,
+**Branch control**.
 
 ### (g) Caching and purging
 
-Pages serves the files from Cloudflare's edge. `_astro/*` is cached for a year and is safe to cache forever: its file names carry a content hash. HTML is revalidated on each
-request (Pages' default for static files), so a new deployment shows up at once; every deployment also invalidates the Pages cache of the project. If something stale remains on the
-custom domain (an old `llms.txt`, say), purge it in the zone: **Caching**, then **Configuration**, then **Purge Cache**: **Custom Purge** for URLs, or **Purge Everything**. The
-same with the API: `POST /zones/<zone id>/purge_cache` with a token that has the *Cache Purge* permission. To roll back, open the project's **Deployments** and use
-**Rollback to this deployment** on an earlier production build.
+Static assets are served from Cloudflare's edge. `_astro/*` is cached for a year and is safe to cache forever: its file names carry a content hash. Other files are revalidated, and
+each deployment replaces the assets of the Worker, so a new deployment shows up at once. If something stale remains on the custom domain (an old `llms.txt`, say), purge it in the
+zone: **Caching**, then **Configuration**, then **Purge Cache**: **Custom Purge** for URLs, or **Purge Everything**. The same with the API: `POST /zones/<zone id>/purge_cache` with
+a token that has the *Cache Purge* permission. To roll back, open the Worker's **Deployments** (or **Versions**) and deploy an earlier version, or revert the commit on `main`.
 
 ### (h) What the maintainer does once
 
 1. Add `remeris.dev` to the Cloudflare account and point the registrar's name servers at Cloudflare.
-2. Create the Pages project as in (a) (or the Worker as in (c)); set `NODE_VERSION`.
-3. Add the custom domains `remeris.dev` and `www.remeris.dev`, the Redirect Rule for `www`, and the SSL/TLS settings as in (b).
+2. Create the Worker with Workers Builds as in (a); set `NODE_VERSION`.
+3. Add the Redirect Rule for `www` and the SSL/TLS settings as in (b).
 4. Check `https://remeris.dev`, `https://remeris.dev/docs` (redirects to `/docs/usage`), `https://remeris.dev/llms.txt`, `https://remeris.dev/sitemap.xml`, and the headers of the
     home page (`curl -sI https://remeris.dev`).
 5. Optionally make the `website` job a required check of the branch protection of `main`.
 
-Afterwards, keep three things in step when they change: the Node version (`mise.toml` and `NODE_VERSION` in Cloudflare), the Blume version (`package.json`) and `deployment.site`
-(`blume.config.ts`).
+Afterwards, keep these in step when they change: the Node version (`mise.toml` and `NODE_VERSION` in Cloudflare), the Blume and Wrangler versions (`package.json`; Renovate groups
+the npm updates of `website/`) and `deployment.site` (`blume.config.ts`).
 
 ### What was not verified
 
-The build, the generated `_headers`, `_redirects`, sitemap, `llms.txt` and search index were checked locally. Nothing was run against Cloudflare. The dashboard labels and menu
-paths above are from memory and may have changed; so are these statements: that Pages installs with `npm clean-install` by itself, that the build output directory is relative to
-the root directory, the `*.pages.dev` preview `noindex` header, the form of the preview URLs, the Redirect Rule template, and the `wrangler.jsonc` option values other than
-`html_handling` (documented by Blume). Whether Pages redirects `/docs/usage` to `/docs/usage/` (Blume links without the trailing slash, and its canonical URLs have none) is also
-unchecked: if it does, it costs one redirect hop, and the Workers setup in (c) avoids it with `drop-trailing-slash`.
+The build, the generated `_headers`, `_redirects`, sitemap, `llms.txt` and search index were checked locally, and `wrangler deploy --dry-run` accepts `wrangler.jsonc`. Nothing was
+deployed to Cloudflare. The dashboard labels and menu paths above are from memory and may have changed; so are these statements: that Workers Builds installs the dependencies from
+the lockfile by itself, that the Worker name must match `name`, that the custom domain routes are created on deploy (and the failure when the zone is missing), the preview versions
+and their commands, the Redirect Rule template, and the `404-page` behaviour with Blume's `404.html`.

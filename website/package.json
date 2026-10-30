@@ -12,9 +12,13 @@
     "build": "blume build && node scripts/append-headers.mjs",
     "preview": "blume preview",
     "validate": "blume validate",
+    "deploy": "wrangler deploy",
     "doctor": "blume doctor"
   },
   "dependencies": {
     "blume": "2.2.6"
+  },
+  "devDependencies": {
+    "wrangler": "4.156.0"
   }
 }

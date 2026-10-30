@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "remeris",
+  "compatibility_date": "2026-10-01",
+  // Static site: no Worker script, only the files Blume writes to dist/ (see README.md).
+  "assets": {
+    "directory": "./dist",
+    // Blume writes each page as <route>/index.html and links to it without a trailing slash;
+    // Cloudflare's default (auto-trailing-slash) would answer /docs/usage with a 307 to /docs/usage/.
+    "html_handling": "drop-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  // Attach the domains on deploy. The zone remeris.dev must already be on the Cloudflare account.
+  "routes": [
+    { "pattern": "remeris.dev", "custom_domain": true },
+    { "pattern": "www.remeris.dev", "custom_domain": true }
+  ]
+}
