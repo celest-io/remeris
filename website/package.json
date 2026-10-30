@@ -1,0 +1,24 @@
+{
+  "name": "remeris-website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Documentation website of remeris, built with Blume",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "dev": "blume dev",
+    "build": "blume build && node scripts/append-headers.mjs",
+    "preview": "blume preview",
+    "validate": "blume validate",
+    "deploy": "wrangler deploy",
+    "doctor": "blume doctor"
+  },
+  "dependencies": {
+    "blume": "2.2.6"
+  },
+  "devDependencies": {
+    "wrangler": "4.156.0"
+  }
+}

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Check the configuration, and the internal links, anchors and assets of the documentation website (no network)"
+#MISE dir="{{config_root}}/website"
+set -euo pipefail
+
+if [ ! -d node_modules ]; then
+  npm ci
+fi
+npm run doctor
+npm run validate

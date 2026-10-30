@@ -38,3 +38,9 @@ build/
 .claude/*.local.*
 mise.local.*
 dist/
+
+# Documentation website (Blume): dependencies, generated runtime and build output
+website/node_modules/
+website/.blume/
+website/dist/
+website/.env.local

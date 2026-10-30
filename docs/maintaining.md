@@ -1,8 +1,8 @@
 # Maintaining the repository
 
 This page is for the maintainers of `celest-io/remeris`. It lists the repository settings to apply once, in the order of the GitHub settings pages, so that the contributor rules in
-[CONTRIBUTING.md](../CONTRIBUTING.md) hold. The release pipeline (GitHub App, `release` environment, secrets, tag protection) is described in [releasing.md](releasing.md) and is
-not repeated here.
+[CONTRIBUTING.md](https://github.com/celest-io/remeris/blob/main/CONTRIBUTING.md) hold. The release pipeline (GitHub App, `release` environment, secrets, tag protection) is
+described in [releasing.md](releasing.md) and is not repeated here.
 
 GitHub changes the wording and the layout of its settings pages often. The paths below are the ones at the time of writing; where a label may differ, check the current UI wording
 and the [GitHub documentation](https://docs.github.com). You need the Admin role on the repository (or Owner of the organization) for all of it.
@@ -127,7 +127,7 @@ or change `.github/workflows/`; with the code owner rule above, a change of the 
 
 **Settings**, **Advanced Security** (named **Code security and analysis** in older versions of the page; check the current wording).
 
-1. **Private vulnerability reporting:** **Enable**. This is what [SECURITY.md](../SECURITY.md) and the Security tab rely on.
+1. **Private vulnerability reporting:** **Enable**. This is what [SECURITY.md](https://github.com/celest-io/remeris/blob/main/SECURITY.md) and the Security tab rely on.
 2. **Dependency graph:** enable.
 3. **Dependabot alerts:** enable. Renovate reads them for its security pull requests (`vulnerabilityAlerts`).
 4. **Dependabot security updates:** leave disabled if Renovate handles vulnerabilities, to avoid two pull requests for one problem; enable them if you do not install Renovate.
@@ -216,7 +216,7 @@ not checked in CI; regenerate it with `mise --env claude lock --platform linux-x
 
 For the maintainers, when a new contributor shows up:
 
-- Welcome them by name in the issue or pull request, and point to [CONTRIBUTING.md](../CONTRIBUTING.md) if they missed something.
+- Welcome them by name in the issue or pull request, and point to [CONTRIBUTING.md](https://github.com/celest-io/remeris/blob/main/CONTRIBUTING.md) if they missed something.
 - Approve the workflow run of a first pull request from a fork (**Approve and run workflows**), after you have looked at the diff for changes to `.github/`, `mise-tasks/` and
     `mise.toml`.
 - Keep a few issues labelled `good first issue` and `help wanted`, each with the files to touch, the Knope behaviour to match and the test to add.
@@ -229,14 +229,14 @@ For the maintainers, when a new contributor shows up:
 The issue forms add `needs-triage` and either `bug` or `enhancement`. A maintainer goes through the issues with `label:needs-triage` (Issues, filter `is:open label:needs-triage`)
 at least weekly:
 
-1. **Is it a security problem?** Ask the reporter to delete the details, close the issue as not planned, and point to [SECURITY.md](../SECURITY.md). Hide the comment that holds
-    the details.
+1. **Is it a security problem?** Ask the reporter to delete the details, close the issue as not planned, and point to
+    [SECURITY.md](https://github.com/celest-io/remeris/blob/main/SECURITY.md). Hide the comment that holds the details.
 2. **Is it a question?** Convert it to a discussion (**Convert to discussion** in the right column of the issue, category Q&A) or label it `question`, answer, and close it.
 3. **Duplicate?** Close it as a duplicate (**Close as duplicate** in the close menu) and link the original.
 4. **Can it be reproduced?** Ask for what is missing from the form (version, `knope.toml`, `--verbose` output without tokens). Try to reproduce it with the version given.
-5. **Compare with Knope.** If Knope 0.23.1 does the same, check [docs/differences.md](differences.md), [testdata/deviations.md](../testdata/deviations.md) and the Quirks register
-    and Decisions at the end of [spec.md](spec.md). Parity is the default: a report that matches Knope and the spec is a request for a change (`enhancement`, discussed first), not
-    a bug.
+5. **Compare with Knope.** If Knope 0.23.1 does the same, check [docs/differences.md](differences.md),
+    [testdata/deviations.md](https://github.com/celest-io/remeris/blob/main/testdata/deviations.md) and the Quirks register and Decisions at the end of [spec.md](spec.md). Parity
+    is the default: a report that matches Knope and the spec is a request for a change (`enhancement`, discussed first), not a bug.
 6. **Label it:** `bug`, `enhancement` or `documentation`; add `breaking` if the fix changes behaviour that users rely on; add `good first issue` or `help wanted` when it is
     suitable, and write down the files to touch and the test to add. Remove `needs-triage`.
 7. **Answer within a week** (see the checklist above), even if the answer is "not now".

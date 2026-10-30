@@ -4,6 +4,7 @@ lockfile = true
 
 [tools]
 go = "1.27.1"
+node = "24.22.1"                                     # LTS; builds the documentation website in website/ (Blume needs >= 22.19)
 golangci-lint = "2.14.0"
 "github:owenlamont/ryl" = "0.26.1"                   # lints and formats YAML (Rust yamllint)
 hk = { version = "2.8.1", workflow = "release.yml" } # runner that orchestrates the hooks in hk.pkl
