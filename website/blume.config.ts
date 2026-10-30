@@ -48,9 +48,21 @@ export default defineConfig({
   footer: {
     copyright: "Remeris is released under the Apache License 2.0.",
     links: [
+      // A plain followed link on every page (no nofollow): it credits Celest.io, who develops remeris.
+      { label: "Developed by Celest.io", href: "https://celest.io" },
       { label: "Releases", href: "https://github.com/celest-io/remeris/releases" },
       { label: "Knope", href: "https://knope.tech" },
     ],
+  },
+
+  // Every page carries a schema.org Organization node naming Celest.io as the publisher, which is what search engines and AI agents read
+  // to learn who is behind the site. Add Celest.io's other profiles to sameAs, and a link to its remeris page once that exists.
+  seo: {
+    organization: {
+      name: "Celest.io",
+      url: "https://celest.io",
+      sameAs: ["https://github.com/celest-io"],
+    },
   },
 
   // /docs has no page of its own: send it to the first page of the guide.
