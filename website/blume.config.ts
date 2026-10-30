@@ -33,7 +33,7 @@ export default defineConfig({
       {
         label: "Maintainers",
         collapsed: false,
-        items: ["/docs/releasing"],
+        items: ["/docs/maintaining", "/docs/releasing"],
       },
       {
         label: "For implementers",
