@@ -1,0 +1,31 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Show how you use remeris: a workflow, a `knope.toml`, a CI setup. Remove tokens and private names first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you build or set up?
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link to the repository or the workflow
+      description: Optional.
+    validations:
+      required: false
+  - type: textarea
+    id: config
+    attributes:
+      label: Your knope.toml or workflow
+      render: toml
+    validations:
+      required: false
+  - type: textarea
+    id: learned
+    attributes:
+      label: What worked well, and what was awkward?
+    validations:
+      required: false

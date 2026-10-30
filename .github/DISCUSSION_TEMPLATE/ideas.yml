@@ -1,0 +1,26 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share an idea to talk about before it becomes an issue. remeris mirrors Knope and its behaviour is written in
+        [docs/spec.md](https://github.com/celest-io/remeris/blob/main/docs/spec.md); ideas that fit the spec are welcome.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem or the goal
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How could remeris behave? A `knope.toml` snippet or an example of the output helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and Knope
+      description: What does Knope do today, and what else did you consider?
+    validations:
+      required: false

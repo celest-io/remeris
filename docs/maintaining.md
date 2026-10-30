@@ -83,9 +83,9 @@ it as a bypass actor (**Bypass list**, **Add bypass**, choose the App from the l
         **Require review from Code Owners**; **Require approval of the most recent reviewable push**; **Require conversation resolution before merging** (optional); allowed merge
         methods: **Squash** only.
     - **Require status checks to pass**, with **Require branches to be up to date before merging** (optional, it forces a rebase after every merge), and these checks, which are
-        the job names of `.github/workflows/ci.yml`: `ci`, `vet (windows)` and `vet (darwin)`. Add each in the **Add checks** box (a check only appears in the list after it has run
-        once; pick the GitHub Actions app as the source). The workflow is `CI`; the job `ci` runs `mise run ci`, and the job named `vet (${{ matrix.goos }})` expands to
-        `vet (windows)` and `vet (darwin)`. Check the current UI wording of the check names after the first run.
+        the job names of `.github/workflows/ci.yml`: `ci`, `vet (windows)`, `vet (darwin)` and `mise-lock`. Add each in the **Add checks** box (a check only appears in the list
+        after it has run once; pick the GitHub Actions app as the source). The workflow is `CI`; the job `ci` runs `mise run ci`, and the job named `vet (${{ matrix.goos }})`
+        expands to `vet (windows)` and `vet (darwin)`; the job `mise-lock` checks that `mise.lock` is current. Check the current UI wording of the check names after the first run.
     - **Block force pushes**.
 
 With a single maintainer, **Require review from Code Owners** and one approval mean that a maintainer cannot merge their own pull request (GitHub does not count the approval of the
@@ -149,14 +149,68 @@ repository secrets with the same names. Nothing else on this page needs a secret
 valid: GitHub shows errors on the file's page (open it in the web UI, "Code owners" menu) when a handle does not exist or has no write access. Owners need the Write role at least.
 When the project has a team, replace the handles by `@celest-io/<team>`.
 
-Review rules in practice: a maintainer approves only after `ci`, `vet (windows)` and `vet (darwin)` are green; the pull request title is a conventional commit (the squash message);
-a change of behaviour has its spec, `docs/differences.md` and `testdata/deviations.md` updates; no secret appears anywhere.
+Review rules in practice: a maintainer approves only after `ci`, `vet (windows)`, `vet (darwin)` and `mise-lock` are green; the pull request title is a conventional commit (the
+squash message); a change of behaviour has its spec, `docs/differences.md` and `testdata/deviations.md` updates; no secret appears anywhere.
 
 ## 9. Renovate
 
-Renovate keeps the dependencies current through `renovate.json`. The installation steps and the way to handle its pull requests are added to this section once the configuration
-lands; until then, only the existing `renovate.json` (actions pinned to SHAs, the hk and ghcommit rules) applies. Security and authorship notes are in
-[releasing.md](releasing.md#renovate).
+Renovate keeps the dependencies current through `renovate.json`. The ghcommit pin and its checksum are described in [releasing.md](releasing.md#renovate).
+
+### Install
+
+1. Open the [Mend Renovate app](https://github.com/apps/renovate) on GitHub Marketplace and choose **Install** (or **Configure** if it is already installed on the organization).
+2. Choose the `celest-io` organization, select **Only select repositories**, and pick `remeris`. Confirm. (Check the current UI wording.)
+3. `renovate.json` already exists, so Renovate does not open an onboarding pull request with a new file. Depending on the app version it may still open a "Configure Renovate" pull
+    request; the file is valid, so merge it only if it changes nothing you did not expect, or close it.
+4. Within a few minutes Renovate creates an issue named **Dependency Dashboard** (`dependencyDashboard` is on in `renovate.json`). The first pull requests follow the schedule, or
+    tick them in the dashboard.
+
+### What the configuration does
+
+- Runs on Monday before 06:00 UTC, with at most 5 open pull requests and 2 new ones per hour. A new release must be 3 days old (`minimumReleaseAge`, with
+    `internalChecksFilter: "strict"`, so no branch exists before then). Security updates (`vulnerabilityAlerts`) ignore the schedule, are labelled `security`, and are not delayed.
+- Titles are `chore(deps): ...`, so they pass the conventional-commit rule and are squash-merged like other changes.
+- Groups: non-major Go modules, all GitHub Actions, the mise tools, the non-major npm packages of a future `website/`, and the existing `go toolchain` and `hk` groups. Major
+    updates are separate pull requests.
+- `testdata/` and the other usual test paths are ignored (`ignorePaths`), so fixtures are never updated.
+- **Automerge is off** everywhere: `main` requires signed commits and a human review, and the release pipeline trusts what is merged. Every Renovate pull request is merged by a
+    maintainer.
+- `postUpdateOptions: ["gomodTidy"]` runs `go mod tidy` for Go updates. Renovate does not run mise, so `mise.lock` is not regenerated (below).
+
+### The dependency dashboard
+
+The issue **Dependency Dashboard** lists the open, pending, rate-limited and ignored updates. Tick the checkbox of an update to create its pull request now (for example one that
+waits for the schedule or the release age), and tick **Rebase** next to a pull request to have it rebased. Do not close the issue: Renovate keeps it up to date.
+
+### Review a Renovate pull request
+
+1. Read the release notes in the pull request body. Grouped pull requests mix packages: check each one.
+2. `ci`, `vet (windows)`, `vet (darwin)` and `mise-lock` must be green. The squash merge made in the GitHub UI is signed by GitHub, which is what **Require signed commits** checks
+    on `main`. If the ruleset still rejects a Renovate pull request, check whether it comes from the commits of its branch (rulesets apply to the commits that land on `main`) and
+    look at the current GitHub documentation.
+3. To split a group, comment on the dashboard or edit `renovate.json` (a new `packageRules` entry with its own `groupName`, or none).
+4. The ghcommit pull request needs a manual edit: Renovate bumps `GHCOMMIT_VERSION` but not `GHCOMMIT_SHA256` (see [releasing.md](releasing.md#renovate)).
+
+### The `mise.lock` step
+
+A change of a tool version in `mise.toml` also needs `mise.lock`, which Renovate cannot regenerate (the hosted Mend Renovate app does not run mise, and `postUpgradeTasks` are not
+available in it). The job `mise-lock` of `ci.yml` runs `mise lock --platform linux-x64,linux-arm64,macos-arm64` and fails the pull request, with an error annotation that names the
+command, when `mise.lock` differs. The job pins the mise version (`version:` of `jdx/mise-action`, currently 2026.10.21) because the lockfile format changes between mise releases:
+write the lockfile with that version (`mise self-update` or `mise use -g mise@2026.10.21`), and change the pin together with the lockfile when you upgrade mise. To fix a mise tool
+pull request:
+
+```sh
+git fetch origin
+git checkout renovate/<branch>        # the branch of the pull request
+mise install
+mise lock --platform linux-x64,linux-arm64,macos-arm64
+git add mise.lock
+git commit -m "chore(deps): update mise.lock"
+git push
+```
+
+If `hk.pkl` and `mise.toml` disagree on the hk version, the `hk` group moves both; check that the three places named in CLAUDE.md agree. `mise.claude.lock` (agent tools only) is
+not checked in CI; regenerate it with `mise --env claude lock --platform linux-x64,linux-arm64,macos-arm64` when you change `mise.claude.toml`.
 
 ## 10. First contributor checklist
 
@@ -169,3 +223,51 @@ For the maintainers, when a new contributor shows up:
 - Aim to answer a new issue, discussion or pull request within a week, and say so when you cannot. Close issues that need a reply that never comes after a polite reminder.
 - Move questions from issues to Discussions (label `question`, then close), and ideas to Discussions, Ideas.
 - Thank people, in the pull request and in the release notes.
+
+## 11. Issue triage
+
+The issue forms add `needs-triage` and either `bug` or `enhancement`. A maintainer goes through the issues with `label:needs-triage` (Issues, filter `is:open label:needs-triage`)
+at least weekly:
+
+1. **Is it a security problem?** Ask the reporter to delete the details, close the issue as not planned, and point to [SECURITY.md](../SECURITY.md). Hide the comment that holds
+    the details.
+2. **Is it a question?** Convert it to a discussion (**Convert to discussion** in the right column of the issue, category Q&A) or label it `question`, answer, and close it.
+3. **Duplicate?** Close it as a duplicate (**Close as duplicate** in the close menu) and link the original.
+4. **Can it be reproduced?** Ask for what is missing from the form (version, `knope.toml`, `--verbose` output without tokens). Try to reproduce it with the version given.
+5. **Compare with Knope.** If Knope 0.23.1 does the same, check [docs/differences.md](differences.md), [testdata/deviations.md](../testdata/deviations.md) and the Quirks register
+    and Decisions at the end of [spec.md](spec.md). Parity is the default: a report that matches Knope and the spec is a request for a change (`enhancement`, discussed first), not
+    a bug.
+6. **Label it:** `bug`, `enhancement` or `documentation`; add `breaking` if the fix changes behaviour that users rely on; add `good first issue` or `help wanted` when it is
+    suitable, and write down the files to touch and the test to add. Remove `needs-triage`.
+7. **Answer within a week** (see the checklist above), even if the answer is "not now".
+
+Pull requests: check the title (conventional commit), the checks, that the spec and the deviations file are updated, then review.
+
+## 12. Welcome post for Discussions
+
+Post it in the **Announcements** category after the settings above are in place, and pin it (**Pin discussion**, from the three dots menu). Adapt the text to the current state of
+the project.
+
+Title: `Welcome to the remeris community`
+
+```markdown
+Welcome, and thank you for being here.
+
+remeris is a release tool written in Go. It starts as a drop-in replacement for [Knope](https://github.com/knope-dev/knope): it reads `knope.toml`, `.changeset/` files and Git
+tags, writes the same file edits and changelogs, and prints the same messages. Where it differs on purpose, [docs/differences.md](https://github.com/celest-io/remeris/blob/main/docs/differences.md)
+says so.
+
+**Where to go**
+
+- **Q&A:** how do I configure or use remeris?
+- **Ideas:** a proposal you want to talk about before it becomes an issue.
+- **Show and tell:** your workflows and `knope.toml` files.
+- **Issues:** bugs and feature requests, with the forms.
+- **Security:** please do not post vulnerabilities here; use the private reporting described in [SECURITY.md](https://github.com/celest-io/remeris/blob/main/SECURITY.md).
+
+**Contributing:** [CONTRIBUTING.md](https://github.com/celest-io/remeris/blob/main/CONTRIBUTING.md) explains the setup (`mise install`), the spec-first rule, the tests and the pull
+request flow. Issues labelled `good first issue` are a good start.
+
+Please be kind: we follow the [Code of Conduct](https://github.com/celest-io/remeris/blob/main/CODE_OF_CONDUCT.md). remeris is maintained by volunteers, so answers may take a few
+days.
+```

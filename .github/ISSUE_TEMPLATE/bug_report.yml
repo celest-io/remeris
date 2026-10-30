@@ -1,0 +1,89 @@
+name: Bug report
+description: remeris does something that the spec, the documentation or Knope says it should not.
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. remeris mirrors [Knope](https://github.com/knope-dev/knope), so the same behaviour as Knope is usually intended: see
+        [docs/differences.md](https://github.com/celest-io/remeris/blob/main/docs/differences.md). For a question, use Discussions. For a security problem, do not use this form:
+        read [SECURITY.md](https://github.com/celest-io/remeris/blob/main/SECURITY.md).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched the existing issues and discussions.
+          required: true
+        - label: I read docs/differences.md and this is not a documented difference from Knope.
+          required: true
+        - label: I removed every token and password from what I paste below.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: remeris version
+      description: The output of `remeris --version`.
+      placeholder: remeris v0.0.2
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and architecture
+      placeholder: Linux amd64, macOS arm64, Windows amd64
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install remeris?
+      options:
+        - mise (packslip backend)
+        - go install
+        - A downloaded release archive
+        - Built from a checkout (mise run build)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: knope.toml
+      description: The smallest part of your `knope.toml` that shows the problem (the workflow and its steps), and the files it works on if they matter. Remove secrets.
+      render: toml
+    validations:
+      required: false
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      description: If Knope behaves differently, say which version of Knope and what it prints.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands you ran, starting from a clean checkout if possible.
+      placeholder: |
+        1. remeris --generate
+        2. remeris release --dry-run
+    validations:
+      required: true
+  - type: textarea
+    id: verbose
+    attributes:
+      label: Output with --verbose
+      description: |
+        Run the same command again with `--verbose` and paste the output. Remove tokens, passwords and private repository or host names before you paste it.
+      render: shell
+    validations:
+      required: false

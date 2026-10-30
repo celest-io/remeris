@@ -1,0 +1,34 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask your question here. For a bug, open an issue instead. Please search existing discussions and read the
+        [documentation](https://github.com/celest-io/remeris/tree/main/docs) first.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What are you trying to do, and what is unclear?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: remeris version
+      description: The output of `remeris --version`.
+    validations:
+      required: false
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant knope.toml or command
+      description: Remove tokens and passwords before you paste.
+      render: toml
+    validations:
+      required: false
+  - type: textarea
+    id: tried
+    attributes:
+      label: What did you try?
+    validations:
+      required: false

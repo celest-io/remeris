@@ -1,0 +1,63 @@
+name: Feature request
+description: Suggest a new capability or a change of behaviour.
+title: "feat: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        remeris starts as a drop-in replacement for [Knope](https://github.com/knope-dev/knope) and its behaviour is written in
+        [docs/spec.md](https://github.com/celest-io/remeris/blob/main/docs/spec.md), the source of truth. A change needs to fit the spec, so we discuss the behaviour first and
+        change the spec before the code. Ideas that are still vague belong in Discussions, Ideas.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched the existing issues and discussions.
+          required: true
+        - label: I read docs/differences.md and docs/spec.md, and this is not already covered.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem do you want to solve?
+      description: Describe what you are trying to do and why it is hard or impossible today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What behaviour do you propose?
+      description: |
+        Write it as it could appear in the spec: the configuration (a `knope.toml` snippet), the command line, the output, and the errors. Say what happens in a dry run.
+    validations:
+      required: true
+  - type: dropdown
+    id: knope
+    attributes:
+      label: How does it relate to Knope?
+      options:
+        - Knope already does this and remeris differs
+        - Knope does not do this (an addition to remeris)
+        - It would change a behaviour that remeris keeps from Knope
+        - I do not know
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Workarounds, other tools, and why they are not enough.
+    validations:
+      required: false
+  - type: dropdown
+    id: help
+    attributes:
+      label: Would you like to implement it?
+      options:
+        - "Yes"
+        - Yes, with some guidance
+        - "No"
+    validations:
+      required: false
