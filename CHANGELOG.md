@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.3 (2026-10-31)
+
+### Features
+
+- add the Blume documentation site for remeris.dev (#131)
+- credit Celest.io and improve the SEO of the site (#134)
+
 ## 0.0.2 (2026-10-28)
 
 ## 0.0.1 (2026-10-27)
