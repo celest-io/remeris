@@ -1,3 +1,7 @@
+---
+description: "Maintainer guide for the remeris repository: settings, Discussions, labels, rulesets, Actions, security, Renovate, issue triage and the contributor checklist."
+---
+
 # Maintaining the repository
 
 This page is for the maintainers of `celest-io/remeris`. It lists the repository settings to apply once, in the order of the GitHub settings pages, so that the contributor rules in

@@ -1,3 +1,7 @@
+---
+description: "Where remeris differs from Knope 0.23.1: full SemVer 2.0 support, credential storage, GitHub App authentication, fast-forward-only rebase and more."
+---
+
 # Differences from Knope
 
 remeris reads Knope's `knope.toml`, `.changeset/` files and Git tags, writes the same file edits and changelogs, and aims to be a drop-in replacement for Knope 0.23.1. This page

@@ -1,3 +1,7 @@
+---
+description: "How to run remeris: the command line, global flags and workflow options, --generate, --upgrade and --validate, environment variables, credentials, exit codes"
+---
+
 # Usage
 
 ```sh

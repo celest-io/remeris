@@ -1,8 +1,12 @@
+---
+description: "How remeris releases itself with its own knope.toml: the GitHub Actions workflows, one-time setup, cutting a release and verifying downloads with cosign."
+---
+
 # Releasing
 
 remeris releases itself: its own `knope.toml` drives three GitHub Actions workflows, in the same way as Knope-based projects such as mizuya. This page explains the flow, what to
 set up once, how to cut the first release (v0.0.1), and how users verify a download. For the commands, see [usage.md](usage.md); for the configuration, see
-[configuration.md](configuration.md).
+[configuration.md](configuration.md); for the repository settings, see [maintaining.md](maintaining.md).
 
 ## How a release happens
 

@@ -1,3 +1,7 @@
+---
+description: "The specification for remeris, a Go reimplementation of Knope: milestones, feature behaviour, the quirks register and the design decisions."
+---
+
 # Remeris: spec for a Go reimplementation of Knope
 
 **Source analysed:** [knope-dev/knope](https://github.com/knope-dev/knope) at `af540f3`, Knope CLI `0.23.1`, `knope-versioning` `0.8.x`, `knope-config` `0.4.x`, plus the

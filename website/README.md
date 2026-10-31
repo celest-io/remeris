@@ -7,8 +7,9 @@ maintainers: how the site is put together, how to work on it, and how to host it
 
 - **The documentation is not copied.** `docs/*.md` is the single source: GitHub renders it, and the site reads the same files. `blume.config.ts` sets `content.root` to the
     repository root and `content.include` to `docs/*.md` and `website/docs/*.mdx`, so a page's route is its path: `docs/usage.md` is `/docs/usage`.
-- **No frontmatter in `docs/`.** Blume takes the title of a page from its first heading, so the Markdown files stay plain. The page title in the sidebar and the browser tab is
-    that heading.
+- **Frontmatter in `docs/` is only a `description`.** Blume takes the title of a page from its first heading. Each page needs its own description (110 to 160 characters): it
+    becomes the meta description and the Open Graph text, and `blume audit` warns about missing, short, long or duplicate ones. GitHub shows the frontmatter as a small table. The
+    page title in the sidebar and the browser tab is that heading.
 - **`website/docs/index.mdx`** is the landing page and the only page that exists just for the site (Cards, Steps and Tabs). Its `slug: index` puts it at `/`.
 - **The sidebar** is written in `navigation.sidebar` of `blume.config.ts`: Guide (usage, configuration, differences), Maintainers (releasing) and For implementers (the
     specification).
