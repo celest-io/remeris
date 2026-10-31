@@ -3,10 +3,10 @@ import { defineConfig } from "blume";
 // The site has two content folders, read as one root (the repository root):
 //   - docs/*.md           the documentation, which is also what GitHub renders; it is the single source and is not copied;
 //   - website/docs/*.mdx  the pages that only exist on the site (the landing page, with Cards and Steps).
-// The titles of docs/*.md come from their first heading, so they need no frontmatter.
+// The titles of docs/*.md come from their first heading; their frontmatter holds only a unique description (meta description, Open Graph).
 export default defineConfig({
   title: "remeris",
-  description: "A release tool written in Go that reads Knope's configuration: a drop-in replacement for Knope.",
+  description: "remeris is a release tool written in Go. It reads Knope's knope.toml, changeset files and Git tags, so it can replace Knope in an existing project.",
   logo: "/logo.svg",
 
   content: {

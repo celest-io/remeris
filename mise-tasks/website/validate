@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Check the configuration, and the internal links, anchors and assets of the documentation website (no network)"
+#MISE description="Check the configuration, the SEO audit, and the internal links, anchors and assets of the documentation website (no network)"
 #MISE dir="{{config_root}}/website"
 set -euo pipefail
 
@@ -8,3 +8,6 @@ if [ ! -d node_modules ]; then
 fi
 npm run doctor
 npm run validate
+# SEO and site health of the built site (titles, descriptions, canonicals, structured data, sitemap); offline. Warnings fail, so a page
+# without its own description is caught.
+npx blume audit --strict

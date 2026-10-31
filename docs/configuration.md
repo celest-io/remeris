@@ -1,3 +1,7 @@
+---
+description: "Every knope.toml setting remeris reads: packages, versioned files, changes, release notes, forge settings, workflows and each step with its fields."
+---
+
 # Configuration
 
 remeris reads Knope's `knope.toml` from the working directory. This page lists what remeris reads from it. For what each setting means in practice, see the Knope documentation at
