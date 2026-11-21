@@ -172,3 +172,52 @@ func noChangesError() error {
 		WithCode(codeCommit).
 		WithHelp("None of the selected files differ from HEAD.")
 }
+
+// Root is git rev-parse --show-toplevel.
+func (c *CLI) Root(ctx context.Context) (string, error) {
+	out, err := c.run(ctx, "", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", fail(err, openRepoError)
+	}
+	return strings.TrimRight(out, "\n"), nil
+}
+
+// AdoptCommit fetches branch from its remote and soft-resets to sha, which must be the tip it fetched. The index and
+// the working tree stay as they are, so the files that were committed through the API (and staged by the caller)
+// are not changed. The remote is branch.<name>.remote, or origin. branch and sha are checked: a name that is not a
+// valid branch name or an id that is not 40 hexadecimal digits never reaches git.
+func (c *CLI) AdoptCommit(ctx context.Context, branch, sha string) error {
+	if !validSHA(sha) {
+		return unknownGitError(errors.New("not a commit id: " + sha))
+	}
+	if _, err := c.BranchExists(ctx, branch); err != nil {
+		return err
+	}
+	remote := "origin"
+	if out, err := c.run(ctx, "", "config", "--get", "branch."+branch+".remote"); err == nil && strings.TrimSpace(out) != "" {
+		remote = strings.TrimSpace(out)
+	}
+	if strings.HasPrefix(remote, "-") {
+		return unknownGitError(errors.New("bad remote name"))
+	}
+	if _, err := c.run(ctx, "", "fetch", "--quiet", remote, "--", "refs/heads/"+branch); err != nil {
+		return fail(err, unknownGitError)
+	}
+	if _, err := c.run(ctx, "", "reset", "--soft", "--quiet", sha, "--"); err != nil {
+		return fail(err, unknownGitError)
+	}
+	return nil
+}
+
+// validSHA reports whether s is a full SHA-1 or SHA-256 commit id.
+func validSHA(s string) bool {
+	if len(s) != 40 && len(s) != 64 { //nolint:mnd // the length of a SHA-1 and of a SHA-256 id
+		return false
+	}
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}

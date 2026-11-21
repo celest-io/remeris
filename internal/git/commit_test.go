@@ -2,10 +2,12 @@ package git
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -14,7 +16,7 @@ const (
 	fileKeep    = "keep.txt"
 	fileStaged  = "staged.txt"
 	commitMsg   = "chore: prepare release 1.0.0"
-	fakeGPGBody = "#!/bin/sh\necho '[GNUPG:] SIG_CREATED D 1 8 00 1 KEY' >&2\n" +
+	fakeGPGBody = "#!/bin/sh\ncat >/dev/null\necho '[GNUPG:] SIG_CREATED D 1 8 00 1 KEY' >&2\n" +
 		"printf -- '-----BEGIN PGP SIGNATURE-----\\n\\nZmFrZQ==\\n-----END PGP SIGNATURE-----\\n'\n"
 )
 
@@ -288,6 +290,7 @@ func TestCommitSigned(t *testing.T) { //nolint:paralleltest // sets environment 
 		if err := os.WriteFile(program, []byte(fakeGPGBody), 0o700); err != nil { //nolint:gosec // an executable test script
 			t.Fatal(err)
 		}
+		waitExecutable(t, program)
 		r.git("config", "gpg.program", program)
 		r.git("config", "user.signingkey", "KEY")
 		r.write(fileA, "changed\n")
@@ -355,4 +358,18 @@ func sorted(s []string) []string {
 		}
 	}
 	return out
+}
+
+// waitExecutable runs the freshly written script until the system lets it run: a fork in another test can hold the
+// file open for writing for a moment, which makes executing it fail with "text file busy".
+func waitExecutable(t *testing.T, program string) {
+	t.Helper()
+	for range 100 {
+		err := exec.CommandContext(t.Context(), program).Run()
+		if err == nil || !strings.Contains(err.Error(), "text file busy") {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("the test script stays busy")
 }
