@@ -87,10 +87,16 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 				return ctx, err
 			}
 			setupLogging(stdout, global.Verbose, global.Validate)
+			if _, err := global.SigningOptions(); err != nil {
+				return ctx, err
+			}
 			if cfg.GitHub == nil {
 				return ctx, nil // the App options are only used with [github]
 			}
-			return ctx, global.ValidateGitHubApp(os.Getenv)
+			if err := global.ValidateGitHubApp(os.Getenv); err != nil {
+				return ctx, err
+			}
+			return ctx, global.ValidateCommitGitHubApp(os.Getenv)
 		},
 		OnUsageError: usageError,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -143,6 +149,42 @@ func rootFlags(cfg *config.Config) []cli.Flag {
 			Usage: "Path to the GitHub App private key (PEM); " + app.EnvGitHubAppKey +
 				" may hold the key itself",
 			Sources: cli.EnvVars(app.EnvGitHubAppKeyPath),
+		},
+		&cli.BoolFlag{
+			Name:    app.FlagSignCommits,
+			Usage:   "Sign the commits of the Commit step (the step's own sign key wins)",
+			Sources: cli.EnvVars(app.EnvSignCommits),
+		},
+		&cli.StringFlag{
+			Name:    app.FlagSigner,
+			Usage:   "How to sign: auto (git when it is set up to sign, else the forge API), git or api",
+			Sources: cli.EnvVars(app.EnvSigner),
+		},
+		&cli.StringSliceFlag{
+			Name:    app.FlagCommitInclude,
+			Usage:   "Commit only the changed files that match this glob (can be repeated)",
+			Sources: cli.EnvVars(app.EnvCommitInclude),
+		},
+		&cli.StringSliceFlag{
+			Name:    app.FlagCommitExclude,
+			Usage:   "Do not commit the changed files that match this glob (can be repeated)",
+			Sources: cli.EnvVars(app.EnvCommitExclude),
+		},
+		&cli.Int64Flag{
+			Name:    app.FlagCommitGitHubAppID,
+			Usage:   "ID of the GitHub App that makes the signed commits; the --github-app-id App when not given",
+			Sources: cli.EnvVars(app.EnvCommitGitHubAppID),
+		},
+		&cli.Int64Flag{
+			Name:    app.FlagCommitGitHubInstallationID,
+			Usage:   "ID of the installation of the GitHub App that makes the signed commits",
+			Sources: cli.EnvVars(app.EnvCommitGitHubInstallationID),
+		},
+		&cli.StringFlag{
+			Name: app.FlagCommitGitHubAppKeyPath,
+			Usage: "Path to the private key (PEM) of the GitHub App that makes the signed commits; " +
+				app.EnvCommitGitHubAppKey + " may hold the key itself",
+			Sources: cli.EnvVars(app.EnvCommitGitHubAppKeyPath),
 		},
 		&cli.StringFlag{
 			Name: app.FlagGitHubAPIURL,
@@ -288,20 +330,34 @@ func projectOptions(global *app.GlobalOptions, p prompt.Prompter) project.Option
 		TrustedGitHubAPIURL:    global.GitHubAPIURL,
 		TrustedGitHubUploadURL: global.GitHubUploadURL,
 	}
+	// A bad signer was refused when the flags were loaded, so the error is not looked at again here.
+	opts.Signing, _ = global.SigningOptions()
 	if global.GitHubAppID != 0 {
-		opts.GitHubApp = &github.App{
-			ID:             global.GitHubAppID,
-			InstallationID: global.GitHubInstallationID,
-			PrivateKey: func() ([]byte, error) {
-				key, found, err := global.GitHubAppPrivateKey(os.Getenv, os.ReadFile)
-				if err == nil && !found {
-					err = diag.New("A GitHub App ID is set without a private key").WithCode("remeris::github::app_options")
-				}
-				return key, err
-			},
-		}
+		opts.GitHubApp = githubApp(global.GitHubAppID, global.GitHubInstallationID, global.GitHubAppPrivateKey)
+	}
+	if global.HasCommitGitHubApp() {
+		opts.GitHubCommitApp = githubApp(
+			global.CommitGitHubAppID, global.CommitGitHubInstallationID, global.CommitGitHubAppPrivateKey)
 	}
 	return opts
+}
+
+// githubApp builds the App of the options. The private key is read when a client is built, never before.
+func githubApp(
+	id, installation int64,
+	privateKey func(func(string) string, func(string) ([]byte, error)) ([]byte, bool, error),
+) *github.App {
+	return &github.App{
+		ID:             id,
+		InstallationID: installation,
+		PrivateKey: func() ([]byte, error) {
+			key, found, err := privateKey(os.Getenv, os.ReadFile)
+			if err == nil && !found {
+				err = diag.New("A GitHub App ID is set without a private key").WithCode("remeris::github::app_options")
+			}
+			return key, err
+		},
+	}
 }
 
 // validate runs every workflow as a dry run, each on its own copy of the state, and reports all the problems at

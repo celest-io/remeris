@@ -1,0 +1,54 @@
+# remeris only: with Git set up to sign, the Commit step signs with git. A fake gpg stands in for the key.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+chmod 755 gpg
+exec git config gpg.program $WORK/gpg
+exec git config user.signingkey KEY
+exec git add .gitignore VERSION knope.toml
+exec git commit -m 'chore: init'
+cp changed/VERSION VERSION
+
+exec remeris --sign-commits --dry-run commit
+cmp stdout want/dryrun.log
+
+exec remeris --sign-commits commit
+stdout 'Created commit'
+exec git cat-file commit HEAD
+stdout 'gpgsig '
+
+# Signing is off by default: with the key configured, no flag and no sign key, the commit is plain and git is not
+# asked to sign it (user.signingkey alone does not sign a commit).
+cp changed2/VERSION VERSION
+exec remeris commit
+exec git cat-file commit HEAD
+! stdout gpgsig
+
+-- knope.toml --
+[[workflows]]
+name = "commit"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: release"
+
+-- .gitignore --
+changed/
+changed2/
+want/
+gpg
+-- VERSION --
+0.9.0
+-- changed/VERSION --
+1.0.0
+-- changed2/VERSION --
+1.1.0
+-- gpg --
+#!/bin/sh
+cat >/dev/null
+echo '[GNUPG:] SIG_CREATED D 1 8 00 1 KEY' >&2
+printf -- '-----BEGIN PGP SIGNATURE-----\n\nZmFrZQ==\n-----END PGP SIGNATURE-----\n'
+-- want/dryrun.log --
+Would create a signed commit using git and your own signing key on main: chore: release
+Would commit these files:
+  VERSION

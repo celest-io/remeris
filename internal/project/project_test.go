@@ -14,6 +14,7 @@ import (
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
+	"github.com/celest-io/remeris/internal/signing"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
@@ -370,5 +371,66 @@ func TestStateKeepsTheFormOfAssets(t *testing.T) {
 				t.Errorf("lines = %q, want %q", lines[1:], tc.want)
 			}
 		})
+	}
+}
+
+func TestLoadBuildsTheSigningSetup(t *testing.T) {
+	yes, no := true, false
+	repo := &config.GitHub{Owner: "o", Repo: "r"}
+	defaultApp := &github.App{ID: 1}
+	commitApp := &github.App{ID: 2}
+	tests := map[string]struct {
+		cfg        config.Config
+		opts       Options
+		wantSign   *bool
+		wantSigner signing.Method
+		wantForge  bool
+		forgeApp   bool // the forge of the signing setup has credentials
+	}{
+		"nothing": {},
+		"the table fills in what the command line leaves unset": {
+			cfg:  config.Config{Commit: &config.Commit{Sign: &yes, Signer: "git"}},
+			opts: Options{Signing: signing.Options{Signer: signing.MethodAPI}}, wantSign: &yes, wantSigner: signing.MethodAPI,
+		},
+		"the command line wins over the table": {
+			cfg:  config.Config{Commit: &config.Commit{Sign: &yes}},
+			opts: Options{Signing: signing.Options{Sign: &no}}, wantSign: &no,
+		},
+		"a forge without credentials is there but not configured": {
+			cfg: config.Config{GitHub: repo}, wantForge: true,
+		},
+		"the default App is the fallback": {
+			cfg: config.Config{GitHub: repo}, opts: Options{GitHubApp: defaultApp}, wantForge: true, forgeApp: true,
+		},
+		"a dedicated App is used for commits": {
+			cfg: config.Config{GitHub: repo}, opts: Options{GitHubCommitApp: commitApp}, wantForge: true, forgeApp: true,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("GITHUB_TOKEN", "")
+			state, err := Load(context.Background(), &tc.cfg, tc.opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := state.Signing.Options
+			if (got.Sign == nil) != (tc.wantSign == nil) || (got.Sign != nil && *got.Sign != *tc.wantSign) ||
+				got.Signer != tc.wantSigner {
+				t.Errorf("options = %+v, want sign %v signer %q", got, tc.wantSign, tc.wantSigner)
+			}
+			if (len(state.Signing.API) == 1) != tc.wantForge {
+				t.Fatalf("%d signing forges, want one: %v", len(state.Signing.API), tc.wantForge)
+			}
+			if tc.wantForge && state.Signing.API[0].Configured() != tc.forgeApp {
+				t.Errorf("Configured = %v, want %v", state.Signing.API[0].Configured(), tc.forgeApp)
+			}
+		})
+	}
+}
+
+func TestLoadRefusesABadSignerInTheTable(t *testing.T) {
+	_, err := Load(context.Background(), &config.Config{Commit: &config.Commit{Signer: "gpg"}}, Options{})
+	if err == nil || !strings.Contains(err.Error(), "not a signer") {
+		t.Fatalf("error = %v", err)
 	}
 }
