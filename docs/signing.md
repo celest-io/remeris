@@ -1,5 +1,5 @@
 ---
-description: "Commit and sign commits with remeris: the Commit step, the options that turn signing on, how it picks between your own key and a forge API, include and exclude patterns, and a setup guide for each way."
+description: "The Commit step: signed commits with your own Git key or a forge API, include and exclude patterns, and a setup guide when signing is not configured."
 ---
 
 # Signed commits
