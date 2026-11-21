@@ -1,0 +1,70 @@
+# remeris only: the Commit step commits the changed files, narrowed by include and exclude, and leaves the rest.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add .gitignore CHANGELOG.md VERSION mise.lock gone.txt knope.toml
+exec git commit -m 'chore: init'
+cp changed/CHANGELOG.md CHANGELOG.md
+cp changed/mise.lock mise.lock
+cp changed/VERSION VERSION
+exec git rm --quiet --cached gone.txt
+rm gone.txt
+
+exec remeris commit --dry-run
+cmp stdout want/dryrun.log
+! stderr .
+
+exec remeris commit
+stdout 'Created commit [0-9a-f]{7}: chore: prepare release 1.0.0'
+! stderr .
+exec git show --name-status --format=%s HEAD
+cmp stdout want/show.log
+exec git status --porcelain
+cmp stdout want/left.log
+
+# Nothing is left to commit now.
+exec remeris commit
+stdout 'Nothing to commit'
+
+-- knope.toml --
+[[workflows]]
+name = "commit"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: prepare release 1.0.0"
+exclude = ["mise*.lock"]
+
+-- .gitignore --
+changed/
+want/
+-- VERSION --
+0.9.0
+-- CHANGELOG.md --
+# Changelog
+-- mise.lock --
+old
+-- gone.txt --
+bye
+-- changed/CHANGELOG.md --
+# Changelog
+
+## 1.0.0
+-- changed/mise.lock --
+new
+-- changed/VERSION --
+1.0.0
+-- want/dryrun.log --
+Would create a commit using git on main: chore: prepare release 1.0.0
+Would commit these files:
+  CHANGELOG.md
+  VERSION
+  gone.txt
+-- want/show.log --
+chore: prepare release 1.0.0
+
+M	CHANGELOG.md
+M	VERSION
+D	gone.txt
+-- want/left.log --
+ M mise.lock

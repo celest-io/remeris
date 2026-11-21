@@ -41,6 +41,7 @@ func decodeHook(_, to reflect.Type, data any) (any, error) {
 // stepConstructors maps the `type` key to a new, empty step.
 var stepConstructors = map[string]func() workflow.Step{
 	"Command":               func() workflow.Step { return &steps.Command{} },
+	"Commit":                func() workflow.Step { return &steps.Commit{} },
 	"BumpVersion":           func() workflow.Step { return &steps.BumpVersion{} },
 	"PrepareRelease":        func() workflow.Step { return &steps.PrepareRelease{} },
 	"Release":               func() workflow.Step { return &steps.Release{} },
