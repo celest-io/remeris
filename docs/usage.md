@@ -40,6 +40,10 @@ Global options can be given before or after the workflow name.
 | `--help`, `-h` | Show help. |
 | `--github-app-id`, `--github-installation-id`, `--github-app-private-key-path` | GitHub App authentication (see Credentials). |
 | `--github-api-url`, `--github-upload-url` | The GitHub Enterprise URLs that may receive credentials. |
+| `--sign-commits` | Sign the commits of the `Commit` step (see [signing.md](signing.md)). The step's own `sign` wins. |
+| `--signer` | How to sign: `auto` (the default), `git` or `api`. |
+| `--commit-include`, `--commit-exclude` | Glob of the files the `Commit` step commits, or leaves out. Can be repeated. |
+| `--commit-github-app-id`, `--commit-github-installation-id`, `--commit-github-app-private-key-path` | A GitHub App just for commits. The `--github-app-*` App is used when not given. |
 
 Options of a workflow, present only when the workflow has the step that uses them:
 
@@ -104,6 +108,13 @@ Knope's argument parser exits with 2 on usage errors. Remeris exits with 1.
 | `REMERIS_GITHUB_INSTALLATION_ID` | `--github-installation-id`. Looked up from the repository when 0. |
 | `REMERIS_GITHUB_APP_PRIVATE_KEY_PATH` | `--github-app-private-key-path`. |
 | `REMERIS_GITHUB_APP_PRIVATE_KEY` | The PEM key itself. Has no flag. Used only when no path is given. |
+| `REMERIS_SIGN_COMMITS` | `--sign-commits`. |
+| `REMERIS_SIGNER` | `--signer`. |
+| `REMERIS_COMMIT_INCLUDE`, `REMERIS_COMMIT_EXCLUDE` | `--commit-include` and `--commit-exclude`; several patterns are separated by commas. |
+| `REMERIS_COMMIT_GITHUB_APP_ID` | `--commit-github-app-id`. |
+| `REMERIS_COMMIT_GITHUB_INSTALLATION_ID` | `--commit-github-installation-id`. |
+| `REMERIS_COMMIT_GITHUB_APP_PRIVATE_KEY_PATH` | `--commit-github-app-private-key-path`. |
+| `REMERIS_COMMIT_GITHUB_APP_PRIVATE_KEY` | The PEM key of the commit App itself. Has no flag. Used only when no path is given. |
 | `REMERIS_GITHUB_API_URL` | `--github-api-url`. |
 | `REMERIS_GITHUB_UPLOAD_URL` | `--github-upload-url`. |
 

@@ -1709,41 +1709,62 @@ channels = ["alpha", "beta", "rc"]   # ordered, lowest first; any SemVer alphanu
 - Precedence: SemVer compares `alpha < beta < rc` correctly as strings, but the configured order (not string order) is what the promotion rule uses, so custom names like
     `preview` work.
 
-### E2: Signed commits and tags
+### E2: Signed commits
 
-Knope never commits: the default workflows run `git commit` through a `Command` step. E2 adds first-class steps:
+Status: built (`Commit` step, `internal/signing`). Signed tags (`sign_tags`) and `push = true` are not built yet.
+
+Knope never commits: the default workflows run `git commit` through a `Command` step, and they still do. E2 adds a first-class step, remeris only:
 
 ```toml
 [[workflows.steps]]
 type = "Commit"
-message = "chore: prepare release $version"   # a Template (F4.4)
-sign = "auto"        # "auto" | "git" | "github" | "none"
-push = true          # push the branch (and new tags) after committing
+message = "chore: prepare release $version"   # like Command's `command`: variables, default variables when the key is absent
+sign = true                                   # bool; unset inherits
+signer = "auto"                               # "auto" | "git" | "api"; unset inherits
+include = ["CHANGELOG.md", "VERSION"]         # globs (internal/glob); every changed file when empty
+exclude = ["mise*.lock"]                      # globs, applied after include
 
-[[workflows.steps]]
-type = "Release"
-sign_tags = true     # annotated, signed tags for git-only releases
+[commit]                                      # defaults for every Commit step (no credentials, D11)
+sign = true
 ```
 
-**`sign = "git"`:** use the user's own git signing setup. CLI backend: `git commit -S -m …` / `git tag -s`. This respects `gpg.format` (`openpgp`, `ssh`, `x509`), `user.signingkey`
-and `gpg.program`. go-git fallback: OpenPGP keys through `CommitOptions.SignKey`, and SSH keys through go-git's signer support (check which go-git v5 release has it during the
-spike); `x509` is CLI-only. If signing fails, the step fails; it never silently falls back to unsigned.
+**Options.** Every option has a step key, a flag, a variable and a `[commit]` key: `--sign-commits` / `REMERIS_SIGN_COMMITS`, `--signer` / `REMERIS_SIGNER`, `--commit-include` /
+`REMERIS_COMMIT_INCLUDE`, `--commit-exclude` / `REMERIS_COMMIT_EXCLUDE` (comma separated). The step wins over the flag, which wins over the variable, which wins over `[commit]`
+(`signing.Options.Over`). Signing is off by default, and an off Commit step is a plain `git commit` that follows the user's own Git configuration.
 
-**`sign = "github"`: GitHub App, commits made through the API.** GitHub signs commits created through the API by an App and shows them as Verified, as long as the author/committer
-are not overridden (confirm this, and the exact conditions, in a spike before building on it). Flow, all through go-github with the App installation token (F16.1):
+**Files.** The set is what differs from HEAD (`Committer.Changes`: modified, untracked and deleted files, never ignored ones; a rename is a new path and a deleted old one),
+narrowed by include and then by exclude (`signing.Filter`). Only those files are committed (`git commit --only`): other staged changes stay staged. A pattern `dir/**` also selects
+the directory `dir`, because the crate's `**` matches directories only. Nothing selected: the step logs `Nothing to commit` and succeeds.
 
-1. Precondition: the local branch must equal the remote branch (`git fetch` then compare SHAs). Otherwise fail: `Local branch is not in sync with origin; push or pull first`.
-2. Read the staged changes (`git diff --cached --name-status -z`). For each added/modified file: `Git.CreateBlob` (base64). Deleted files become tree entries with a nil SHA.
-3. `Git.CreateTree` with `base_tree` = the HEAD tree. Keep file modes (executable bit, symlinks).
-4. `Git.CreateCommit` with the message and parent = HEAD, **no author or committer** (so GitHub signs it).
-5. `Git.UpdateRef("heads/{branch}", sha, force=false)`. A race with someone else's push fails here, with no force.
-6. Sync locally: `git fetch origin {branch}` then `git reset --soft {sha}` (the index already matches the commit).
-7. Tags: `Release` with a forge creates the tag at `target_commitish` = this SHA, so no local tag or push is needed. Signed annotated tags are only supported with `sign = "git"`
-    (verify whether App-created tag objects are signed).
+**Interface.** `signing.Signer` makes one kind of commit (plain git, git signed with the user's key, forge API). A forge implements `signing.APICommitter` (`Name`, `Configured`,
+`CommitFiles`); GitHub is the only one, and GitLab's Commits API fits the same shape. The step reads `State.Signing` (the options of the flags, variables and `[commit]`, and the
+forges). The git side is `git.Committer` (`SigningConfig`, `Changes`, `Root`, `AdoptCommit`, `Commit`), kept apart from `git.Git` so that fakes of `Git` need not implement it.
 
-**`sign = "auto"`:** `github` when GitHub App credentials are configured and `[github]` is set; else `git` when git's `commit.gpgsign` is true; else `none`.
+**Choosing the signer** (`signing.Select`), when signing is on and `signer = "auto"`:
 
-Dry run: `Would create a signed commit via the GitHub API on {branch}: {message}` (or `…with git`), and list the files.
+1. git, when Git is set up to sign: `commit.gpgsign` is true or `user.signingkey` is set (`git.SigningConfig.Configured`). `git commit --gpg-sign`: it follows `gpg.format`,
+    `user.signingkey` and the program of the format. A failing signature fails the step.
+2. the first configured forge: `[github]` is present and there is a GitHub App or the token variable (`Forge.HasCredentials`: no secret is read, no request is made, so the choice
+   is the same in a dry run).
+3. else the step fails with `remeris::commit::signing_not_configured`, whose help is a step-by-step guide for the missing way(s). It never commits unsigned.
+
+`signer = "git"` and `"api"` allow only that way. The go-git backend cannot sign (go-git has no way to use the user's gpg or ssh configuration) and cannot commit a subset of the
+staged files, so it refuses; the API signer needs the git command to fetch the new commit.
+
+**GitHub API commits.** Done with the GraphQL mutation `createCommitOnBranch`, not with the REST git-data calls this section first sketched. It is one request, GitHub signs the
+commit when it is made by an App or a user, and `expectedHeadOid` makes the check that the remote branch is at the local HEAD atomic (the REST sequence has a window between the
+tree and the ref update). The ghcommit tool, which this repository's release workflow already depended on, makes the same call. The endpoint is `{host}/graphql`, or
+`{host}/api/graphql` for GitHub Enterprise Server (`{host}/api/v3/` is its REST API). Flow: `CurrentBranch` and `HeadCommitSHA`; read the files from the working tree (a symbolic
+link or a non-regular file is an error: the mutation cannot carry modes); `CreateCommitOnBranch`; stage the files; `Committer.AdoptCommit` (fetch the branch from its remote,
+`git reset --soft`). A failure after the commit exists says so and gives the two commands to catch up. Executable bits are not carried. Not verified against the live API in this
+build: the tests use a fake server, so check that the commit shows as Verified in the first real run.
+
+**Credentials.** The commit forge is the `[github]` forge with the default App (`--github-app-*`), else the token. A dedicated App for commits (`--commit-github-app-*`,
+`REMERIS_COMMIT_GITHUB_APP_*`) builds a second forge for the same repository; without it the default one is used. Both follow D11 (flags and variables only).
+
+**Dry run.** `Would create a signed commit using the GitHub API on main: <message>` (or `a commit using git`, `a signed commit using git and your own signing key`), then
+`Would commit these files:` and the paths. It reads the Git configuration and the changed files, reads no credentials and uses no network, and fails with the guide when signing is
+asked for and impossible, like a real run.
 
 ### E3: More changelog sources
 
