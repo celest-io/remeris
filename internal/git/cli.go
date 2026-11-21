@@ -194,7 +194,7 @@ func (c *CLI) tagsByCommit(ctx context.Context) (map[string][]string, error) {
 	}
 	for i, line := range lines {
 		fields := strings.Fields(line)
-		if len(fields) != 3 || fields[1] != "commit" {
+		if len(fields) != 3 || fields[1] != gitCommit {
 			continue // does not peel to a commit
 		}
 		byCommit[fields[0]] = append(byCommit[fields[0]], strings.TrimPrefix(names[i], "refs/tags/"))
@@ -269,7 +269,7 @@ func (c *CLI) rawCommits(ctx context.Context, hashes []string) ([]rawCommit, err
 	for range hashes {
 		header, rest, ok := strings.Cut(out, "\n")
 		fields := strings.Fields(header)
-		if !ok || len(fields) != 3 || fields[1] != "commit" {
+		if !ok || len(fields) != 3 || fields[1] != gitCommit {
 			return nil, unknownGitError(fmt.Errorf("unexpected cat-file header %q", header))
 		}
 		size, err := strconv.Atoi(fields[2])
@@ -309,7 +309,7 @@ func (c *CLI) FirstCommitsForFiles(ctx context.Context, paths []string) map[stri
 	if len(paths) == 0 {
 		return results
 	}
-	args := []string{"--literal-pathspecs", "log", "--topo-order", "--reverse", "-m", "--root", "--no-renames",
+	args := []string{literalPaths, "log", "--topo-order", "--reverse", "-m", "--root", "--no-renames",
 		"--full-history", "--diff-filter=A", "--name-status", "-z", "--format=%x01%H", "HEAD", "--"}
 	out, err := c.run(ctx, "", append(args, paths...)...)
 	if err != nil {
