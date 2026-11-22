@@ -28,7 +28,7 @@ export default defineConfig({
       {
         label: "Guide",
         collapsed: false,
-        items: ["/docs/usage", "/docs/configuration", "/docs/differences"],
+        items: ["/docs/usage", "/docs/configuration", "/docs/signing", "/docs/differences"],
       },
       {
         label: "Maintainers",
