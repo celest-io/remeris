@@ -312,6 +312,71 @@ func TestCommitNoSign(t *testing.T) { //nolint:paralleltest // sets environment 
 	}
 }
 
+func TestCommitSigned(t *testing.T) { //nolint:paralleltest // sets environment variables
+	t.Run("cli signs through the configured program", func(t *testing.T) { //nolint:paralleltest // sets environment variables
+		r := commitRepo(t)
+		program := filepath.Join(t.TempDir(), "gpg")
+		if err := os.WriteFile(program, []byte(fakeGPGBody), 0o700); err != nil { //nolint:gosec // an executable test script
+			t.Fatal(err)
+		}
+		waitExecutable(t, program)
+		r.git("config", "gpg.program", program)
+		r.git("config", "user.signingkey", "KEY")
+		r.write(fileA, "changed\n")
+		c, _ := AsCommitter(openGit(t, r.dir))
+		if _, err := c.Commit(t.Context(), commitMsg, CommitOptions{Sign: true, Paths: []string{fileA}}); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.git("cat-file", "commit", "HEAD"); !strings.Contains(got, "gpgsig ") {
+			t.Fatalf("the commit is not signed:\n%s", got)
+		}
+	})
+
+	t.Run(
+		"cli fails and does not fall back to an unsigned commit",
+		func(t *testing.T) { //nolint:paralleltest // sets environment variables
+			r := commitRepo(t)
+			r.git("config", "gpg.program", "/nonexistent/gpg")
+			r.git("config", "user.signingkey", "KEY")
+			r.write(fileA, "changed\n")
+			before := r.git("rev-parse", "HEAD")
+			c, _ := AsCommitter(openGit(t, r.dir))
+			_, err := c.Commit(t.Context(), commitMsg, CommitOptions{Sign: true, Paths: []string{fileA}})
+			if err == nil || !strings.Contains(err.Error(), "Could not commit") {
+				t.Fatalf("error = %v", err)
+			}
+			if after := r.git("rev-parse", "HEAD"); after != before {
+				t.Fatal("a commit was made")
+			}
+		},
+	)
+
+	t.Run(
+		"a plain commit follows the user's own configuration",
+		func(t *testing.T) { //nolint:paralleltest // sets environment variables
+			r := commitRepo(t)
+			r.write(fileA, "changed\n")
+			c, _ := AsCommitter(openGit(t, r.dir))
+			if _, err := c.Commit(t.Context(), commitMsg, CommitOptions{Paths: []string{fileA}}); err != nil {
+				t.Fatal(err)
+			}
+			if got := r.git("cat-file", "commit", "HEAD"); strings.Contains(got, "gpgsig") {
+				t.Fatal("the commit is signed")
+			}
+		},
+	)
+
+	t.Run("go-git cannot sign", func(t *testing.T) { //nolint:paralleltest // sets environment variables
+		r := commitRepo(t)
+		r.write(fileA, "changed\n")
+		c, _ := AsCommitter(openGoGit(t, r.dir))
+		_, err := c.Commit(t.Context(), commitMsg, CommitOptions{Sign: true, Paths: []string{fileA}})
+		if err == nil || !strings.Contains(err.Error(), "cannot sign") {
+			t.Fatalf("error = %v", err)
+		}
+	})
+}
+
 func sorted(s []string) []string {
 	out := append([]string(nil), s...)
 	for i := range out {

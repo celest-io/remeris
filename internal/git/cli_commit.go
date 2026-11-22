@@ -127,12 +127,17 @@ func (c *CLI) Commit(ctx context.Context, message string, opts CommitOptions) (s
 	top := &CLI{Dir: strings.TrimRight(root, "\n"), path: c.path}
 
 	args := []string{literalPaths, gitCommit, "--quiet", "--only"}
-	if opts.NoSign {
+	switch {
+	case opts.Sign && opts.NoSign:
+		return "", diag.New("A commit cannot be both signed and unsigned").WithCode(codeCommit)
+	case opts.Sign:
+		args = append(args, "--gpg-sign")
+	case opts.NoSign:
 		args = append(args, "--no-gpg-sign")
 	}
 	args = append(args, "-m", message, "--pathspec-from-file=-", "--pathspec-file-nul")
 	if _, err := top.run(ctx, strings.Join(opts.Paths, "\x00")+"\x00", args...); err != nil {
-		return "", fail(err, func(cause error) error { return commitError(cause) })
+		return "", fail(err, func(cause error) error { return commitError(cause, opts.Sign) })
 	}
 	sha, err := top.run(ctx, "", "rev-parse", "HEAD")
 	if err != nil {
@@ -156,11 +161,15 @@ func (c *CLI) requireChanges(ctx context.Context, paths []string) error {
 	return noChangesError()
 }
 
-// commitError reports a failed git commit.
-func commitError(cause error) error {
-	return diag.Newf("Could not commit: %w", cause).
-		WithCode(codeCommit).
-		WithHelp("Try the same commit by hand with git to see why it failed.")
+// commitError reports a failed git commit. A signing failure, which git reports through its own message, is
+// told apart so the caller can show how to set signing up.
+func commitError(cause error, signed bool) error {
+	e := diag.Newf("Could not commit: %w", cause).WithCode(codeCommit)
+	if signed {
+		return e.WithHelp("Git could not sign the commit. Check user.signingkey, gpg.format and the signing program, " +
+			"and try \"git commit -S\" by hand.")
+	}
+	return e.WithHelp("Try the same commit by hand with git to see why it failed.")
 }
 
 func noChangesError() error {
