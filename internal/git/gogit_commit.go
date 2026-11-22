@@ -6,11 +6,42 @@ import (
 	"strings"
 
 	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 
 	"github.com/celest-io/remeris/internal/diag"
 )
 
 var _ Committer = (*GoGit)(nil)
+
+// SigningConfig reads the same keys as the CLI backend from the merged system, global and local configuration.
+func (g *GoGit) SigningConfig(ctx context.Context) (SigningConfig, error) {
+	if err := ctx.Err(); err != nil {
+		return SigningConfig{}, err
+	}
+	repo, err := g.open()
+	if err != nil {
+		return SigningConfig{}, err
+	}
+	cfg, err := repo.ConfigScoped(config.SystemScope)
+	if err != nil {
+		return SigningConfig{}, unknownGitError(err)
+	}
+	raw := cfg.Raw
+	out := SigningConfig{
+		GPGSign: isTrue(raw.Section("commit").Option("gpgsign")),
+		Key:     raw.Section("user").Option("signingkey"),
+		Format:  raw.Section("gpg").Option("format"),
+	}
+	switch out.Format {
+	case formatSSH:
+		out.Program = raw.Section("gpg").Subsection("ssh").Option("program")
+	case "x509":
+		out.Program = raw.Section("gpg").Subsection("x509").Option("program")
+	default:
+		out.Program = raw.Section("gpg").Option("program")
+	}
+	return out, nil
+}
 
 // Changes lists what differs from HEAD from go-git's worktree status, which leaves ignored files out. go-git does not
 // detect renames, so a rename is a deleted path and a new one.
@@ -99,4 +130,13 @@ func (g *GoGit) Commit(ctx context.Context, message string, opts CommitOptions) 
 			WithHelp("Check that user.name and user.email are set in the Git configuration.")
 	}
 	return hash.String(), nil
+}
+
+// isTrue reads a Git boolean the way git config --type=bool does for its true values.
+func isTrue(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "yes", "on", "1":
+		return true
+	}
+	return false
 }

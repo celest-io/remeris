@@ -1,6 +1,9 @@
 package git
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // Change is one path that differs from HEAD in the index or the working tree (an ignored file never is).
 type Change struct {
@@ -11,8 +14,27 @@ type Change struct {
 	Deleted bool
 }
 
+// SigningConfig is the commit signing setup of the Git configuration (system, global, then local).
+type SigningConfig struct {
+	// GPGSign is commit.gpgsign: every commit is signed.
+	GPGSign bool
+	// Key is user.signingkey: a key id, or for gpg.format=ssh a public key or the path of one.
+	Key string
+	// Format is gpg.format: "openpgp" (the default, reported as ""), "ssh" or "x509".
+	Format string
+	// Program is the program of the format: gpg.program, gpg.ssh.program or gpg.x509.program, for the format in use.
+	Program string
+}
+
+// Configured reports whether Git is set up to sign commits: it is asked to sign every commit, or has a signing key.
+// It does not check that the key is usable; a failing signature is reported by the commit itself.
+func (c SigningConfig) Configured() bool { return c.GPGSign || strings.TrimSpace(c.Key) != "" }
+
 // CommitOptions are the options of Committer.Commit.
 type CommitOptions struct {
+	// NoSign turns signing off for this commit (git commit --no-gpg-sign), even when the Git configuration asks for it.
+	// When false the commit follows the user's own Git configuration, like a plain "git commit" does.
+	NoSign bool
 	// Paths are the files to commit: slash-separated and relative to the root of the working tree, as in Change.Path.
 	// Other staged changes are left out of the commit and stay staged. An empty list commits nothing and is an error.
 	Paths []string
@@ -21,6 +43,8 @@ type CommitOptions struct {
 // Committer is the part of a Git backend that makes commits. It is separate from Git so that the many fakes of Git
 // need not implement it; Open returns a backend that implements both.
 type Committer interface {
+	// SigningConfig reads the signing setup of the Git configuration.
+	SigningConfig(ctx context.Context) (SigningConfig, error)
 	// Changes lists what differs from HEAD, sorted by path: modified and untracked files (ignored ones are left out) and
 	// deleted tracked files. A rename is a new path and a deleted old one.
 	Changes(ctx context.Context) ([]Change, error)

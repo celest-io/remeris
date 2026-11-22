@@ -1,0 +1,97 @@
+# remeris only: a signed commit that cannot be signed fails with a guide, and nothing is committed unsigned.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add .gitignore VERSION knope.toml
+exec git commit -m 'chore: init'
+cp changed/VERSION VERSION
+
+# The step asks for signing.
+! exec remeris commit
+! stdout .
+stderr 'Cannot sign the commit: signing is not set up'
+stderr 'ssh-keygen -t ed25519'
+stderr 'REMERIS_COMMIT_GITHUB_APP_ID'
+stderr 'To commit without signing, set sign = false'
+exec git log --format=%s
+cmp stdout want/log.txt
+
+# The [commit] table asks for it, then the flag, then the variable, each one for a step that says nothing.
+! exec remeris commit-from-file
+stderr 'signing is not set up'
+! exec remeris --sign-commits commit-flag
+stderr 'signing is not set up'
+env REMERIS_SIGN_COMMITS=true
+! exec remeris commit-flag
+stderr 'signing is not set up'
+
+# A dry run fails the same way: the checks do not depend on the run type.
+! exec remeris commit --dry-run
+stderr 'signing is not set up'
+
+# The flag and the variable win over the table, and the step's own key wins over all of them.
+env REMERIS_SIGN_COMMITS=false
+exec remeris commit-from-file
+stdout 'Created commit'
+exec git cat-file commit HEAD
+! stdout gpgsig
+env REMERIS_SIGN_COMMITS=true
+cp changed2/VERSION VERSION
+exec remeris commit-plain
+stdout 'Created commit'
+exec git log --format=%s
+cmp stdout want/log2.txt
+
+# A signer that does not exist is refused up front.
+! exec remeris --signer gpg commit-plain
+stderr '"gpg" is not a signer'
+
+-- knope.toml --
+[[workflows]]
+name = "commit"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: release"
+sign = true
+
+[[workflows]]
+name = "commit-from-file"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: from the table"
+
+[[workflows]]
+name = "commit-flag"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: flag"
+
+[[workflows]]
+name = "commit-plain"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: plain"
+sign = false
+
+[commit]
+sign = true
+-- .gitignore --
+changed/
+changed2/
+want/
+-- VERSION --
+0.9.0
+-- changed/VERSION --
+1.0.0
+-- changed2/VERSION --
+1.1.0
+-- want/log.txt --
+chore: init
+-- want/log2.txt --
+chore: plain
+chore: from the table
+chore: init

@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 
@@ -14,8 +15,51 @@ var _ Committer = (*CLI)(nil)
 const (
 	codeCommit   = "remeris::git::commit"
 	literalPaths = "--literal-pathspecs"
+	formatSSH    = "ssh"
 	gitCommit    = "commit"
 )
+
+// SigningConfig reads commit.gpgsign, user.signingkey, gpg.format and the program of that format with
+// git config --get, which applies the system, global and local files in git's own order. A missing key is not an
+// error: git config exits with 1 for it.
+func (c *CLI) SigningConfig(ctx context.Context) (SigningConfig, error) {
+	get := func(key string, extra ...string) (string, error) {
+		args := append([]string{"config", "--get"}, extra...)
+		out, err := c.run(ctx, "", append(args, key)...)
+		if err != nil {
+			var ee interface{ ExitCode() int }
+			if errors.As(err, &ee) && ee.ExitCode() == 1 {
+				return "", nil
+			}
+			return "", fail(err, unknownGitError)
+		}
+		return strings.TrimSpace(out), nil
+	}
+
+	var cfg SigningConfig
+	gpgsign, err := get("commit.gpgsign", "--type=bool")
+	if err != nil {
+		return cfg, err
+	}
+	cfg.GPGSign = gpgsign == "true"
+	if cfg.Key, err = get("user.signingkey"); err != nil {
+		return cfg, err
+	}
+	if cfg.Format, err = get("gpg.format"); err != nil {
+		return cfg, err
+	}
+	programKey := "gpg.program"
+	switch cfg.Format {
+	case formatSSH:
+		programKey = "gpg.ssh.program"
+	case "x509":
+		programKey = "gpg.x509.program"
+	}
+	if cfg.Program, err = get(programKey); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
 
 // Changes lists the changes with git status --porcelain=v1 -z --untracked-files=all, which is relative to the root of
 // the working tree whatever the directory is, and leaves out ignored files.
@@ -83,6 +127,9 @@ func (c *CLI) Commit(ctx context.Context, message string, opts CommitOptions) (s
 	top := &CLI{Dir: strings.TrimRight(root, "\n"), path: c.path}
 
 	args := []string{literalPaths, gitCommit, "--quiet", "--only"}
+	if opts.NoSign {
+		args = append(args, "--no-gpg-sign")
+	}
 	args = append(args, "-m", message, "--pathspec-from-file=-", "--pathspec-file-nul")
 	if _, err := top.run(ctx, strings.Join(opts.Paths, "\x00")+"\x00", args...); err != nil {
 		return "", fail(err, func(cause error) error { return commitError(cause) })
