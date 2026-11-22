@@ -35,6 +35,9 @@ type CommitOptions struct {
 	// NoSign turns signing off for this commit (git commit --no-gpg-sign), even when the Git configuration asks for it.
 	// When false the commit follows the user's own Git configuration, like a plain "git commit" does.
 	NoSign bool
+	// Sign signs the commit (git commit --gpg-sign) with the key of the Git configuration, and fails when it cannot.
+	// It wins over NoSign being unset; setting both is an error.
+	Sign bool
 	// Paths are the files to commit: slash-separated and relative to the root of the working tree, as in Change.Path.
 	// Other staged changes are left out of the commit and stay staged. An empty list commits nothing and is an error.
 	Paths []string

@@ -85,10 +85,15 @@ func (g *GoGit) status(ctx context.Context) (gogit.Status, error) {
 }
 
 // Commit stages opts.Paths and commits what is staged. Unlike git commit --only, go-git cannot leave other staged
-// changes out of the commit, so it refuses to commit when some exist: that needs the git command.
+// changes out of the commit, so it refuses to commit when some exist, and it cannot sign: both need the git command.
 func (g *GoGit) Commit(ctx context.Context, message string, opts CommitOptions) (string, error) {
 	if len(opts.Paths) == 0 {
 		return "", noChangesError()
+	}
+	if opts.Sign {
+		return "", diag.New("The built-in Git support cannot sign commits").
+			WithCode(codeCommit).
+			WithHelp("Install the git command and put it on PATH, or sign through the forge API instead.")
 	}
 	if err := g.AddFiles(ctx, opts.Paths); err != nil {
 		return "", err
