@@ -143,6 +143,39 @@ func TestGitHubURLFlagsLoad(t *testing.T) {
 	}
 }
 
+func TestCommitGitHubApp(t *testing.T) {
+	t.Parallel()
+	opts := GlobalOptions{CommitGitHubAppID: 3, CommitGitHubInstallationID: 4, CommitGitHubAppKeyPath: keyPath}
+	if !opts.HasCommitGitHubApp() || (&GlobalOptions{GitHubAppID: 1}).HasCommitGitHubApp() {
+		t.Fatal("only the commit App ID makes a dedicated App")
+	}
+	if err := opts.ValidateCommitGitHubApp(envOf(nil)); err != nil {
+		t.Fatal(err)
+	}
+	key, found, err := opts.CommitGitHubAppPrivateKey(
+		envOf(nil),
+		func(p string) ([]byte, error) { return []byte("from-file:" + p), nil },
+	)
+	if err != nil || !found || string(key) != "from-file:"+keyPath {
+		t.Fatalf("key %q found %v error %v", key, found, err)
+	}
+
+	// The default App's variable is not the commit App's key.
+	bad := GlobalOptions{CommitGitHubAppID: 3}
+	err = bad.ValidateCommitGitHubApp(envOf(map[string]string{EnvGitHubAppKey: fakeKey}))
+	var d diag.Diagnostic
+	if !errors.As(err, &d) || !strings.Contains(d.Help(), "--"+FlagCommitGitHubAppKeyPath) ||
+		!strings.Contains(d.Help(), EnvCommitGitHubAppKey) {
+		t.Fatalf("error = %v", err)
+	}
+	if err := bad.ValidateCommitGitHubApp(envOf(map[string]string{EnvCommitGitHubAppKey: fakeKey})); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&GlobalOptions{CommitGitHubInstallationID: 4}).ValidateCommitGitHubApp(envOf(nil)); err == nil {
+		t.Fatal("an installation ID needs an App ID")
+	}
+}
+
 func TestSigningOptions(t *testing.T) {
 	t.Parallel()
 	yes := true

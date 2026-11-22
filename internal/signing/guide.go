@@ -67,7 +67,9 @@ func githubSteps() string {
         REMERIS_GITHUB_APP_ID, REMERIS_GITHUB_INSTALLATION_ID and REMERIS_GITHUB_APP_PRIVATE_KEY
         (or REMERIS_GITHUB_APP_PRIVATE_KEY_PATH), or --github-app-id, --github-installation-id and
         --github-app-private-key-path.
-      A GITHUB_TOKEN with Contents write also works.
+      To use another App just for commits, set REMERIS_COMMIT_GITHUB_APP_ID,
+      REMERIS_COMMIT_GITHUB_INSTALLATION_ID and REMERIS_COMMIT_GITHUB_APP_PRIVATE_KEY (or ..._PATH):
+      without them, the App above is used. A GITHUB_TOKEN with Contents write also works.
    c. Make sure the branch is pushed and up to date: GitHub makes the commit on the remote branch.
       Executable bits and symbolic links are not carried by the API; use your own key for those.
 `

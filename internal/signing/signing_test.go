@@ -3,6 +3,8 @@ package signing_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -13,6 +15,8 @@ import (
 )
 
 const (
+	branchMain = "main"
+	fileOld    = "old.txt"
 	nameGit    = "git"
 	nameGitKey = "git and your own signing key"
 	nameGitHub = "GitHub"
@@ -34,12 +38,29 @@ type fakeGit struct {
 
 	cfg      git.SigningConfig
 	cfgErr   error
+	root     string
+	added    [][]string
+	adopted  []string
+	adoptErr error
 	commits  []git.CommitOptions
 	messages []string
 	sha      string
 }
 
 func (f *fakeGit) Changes(context.Context) ([]git.Change, error) { return nil, nil }
+
+func (f *fakeGit) CurrentBranch(context.Context) (string, error) { return branchMain, nil }
+func (f *fakeGit) HeadCommitSHA(context.Context) (string, error) { return headSHA, nil }
+func (f *fakeGit) AddFiles(_ context.Context, p []string) error {
+	f.added = append(f.added, p)
+	return nil
+}
+func (f *fakeGit) Root(context.Context) (string, error) { return f.root, nil }
+
+func (f *fakeGit) AdoptCommit(_ context.Context, branch, sha string) error {
+	f.adopted = append(f.adopted, branch+"@"+sha)
+	return f.adoptErr
+}
 
 func (f *fakeGit) SigningConfig(context.Context) (git.SigningConfig, error) { return f.cfg, f.cfgErr }
 
@@ -240,7 +261,7 @@ func TestGuide(t *testing.T) {
 	}{
 		"auto shows both ways": {
 			method: signing.MethodAuto,
-			want:   []string{keygen, "commit.gpgsign", guideApp, "sign = false"},
+			want:   []string{keygen, "commit.gpgsign", guideApp, "REMERIS_COMMIT_GITHUB_APP_ID", "sign = false"},
 		},
 		"git shows the key setup": {
 			method: signing.MethodGit, want: []string{keygen, "user.signingkey"}, not: []string{guideApp},
@@ -386,4 +407,94 @@ func TestFilter(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAPISignerCommit(t *testing.T) {
+	t.Parallel()
+	setup := func(t *testing.T) (*fakeGit, *fakeAPI, signing.Signer, string) {
+		t.Helper()
+		root := t.TempDir()
+		yes := true
+		g := &fakeGit{root: root}
+		api := &fakeAPI{name: nameGitHub, configured: true}
+		s, err := signing.Select(t.Context(), signing.Settings{Sign: &yes, Signer: signing.MethodAPI},
+			signing.Env{Git: g, API: []signing.APICommitter{api}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return g, api, s, root
+	}
+
+	t.Run("sends the files, stages them and adopts the commit", func(t *testing.T) {
+		t.Parallel()
+		g, api, s, root := setup(t)
+		if err := os.MkdirAll(filepath.Join(root, "docs"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "docs", "a.md"), []byte("hello\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		sha, err := s.Commit(t.Context(), signing.Request{
+			Message: "chore: release",
+			Changes: []git.Change{{Path: fileDocA}, {Path: fileOld, Deleted: true}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := signing.APICommit{
+			Branch: branchMain, ExpectedHead: headSHA, Message: "chore: release",
+			Additions: []signing.File{{Path: fileDocA, Content: []byte("hello\n")}}, Deletions: []string{fileOld},
+		}
+		if sha != newSHA || len(api.got) != 1 || !reflect.DeepEqual(api.got[0], want) {
+			t.Fatalf("sha %s, API calls %+v, want %+v", sha, api.got, want)
+		}
+		if !reflect.DeepEqual(g.added, [][]string{{fileDocA, fileOld}}) ||
+			!reflect.DeepEqual(g.adopted, []string{branchMain + "@" + newSHA}) {
+			t.Fatalf("staged %v, adopted %v", g.added, g.adopted)
+		}
+		if len(g.commits) != 0 {
+			t.Fatal("git committed as well")
+		}
+	})
+
+	t.Run("a symbolic link is refused before anything is sent", func(t *testing.T) {
+		t.Parallel()
+		_, api, s, root := setup(t)
+		if err := os.Symlink("target", filepath.Join(root, "link")); err != nil {
+			t.Skip("symbolic links are not available:", err)
+		}
+		_, err := s.Commit(t.Context(), signing.Request{Message: "m", Changes: []git.Change{{Path: "link"}}})
+		if err == nil || !strings.Contains(err.Error(), "not a regular file") || len(api.got) != 0 {
+			t.Fatalf("error = %v, API calls %d", err, len(api.got))
+		}
+	})
+
+	t.Run("a failing API does not touch the repository", func(t *testing.T) {
+		t.Parallel()
+		g, api, s, root := setup(t)
+		api.err = errors.New("refused")
+		if err := os.WriteFile(filepath.Join(root, "f"), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Commit(t.Context(), signing.Request{Message: "m", Changes: []git.Change{{Path: "f"}}}); err == nil {
+			t.Fatal("no error")
+		}
+		if len(g.added) != 0 || len(g.adopted) != 0 {
+			t.Fatalf("staged %v, adopted %v", g.added, g.adopted)
+		}
+	})
+
+	t.Run("a commit that cannot be adopted says how to catch up", func(t *testing.T) {
+		t.Parallel()
+		g, _, s, root := setup(t)
+		g.adoptErr = errors.New("no network")
+		if err := os.WriteFile(filepath.Join(root, "f"), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := s.Commit(t.Context(), signing.Request{Message: "m", Changes: []git.Change{{Path: "f"}}})
+		var d diag.Diagnostic
+		if !errors.As(err, &d) || !strings.Contains(d.Help(), "git reset --soft "+newSHA) {
+			t.Fatalf("error = %v", err)
+		}
+	})
 }

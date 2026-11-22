@@ -23,7 +23,9 @@ const (
 	codeGitHubApp = "remeris::github::app_options"
 )
 
-// Names of the commit flags and of the environment variables that set them.
+// Names of the signing flags and of the environment variables that set them. The dedicated App of commits falls back
+// on the default App (--github-app-*) when it is not given. Like the default App, its credentials come only from these
+// flags and variables, never from knope.toml (decision D11).
 const (
 	FlagSignCommits   = "sign-commits"
 	FlagSigner        = "signer"
@@ -34,6 +36,16 @@ const (
 	EnvSigner        = "REMERIS_SIGNER"
 	EnvCommitInclude = "REMERIS_COMMIT_INCLUDE"
 	EnvCommitExclude = "REMERIS_COMMIT_EXCLUDE"
+
+	FlagCommitGitHubAppID          = "commit-github-app-id"
+	FlagCommitGitHubInstallationID = "commit-github-installation-id"
+	FlagCommitGitHubAppKeyPath     = "commit-github-app-private-key-path"
+
+	EnvCommitGitHubAppID          = "REMERIS_COMMIT_GITHUB_APP_ID"
+	EnvCommitGitHubInstallationID = "REMERIS_COMMIT_GITHUB_INSTALLATION_ID"
+	EnvCommitGitHubAppKeyPath     = "REMERIS_COMMIT_GITHUB_APP_PRIVATE_KEY_PATH"
+	// EnvCommitGitHubAppKey holds the PEM content itself, like EnvGitHubAppKey.
+	EnvCommitGitHubAppKey = "REMERIS_COMMIT_GITHUB_APP_PRIVATE_KEY"
 )
 
 // Names of the flags and environment variables that say which GitHub API URLs may receive credentials. A
@@ -60,14 +72,17 @@ type GlobalOptions struct {
 	GitHubInstallationID int64  `mapstructure:"github-installation-id"`
 	GitHubAppKeyPath     string `mapstructure:"github-app-private-key-path"`
 
-	// SignCommits is nil when neither the flag nor the variable is given, which leaves the decision to the [commit]
-	// table and then to the Git configuration.
-	SignCommits *bool  `mapstructure:"sign-commits"`
-	Signer      string `mapstructure:"signer"`
-	// CommitInclude and CommitExclude are the globs of the files the Commit step commits or leaves out. They are nil
-	// when not given, which leaves the decision to the [commit] table.
+	// Commit signing. SignCommits is nil when neither the flag nor the variable is given, which leaves the decision to
+	// the [commit] table and then to the Git configuration. The list options are nil when not given.
+	SignCommits   *bool    `mapstructure:"sign-commits"`
+	Signer        string   `mapstructure:"signer"`
 	CommitInclude []string `mapstructure:"commit-include"`
 	CommitExclude []string `mapstructure:"commit-exclude"`
+
+	// The dedicated GitHub App of commits. Never read from knope.toml.
+	CommitGitHubAppID          int64  `mapstructure:"commit-github-app-id"`
+	CommitGitHubInstallationID int64  `mapstructure:"commit-github-installation-id"`
+	CommitGitHubAppKeyPath     string `mapstructure:"commit-github-app-private-key-path"`
 
 	// GitHubAPIURL and GitHubUploadURL are the trusted GitHub API and upload base URLs. Never read from knope.toml.
 	GitHubAPIURL    string `mapstructure:"github-api-url"`
@@ -81,20 +96,7 @@ type GlobalOptions struct {
 func (o *GlobalOptions) GitHubAppPrivateKey(
 	getenv func(string) string, readFile func(string) ([]byte, error),
 ) (key []byte, found bool, err error) {
-	if o.GitHubAppKeyPath != "" {
-		key, err = readFile(o.GitHubAppKeyPath)
-		if err != nil {
-			return nil, false, diag.Newf("Could not read the GitHub App private key at %s", o.GitHubAppKeyPath).
-				WithCode(codeGitHubApp).
-				WithHelp("Check the path given to --" + FlagGitHubAppKeyPath + " or " + EnvGitHubAppKeyPath + ".").
-				WithCause(err)
-		}
-		return key, true, nil
-	}
-	if v := getenv(EnvGitHubAppKey); v != "" {
-		return []byte(v), true, nil
-	}
-	return nil, false, nil
+	return o.defaultApp().privateKey(getenv, readFile)
 }
 
 // ValidateGitHubApp checks that the GitHub App options go together: an App ID needs a private key (a path or
@@ -102,34 +104,103 @@ func (o *GlobalOptions) GitHubAppPrivateKey(
 // is ignored rather than refused: CI environments often export the key variable for jobs that do not use it. All
 // unset is fine. The CLI checks this only when [github] is configured.
 func (o *GlobalOptions) ValidateGitHubApp(getenv func(string) string) error {
-	hasKey := o.GitHubAppKeyPath != "" || getenv(EnvGitHubAppKey) != ""
-	switch {
-	case o.GitHubAppID < 0 || o.GitHubInstallationID < 0:
-		return diag.New("GitHub App and installation IDs must be positive numbers").
-			WithCode(codeGitHubApp).
-			WithHelp("Check --" + FlagGitHubAppID + " (" + EnvGitHubAppID + ") and --" + FlagGitHubInstallationID +
-				" (" + EnvGitHubInstallationID + ").")
-	case o.GitHubAppID != 0 && !hasKey:
-		return diag.New("A GitHub App ID is set without a private key").
-			WithCode(codeGitHubApp).
-			WithHelp("Also set --" + FlagGitHubAppKeyPath + " (" + EnvGitHubAppKeyPath + ") or " + EnvGitHubAppKey + ".")
-	case o.GitHubAppID == 0 && o.GitHubInstallationID != 0:
-		return diag.New("A GitHub App installation ID is set without an App ID").
-			WithCode(codeGitHubApp).
-			WithHelp("Also set --" + FlagGitHubAppID + " (" + EnvGitHubAppID + "), or remove --" +
-				FlagGitHubInstallationID + " (" + EnvGitHubInstallationID + ").")
-	}
-	return nil
+	return o.defaultApp().validate(getenv)
 }
 
-// SigningOptions are the commit options given on the command line or in the environment. An option that was not given
-// is left unset, so that the [commit] table can fill it in.
+// CommitGitHubAppPrivateKey is GitHubAppPrivateKey for the dedicated App of commits (--commit-github-app-*).
+func (o *GlobalOptions) CommitGitHubAppPrivateKey(
+	getenv func(string) string, readFile func(string) ([]byte, error),
+) (key []byte, found bool, err error) {
+	return o.commitApp().privateKey(getenv, readFile)
+}
+
+// ValidateCommitGitHubApp is ValidateGitHubApp for the dedicated App of commits.
+func (o *GlobalOptions) ValidateCommitGitHubApp(getenv func(string) string) error {
+	return o.commitApp().validate(getenv)
+}
+
+// HasCommitGitHubApp reports whether a dedicated App for commits is given. Without one, commits use the default App
+// (--github-app-*) or the token, like every other GitHub call.
+func (o *GlobalOptions) HasCommitGitHubApp() bool { return o.CommitGitHubAppID != 0 }
+
+// SigningOptions are the signing options given on the command line or in the environment. An option that was not
+// given is left unset, so that the [commit] table can fill it in.
 func (o *GlobalOptions) SigningOptions() (signing.Options, error) {
 	m, err := signing.ParseMethod(o.Signer)
 	if err != nil {
 		return signing.Options{}, err
 	}
 	return signing.Options{Sign: o.SignCommits, Signer: m, Include: o.CommitInclude, Exclude: o.CommitExclude}, nil
+}
+
+// githubApp is one set of GitHub App options, with the names of the flags and variables they come from, so that the
+// default App and the dedicated App of commits share one implementation.
+type githubApp struct {
+	id, installation int64
+	keyPath          string
+
+	flagID, flagInstallation, flagKeyPath string
+	envID, envInstallation, envKeyPath    string
+	envKey                                string
+}
+
+func (o *GlobalOptions) defaultApp() githubApp {
+	return githubApp{
+		id: o.GitHubAppID, installation: o.GitHubInstallationID, keyPath: o.GitHubAppKeyPath,
+		flagID: FlagGitHubAppID, flagInstallation: FlagGitHubInstallationID, flagKeyPath: FlagGitHubAppKeyPath,
+		envID: EnvGitHubAppID, envInstallation: EnvGitHubInstallationID, envKeyPath: EnvGitHubAppKeyPath,
+		envKey: EnvGitHubAppKey,
+	}
+}
+
+func (o *GlobalOptions) commitApp() githubApp {
+	return githubApp{
+		id: o.CommitGitHubAppID, installation: o.CommitGitHubInstallationID, keyPath: o.CommitGitHubAppKeyPath,
+		flagID: FlagCommitGitHubAppID, flagInstallation: FlagCommitGitHubInstallationID,
+		flagKeyPath: FlagCommitGitHubAppKeyPath,
+		envID:       EnvCommitGitHubAppID, envInstallation: EnvCommitGitHubInstallationID,
+		envKeyPath: EnvCommitGitHubAppKeyPath, envKey: EnvCommitGitHubAppKey,
+	}
+}
+
+func (a githubApp) privateKey(
+	getenv func(string) string, readFile func(string) ([]byte, error),
+) (key []byte, found bool, err error) {
+	if a.keyPath != "" {
+		key, err = readFile(a.keyPath)
+		if err != nil {
+			return nil, false, diag.Newf("Could not read the GitHub App private key at %s", a.keyPath).
+				WithCode(codeGitHubApp).
+				WithHelp("Check the path given to --" + a.flagKeyPath + " or " + a.envKeyPath + ".").
+				WithCause(err)
+		}
+		return key, true, nil
+	}
+	if v := getenv(a.envKey); v != "" {
+		return []byte(v), true, nil
+	}
+	return nil, false, nil
+}
+
+func (a githubApp) validate(getenv func(string) string) error {
+	hasKey := a.keyPath != "" || getenv(a.envKey) != ""
+	switch {
+	case a.id < 0 || a.installation < 0:
+		return diag.New("GitHub App and installation IDs must be positive numbers").
+			WithCode(codeGitHubApp).
+			WithHelp("Check --" + a.flagID + " (" + a.envID + ") and --" + a.flagInstallation +
+				" (" + a.envInstallation + ").")
+	case a.id != 0 && !hasKey:
+		return diag.New("A GitHub App ID is set without a private key").
+			WithCode(codeGitHubApp).
+			WithHelp("Also set --" + a.flagKeyPath + " (" + a.envKeyPath + ") or " + a.envKey + ".")
+	case a.id == 0 && a.installation != 0:
+		return diag.New("A GitHub App installation ID is set without an App ID").
+			WithCode(codeGitHubApp).
+			WithHelp("Also set --" + a.flagID + " (" + a.envID + "), or remove --" +
+				a.flagInstallation + " (" + a.envInstallation + ").")
+	}
+	return nil
 }
 
 // DefaultGlobalOptions returns the options in effect when no flag is set.

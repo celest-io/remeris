@@ -56,7 +56,10 @@ type Loader struct {
 type Options struct {
 	// GitHubApp is the GitHub App given by the command line, or nil for none.
 	GitHubApp *github.App
-	// Signing are the commit options of the command line and the environment. The [commit] table fills in what they
+	// GitHubCommitApp is the dedicated GitHub App of commits (--commit-github-app-*), or nil to commit with the same
+	// authentication as every other GitHub call (GitHubApp, else the token).
+	GitHubCommitApp *github.App
+	// Signing are the signing options of the command line and the environment. The [commit] table fills in what they
 	// leave unset.
 	Signing signing.Options
 	// Credentials finds the GitHub token and asks for it. nil means the zero credentials.Store: the real
@@ -73,11 +76,18 @@ type Options struct {
 func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State, error) {
 	ignore := cfg.Changes != nil && cfg.Changes.IgnoreConventionalCommits
 	l := Loader{}
+	var commitForge *github.Forge
 	if gh := cfg.GitHub; gh != nil {
-		l.GitHub = github.New(github.Config{
+		ghCfg := github.Config{
 			Owner: gh.Owner, Repo: gh.Repo, APIURL: gh.APIURL, UploadURL: gh.UploadURL,
 			TrustedAPIURL: opts.TrustedGitHubAPIURL, TrustedUploadURL: opts.TrustedGitHubUploadURL,
-		}, opts.GitHubApp, opts.Credentials)
+		}
+		l.GitHub = github.New(ghCfg, opts.GitHubApp, opts.Credentials)
+		// Commits fall back on the forge above, and so on its App, when no dedicated App is given.
+		commitForge = l.GitHub
+		if opts.GitHubCommitApp != nil {
+			commitForge = github.New(ghCfg, opts.GitHubCommitApp, opts.Credentials)
+		}
 	}
 	if g := cfg.Gitea; g != nil {
 		l.Gitea = gitea.New(gitea.Config{Owner: g.Owner, Repo: g.Repo, Host: g.Host}, opts.Credentials)
@@ -100,6 +110,9 @@ func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State
 		return state, err
 	}
 	state.Signing.Options = opts.Signing.Over(fileOptions)
+	if commitForge != nil {
+		state.Signing.API = append(state.Signing.API, signing.GitHub{Forge: commitForge})
+	}
 	return state, nil
 }
 

@@ -145,3 +145,26 @@ func isTrue(v string) bool {
 	}
 	return false
 }
+
+// Root is the root of the working tree.
+func (g *GoGit) Root(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	repo, err := g.open()
+	if err != nil {
+		return "", err
+	}
+	wt, err := repo.Worktree()
+	if err != nil {
+		return "", openRepoError(err)
+	}
+	return wt.Filesystem.Root(), nil
+}
+
+// AdoptCommit is not supported by the built-in Git support, which cannot fetch with the user's credentials.
+func (g *GoGit) AdoptCommit(context.Context, string, string) error {
+	return diag.New("The built-in Git support cannot fetch the commit made through the forge API").
+		WithCode(codeCommit).
+		WithHelp("Install the git command and put it on PATH.")
+}
