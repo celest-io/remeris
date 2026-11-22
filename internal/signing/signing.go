@@ -45,9 +45,9 @@ func ParseMethod(s string) (Method, error) {
 // Options are the signing options of one source: the Commit step, the command line and environment, or the
 // [commit] table. A field that is not set (nil, "" or no list) leaves the decision to a lower source.
 type Options struct {
-	// Sign turns commit signing on or off.
+	// Sign forces signing (true) or turns it off (false). Unset signs when Git is set up to sign.
 	Sign *bool
-	// Signer picks the way to sign: auto, git or api.
+	// Signer limits the way to sign: auto, git or api.
 	Signer Method
 	// Include and Exclude are glob patterns of the files to commit, as in internal/glob: the files that differ from HEAD
 	// are the universe, Include narrows it (every file when it is empty) and Exclude then removes files.
@@ -74,18 +74,16 @@ func (o Options) Over(lower Options) Options {
 
 // Settings are the resolved options: nothing is unset.
 type Settings struct {
-	Sign    bool
+	// Sign is nil when no source said anything.
+	Sign    *bool
 	Signer  Method
 	Include []string
 	Exclude []string
 }
 
-// Resolve applies the defaults: no signing, and the auto signer.
+// Resolve applies the defaults: the auto signer.
 func (o Options) Resolve() Settings {
-	s := Settings{Signer: o.Signer, Include: o.Include, Exclude: o.Exclude}
-	if o.Sign != nil {
-		s.Sign = *o.Sign
-	}
+	s := Settings(o)
 	if s.Signer == "" {
 		s.Signer = MethodAuto
 	}
@@ -154,13 +152,15 @@ type Env struct {
 
 // Select picks the signer for settings.
 //
-// Without signing it is the plain git commit, which follows the user's own Git configuration. With signing:
+//   - sign = false: the plain git commit with signing turned off, whatever the Git configuration says.
+//   - sign unset: git with the user's own key when Git is set up to sign (commit.gpgsign true or user.signingkey set),
+//     else the plain git commit. The forge API is never picked on its own: it makes the commit on the remote branch,
+//     which is not something a local commit should do because a token happens to be around.
+//   - sign = true: signing is forced and never skipped. Git when it is set up to sign, else the first configured forge,
+//     else an error with the setup guide.
 //
-//   - "git": git must be set up to sign (commit.gpgsign true or user.signingkey set);
-//   - "api": a forge must be configured;
-//   - "auto": git when it is set up to sign, else the first configured forge, so the user's own key wins over a bot.
-//
-// When signing is wanted and nothing is available the error is the setup guide: signing is never skipped quietly.
+// The signer limits the ways to sign: "git" never uses a forge and "api" never uses git (so without sign = true it
+// makes a plain commit).
 func Select(ctx context.Context, s Settings, env Env) (Signer, error) {
 	c, ok := git.AsCommitter(env.Git)
 	if !ok {
@@ -168,8 +168,8 @@ func Select(ctx context.Context, s Settings, env Env) (Signer, error) {
 			WithCode("remeris::git::open_repo").
 			WithHelp("Make sure you are in a Git repository and that you have permission to access it.")
 	}
-	if !s.Sign {
-		return &gitSigner{git: c}, nil
+	if s.Sign != nil && !*s.Sign {
+		return &gitSigner{git: c, noSign: true}, nil
 	}
 
 	var cfg git.SigningConfig
@@ -179,22 +179,19 @@ func Select(ctx context.Context, s Settings, env Env) (Signer, error) {
 			return nil, err
 		}
 	}
-	var api APICommitter
+	if cfg.Configured() {
+		return &gitSigner{git: c, sign: true, cfg: cfg}, nil
+	}
+	if s.Sign == nil {
+		return &gitSigner{git: c}, nil
+	}
+
 	if s.Signer != MethodGit {
 		for _, a := range env.API {
 			if a.Configured() {
-				api = a
-				break
+				return &apiSigner{git: env.Git, committer: c, api: a}, nil
 			}
 		}
 	}
-
-	switch {
-	case s.Signer != MethodAPI && cfg.Configured():
-		return &gitSigner{git: c, sign: true, cfg: cfg}, nil
-	case s.Signer != MethodGit && api != nil:
-		return &apiSigner{git: env.Git, committer: c, api: api}, nil
-	default:
-		return nil, NotConfigured(s.Signer, env.API)
-	}
+	return nil, NotConfigured(s.Signer, env.API)
 }

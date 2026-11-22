@@ -28,7 +28,7 @@ func NotConfigured(m Method, forges []APICommitter) error {
 		b.WriteString("\n")
 		b.WriteString(apiGuide("2. Sign through the forge API (for CI and bots)", forges))
 	}
-	b.WriteString("\nThen run the workflow again. To commit without signing, set sign = false (or leave it unset).")
+	b.WriteString("\nThen run the workflow again. To commit without signing, set sign = false.")
 	return diag.New("Cannot sign the commit: signing is not set up").
 		WithCode(CodeNotConfigured).
 		WithHelp(b.String())
@@ -67,9 +67,7 @@ func githubSteps() string {
         REMERIS_GITHUB_APP_ID, REMERIS_GITHUB_INSTALLATION_ID and REMERIS_GITHUB_APP_PRIVATE_KEY
         (or REMERIS_GITHUB_APP_PRIVATE_KEY_PATH), or --github-app-id, --github-installation-id and
         --github-app-private-key-path.
-      To use another App just for commits, set REMERIS_COMMIT_GITHUB_APP_ID,
-      REMERIS_COMMIT_GITHUB_INSTALLATION_ID and REMERIS_COMMIT_GITHUB_APP_PRIVATE_KEY (or ..._PATH):
-      without them, the App above is used. A GITHUB_TOKEN with Contents write also works.
+      A GITHUB_TOKEN with Contents write also works.
    c. Make sure the branch is pushed and up to date: GitHub makes the commit on the remote branch.
       Executable bits and symbolic links are not carried by the API; use your own key for those.
 `
