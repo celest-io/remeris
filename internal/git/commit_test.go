@@ -1,12 +1,19 @@
 package git
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
+	keyGPGSign  = "commit.gpgsign"
+	fakeGPGBody = "#!/bin/sh\ncat >/dev/null\necho '[GNUPG:] SIG_CREATED D 1 8 00 1 KEY' >&2\n" +
+		"printf -- '-----BEGIN PGP SIGNATURE-----\\n\\nZmFrZQ==\\n-----END PGP SIGNATURE-----\\n'\n"
 	fileNew    = "new.txt"
 	fileKeep   = "keep.txt"
 	fileStaged = "staged.txt"
@@ -227,6 +234,84 @@ func TestCommitStagedElsewhere(t *testing.T) { //nolint:paralleltest // sets env
 	})
 }
 
+func TestSigningConfig(t *testing.T) { //nolint:paralleltest // sets environment variables
+	tests := map[string]struct {
+		config [][]string
+		want   SigningConfig
+		set    bool
+	}{
+		"nothing": {},
+		"gpgsign": {
+			config: [][]string{{keyGPGSign, "true"}},
+			want:   SigningConfig{GPGSign: true}, set: true,
+		},
+		"key only": {
+			config: [][]string{{"user.signingkey", "ABCD1234"}},
+			want:   SigningConfig{Key: "ABCD1234"}, set: true,
+		},
+		"gpgsign false": {config: [][]string{{keyGPGSign, "false"}}},
+		formatSSH: {
+			config: [][]string{
+				{"gpg.format", formatSSH}, {"user.signingkey", "/k.pub"},
+				{"gpg.ssh.program", "/bin/ssh-keygen"}, {keyGPGSign, "yes"},
+			},
+			want: SigningConfig{GPGSign: true, Key: "/k.pub", Format: formatSSH, Program: "/bin/ssh-keygen"}, set: true,
+		},
+		"openpgp program": {
+			config: [][]string{{"gpg.program", "/bin/gpg2"}},
+			want:   SigningConfig{Program: "/bin/gpg2"},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) { //nolint:paralleltest // sets environment variables
+			eachCommitter(t, func(t *testing.T, r *testRepo, c Committer) {
+				for _, kv := range tc.config {
+					r.git("config", kv[0], kv[1])
+				}
+				got, err := c.SigningConfig(t.Context())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got != tc.want {
+					t.Fatalf("SigningConfig = %+v, want %+v", got, tc.want)
+				}
+				if got.Configured() != tc.set {
+					t.Fatalf("Configured = %v, want %v", got.Configured(), tc.set)
+				}
+			})
+		})
+	}
+}
+
+func TestCommitNoSign(t *testing.T) { //nolint:paralleltest // sets environment variables
+	r := commitRepo(t)
+	program := filepath.Join(t.TempDir(), "gpg")
+	if err := os.WriteFile(program, []byte(fakeGPGBody), 0o700); err != nil { //nolint:gosec // an executable test script
+		t.Fatal(err)
+	}
+	waitExecutable(t, program)
+	r.git("config", "gpg.program", program)
+	r.git("config", "user.signingkey", "KEY")
+	r.git("config", keyGPGSign, "true")
+	c, _ := AsCommitter(openGit(t, r.dir))
+
+	// The user's own configuration signs every commit, and NoSign turns that off for this one.
+	r.write(fileA, "changed\n")
+	if _, err := c.Commit(t.Context(), commitMsg, CommitOptions{NoSign: true, Paths: []string{fileA}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.git("cat-file", "commit", "HEAD"); strings.Contains(got, "gpgsig") {
+		t.Fatalf("NoSign made a signed commit:\n%s", got)
+	}
+	r.write(fileA, "changed again\n")
+	if _, err := c.Commit(t.Context(), commitMsg, CommitOptions{Paths: []string{fileA}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.git("cat-file", "commit", "HEAD"); !strings.Contains(got, "gpgsig ") {
+		t.Fatalf("a plain commit ignored commit.gpgsign:\n%s", got)
+	}
+}
+
 func sorted(s []string) []string {
 	out := append([]string(nil), s...)
 	for i := range out {
@@ -237,4 +322,18 @@ func sorted(s []string) []string {
 		}
 	}
 	return out
+}
+
+// waitExecutable runs the freshly written script until the system lets it run: a fork in another test can hold the
+// file open for writing for a moment, which makes executing it fail with "text file busy".
+func waitExecutable(t *testing.T, program string) {
+	t.Helper()
+	for range 100 {
+		err := exec.CommandContext(t.Context(), program).Run()
+		if err == nil || !strings.Contains(err.Error(), "text file busy") {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("the test script stays busy")
 }

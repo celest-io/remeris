@@ -41,7 +41,7 @@ var (
 	stepSchemas = map[string]*schema{
 		"Command": {keys: map[string]*schema{"command": leaf, keyVariables: freeTab, "shell": leaf}},
 		"Commit": {keys: map[string]*schema{
-			"message": leaf, keyVariables: freeTab, "include": leaf, "exclude": leaf,
+			"message": leaf, keyVariables: freeTab, "sign": leaf, "signer": leaf, "include": leaf, "exclude": leaf,
 		}},
 		"BumpVersion": {keys: map[string]*schema{"rule": leaf, "label": leaf}},
 		"PrepareRelease": {
@@ -66,7 +66,7 @@ var (
 		"github":        {keys: map[string]*schema{"owner": leaf, "repo": leaf, "api_url": leaf, "upload_url": leaf}},
 		"gitea":         {keys: map[string]*schema{"owner": leaf, "repo": leaf, "host": leaf}},
 		"jira":          {keys: map[string]*schema{"url": leaf, "project": leaf}},
-		"commit":        {keys: map[string]*schema{"include": leaf, "exclude": leaf}},
+		"commit":        {keys: map[string]*schema{"sign": leaf, "signer": leaf, "include": leaf, "exclude": leaf}},
 	}}
 )
 

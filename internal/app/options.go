@@ -25,9 +25,13 @@ const (
 
 // Names of the commit flags and of the environment variables that set them.
 const (
+	FlagSignCommits   = "sign-commits"
+	FlagSigner        = "signer"
 	FlagCommitInclude = "commit-include"
 	FlagCommitExclude = "commit-exclude"
 
+	EnvSignCommits   = "REMERIS_SIGN_COMMITS"
+	EnvSigner        = "REMERIS_SIGNER"
 	EnvCommitInclude = "REMERIS_COMMIT_INCLUDE"
 	EnvCommitExclude = "REMERIS_COMMIT_EXCLUDE"
 )
@@ -56,6 +60,10 @@ type GlobalOptions struct {
 	GitHubInstallationID int64  `mapstructure:"github-installation-id"`
 	GitHubAppKeyPath     string `mapstructure:"github-app-private-key-path"`
 
+	// SignCommits is nil when neither the flag nor the variable is given, which leaves the decision to the [commit]
+	// table and then to the Git configuration.
+	SignCommits *bool  `mapstructure:"sign-commits"`
+	Signer      string `mapstructure:"signer"`
 	// CommitInclude and CommitExclude are the globs of the files the Commit step commits or leaves out. They are nil
 	// when not given, which leaves the decision to the [commit] table.
 	CommitInclude []string `mapstructure:"commit-include"`
@@ -116,8 +124,12 @@ func (o *GlobalOptions) ValidateGitHubApp(getenv func(string) string) error {
 
 // SigningOptions are the commit options given on the command line or in the environment. An option that was not given
 // is left unset, so that the [commit] table can fill it in.
-func (o *GlobalOptions) SigningOptions() signing.Options {
-	return signing.Options{Include: o.CommitInclude, Exclude: o.CommitExclude}
+func (o *GlobalOptions) SigningOptions() (signing.Options, error) {
+	m, err := signing.ParseMethod(o.Signer)
+	if err != nil {
+		return signing.Options{}, err
+	}
+	return signing.Options{Sign: o.SignCommits, Signer: m, Include: o.CommitInclude, Exclude: o.CommitExclude}, nil
 }
 
 // DefaultGlobalOptions returns the options in effect when no flag is set.

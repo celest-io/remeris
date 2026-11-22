@@ -87,6 +87,9 @@ func New(cfg *config.Config, stdout, stderr io.Writer) *cli.Command {
 				return ctx, err
 			}
 			setupLogging(stdout, global.Verbose, global.Validate)
+			if _, err := global.SigningOptions(); err != nil {
+				return ctx, err
+			}
 			if cfg.GitHub == nil {
 				return ctx, nil // the App options are only used with [github]
 			}
@@ -143,6 +146,16 @@ func rootFlags(cfg *config.Config) []cli.Flag {
 			Usage: "Path to the GitHub App private key (PEM); " + app.EnvGitHubAppKey +
 				" may hold the key itself",
 			Sources: cli.EnvVars(app.EnvGitHubAppKeyPath),
+		},
+		&cli.BoolFlag{
+			Name:    app.FlagSignCommits,
+			Usage:   "Force the signing of the commits of the Commit step, or turn it off with --sign-commits=false",
+			Sources: cli.EnvVars(app.EnvSignCommits),
+		},
+		&cli.StringFlag{
+			Name:    app.FlagSigner,
+			Usage:   "How to sign: auto (git when it is set up to sign, else the forge API), git or api",
+			Sources: cli.EnvVars(app.EnvSigner),
 		},
 		&cli.StringSliceFlag{
 			Name:    app.FlagCommitInclude,
@@ -297,8 +310,9 @@ func projectOptions(global *app.GlobalOptions, p prompt.Prompter) project.Option
 		Credentials:            &credentials.Store{Prompter: p},
 		TrustedGitHubAPIURL:    global.GitHubAPIURL,
 		TrustedGitHubUploadURL: global.GitHubUploadURL,
-		Signing:                global.SigningOptions(),
 	}
+	// A bad signer was refused when the flags were loaded, so the error is not looked at again here.
+	opts.Signing, _ = global.SigningOptions()
 	if global.GitHubAppID != 0 {
 		opts.GitHubApp = &github.App{
 			ID:             global.GitHubAppID,
