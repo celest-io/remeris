@@ -142,3 +142,11 @@ func TestGitHubURLFlagsLoad(t *testing.T) {
 		t.Errorf("flag beats environment: got %+v", global)
 	}
 }
+
+func TestSigningOptions(t *testing.T) {
+	t.Parallel()
+	got := (&GlobalOptions{CommitInclude: []string{"a"}}).SigningOptions()
+	if got.Include[0] != "a" || got.Exclude != nil {
+		t.Errorf("options = %+v", got)
+	}
+}

@@ -21,22 +21,15 @@ const codeCommit = "remeris::commit"
 // untracked and deleted ones; ignored files never) narrowed by Include and Exclude, which are globs. Other staged
 // changes are left alone. With nothing left to commit the step does nothing.
 //
-// Sign, Signer, Include and Exclude may also come from --sign-commits, --signer, --commit-include and
-// --commit-exclude, their REMERIS_* variables and the `[commit]` table. The step's own keys win over those.
-// Without signing the commit follows the user's own Git configuration, like a plain "git commit". With signing the
-// commit is made by git with the user's key when Git is set up for it, else by the forge API when a forge is
-// configured; when neither is available the step fails with a guide to set one up. It never commits unsigned when
-// signing is on.
+// Include and Exclude may also come from --commit-include and --commit-exclude, their REMERIS_* variables and the
+// `[commit]` table. The step's own keys win over those. The commit follows the user's own Git configuration, like a
+// plain "git commit" does.
 type Commit struct {
 	Message string `toml:"message"`
 	// Variables is nil when the key is absent, which selects the default variables. See variables.Template.
 	Variables []variables.Entry `toml:"variables"`
-	// Sign turns signing on or off for this step. Nil leaves it to the command line, the environment and `[commit]`.
-	Sign *bool `toml:"sign"`
-	// Signer is "auto", "git" or "api". Empty leaves it to the lower sources.
-	Signer  string   `toml:"signer"`
-	Include []string `toml:"include"`
-	Exclude []string `toml:"exclude"`
+	Include   []string          `toml:"include"`
+	Exclude   []string          `toml:"exclude"`
 }
 
 func (*Commit) Type() string { return "Commit" }
@@ -58,18 +51,13 @@ func (c *Commit) Run(ctx context.Context, rt workflow.RunType[workflow.State]) (
 			WithCode(codeCommit).
 			WithHelp("Set `message` on the Commit step.")
 	}
-	method, err := signing.ParseMethod(c.Signer)
-	if err != nil {
-		return rt, err
-	}
-	settings := signing.Options{Sign: c.Sign, Signer: method, Include: c.Include, Exclude: c.Exclude}.
-		Over(rt.State.Signing.Options).Resolve()
+	settings := signing.Options{Include: c.Include, Exclude: c.Exclude}.Over(rt.State.Signing.Options).Resolve()
 
 	g, err := ensureGit(ctx, &rt.State)
 	if err != nil {
 		return rt, err
 	}
-	signer, err := signing.Select(ctx, settings, signing.Env{Git: g, API: rt.State.Signing.API})
+	signer, err := signing.Select(ctx, settings, signing.Env{Git: g})
 	if err != nil {
 		return rt, err
 	}
@@ -101,9 +89,6 @@ func (c *Commit) Run(ctx context.Context, rt workflow.RunType[workflow.State]) (
 // describeCommit logs what a real run would do.
 func describeCommit(ctx context.Context, g git.Git, signer signing.Signer, message string, changes []git.Change) {
 	kind := "a commit"
-	if signer.Signed() {
-		kind = "a signed commit"
-	}
 	on := ""
 	if branch, err := g.CurrentBranch(ctx); err == nil {
 		on = " on " + branch

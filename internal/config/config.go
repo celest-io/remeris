@@ -69,28 +69,19 @@ type Changes struct {
 }
 
 // Commit is the `[commit]` table. It is remeris' own (Knope ignores it) and holds the defaults of the Commit step,
-// which the step's own keys, the environment and the command line override. It has no credentials: those come from
-// flags and environment variables only (decision D11).
+// which the step's own keys, the environment and the command line override.
 type Commit struct {
-	// Sign turns commit signing on. Nil leaves it to a lower source, which means off.
-	Sign *bool `toml:"sign"`
-	// Signer is "auto" (the default), "git" or "api".
-	Signer string `toml:"signer"`
 	// Include and Exclude are glob patterns of the files to commit (see signing.Options).
 	Include []string `toml:"include"`
 	Exclude []string `toml:"exclude"`
 }
 
-// SigningOptions returns the table as signing options. A signer that is not auto, git or api is an error.
-func (c *Commit) SigningOptions() (signing.Options, error) {
+// SigningOptions returns the table as commit options.
+func (c *Commit) SigningOptions() signing.Options {
 	if c == nil {
-		return signing.Options{}, nil
+		return signing.Options{}
 	}
-	m, err := signing.ParseMethod(c.Signer)
-	if err != nil {
-		return signing.Options{}, err
-	}
-	return signing.Options{Sign: c.Sign, Signer: m, Include: c.Include, Exclude: c.Exclude}, nil
+	return signing.Options{Include: c.Include, Exclude: c.Exclude}
 }
 
 type ReleaseNotes struct {
@@ -307,9 +298,6 @@ func decode(path string, src []byte, root fs.StatFS) (*Config, error) {
 		Jira:         r.Jira,
 		Commit:       r.Commit,
 		index:        index,
-	}
-	if _, err := r.Commit.SigningOptions(); err != nil {
-		return nil, err
 	}
 	cfg.Packages = orderedPackages(r.Packages, index.Keys("packages"))
 	if cfg.packages, err = validatePackages(&r, index, string(src), root, cfg.Packages); err != nil {

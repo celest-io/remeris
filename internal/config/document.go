@@ -97,10 +97,6 @@ func commitTable(c *Commit) *tomlwrite.Table {
 		return nil
 	}
 	t := tomlwrite.NewTable()
-	if c.Sign != nil {
-		t.Set("sign", tomlwrite.Bool(*c.Sign))
-	}
-	setNonEmpty(t, "signer", c.Signer)
 	if c.Include != nil {
 		t.Set("include", stringArray(c.Include))
 	}

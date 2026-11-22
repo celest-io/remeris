@@ -2,7 +2,10 @@
 // line and the environment (spec F3.1, the readykit pattern).
 package app
 
-import "github.com/celest-io/remeris/internal/diag"
+import (
+	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/signing"
+)
 
 // Names of the GitHub App flags and of the environment variables that set them (decision D11). The credentials
 // come only from these flags and variables, never from knope.toml.
@@ -18,6 +21,15 @@ const (
 	EnvGitHubAppKey = "REMERIS_GITHUB_APP_PRIVATE_KEY"
 
 	codeGitHubApp = "remeris::github::app_options"
+)
+
+// Names of the commit flags and of the environment variables that set them.
+const (
+	FlagCommitInclude = "commit-include"
+	FlagCommitExclude = "commit-exclude"
+
+	EnvCommitInclude = "REMERIS_COMMIT_INCLUDE"
+	EnvCommitExclude = "REMERIS_COMMIT_EXCLUDE"
 )
 
 // Names of the flags and environment variables that say which GitHub API URLs may receive credentials. A
@@ -43,6 +55,11 @@ type GlobalOptions struct {
 	GitHubAppID          int64  `mapstructure:"github-app-id"`
 	GitHubInstallationID int64  `mapstructure:"github-installation-id"`
 	GitHubAppKeyPath     string `mapstructure:"github-app-private-key-path"`
+
+	// CommitInclude and CommitExclude are the globs of the files the Commit step commits or leaves out. They are nil
+	// when not given, which leaves the decision to the [commit] table.
+	CommitInclude []string `mapstructure:"commit-include"`
+	CommitExclude []string `mapstructure:"commit-exclude"`
 
 	// GitHubAPIURL and GitHubUploadURL are the trusted GitHub API and upload base URLs. Never read from knope.toml.
 	GitHubAPIURL    string `mapstructure:"github-api-url"`
@@ -95,6 +112,12 @@ func (o *GlobalOptions) ValidateGitHubApp(getenv func(string) string) error {
 				FlagGitHubInstallationID + " (" + EnvGitHubInstallationID + ").")
 	}
 	return nil
+}
+
+// SigningOptions are the commit options given on the command line or in the environment. An option that was not given
+// is left unset, so that the [commit] table can fill it in.
+func (o *GlobalOptions) SigningOptions() signing.Options {
+	return signing.Options{Include: o.CommitInclude, Exclude: o.CommitExclude}
 }
 
 // DefaultGlobalOptions returns the options in effect when no flag is set.

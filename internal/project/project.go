@@ -22,6 +22,7 @@ import (
 	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/forge/jira"
 	"github.com/celest-io/remeris/internal/git"
+	"github.com/celest-io/remeris/internal/signing"
 	"github.com/celest-io/remeris/internal/workflow"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/releasenotes"
@@ -55,6 +56,9 @@ type Loader struct {
 type Options struct {
 	// GitHubApp is the GitHub App given by the command line, or nil for none.
 	GitHubApp *github.App
+	// Signing are the commit options of the command line and the environment. The [commit] table fills in what they
+	// leave unset.
+	Signing signing.Options
 	// Credentials finds the GitHub token and asks for it. nil means the zero credentials.Store: the real
 	// environment and no prompt.
 	Credentials *credentials.Store
@@ -91,6 +95,7 @@ func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State
 		return state, err
 	}
 	state.IgnoreConventionalMergeCommits = cfg.Changes != nil && cfg.Changes.IgnoreConventionalMergeCommits
+	state.Signing.Options = opts.Signing.Over(cfg.Commit.SigningOptions())
 	return state, nil
 }
 

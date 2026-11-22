@@ -97,7 +97,7 @@ func commandFields(t *tomlwrite.Table, s *steps.Command) error {
 }
 
 // commitFields writes the keys of the Commit step that are set. The step is remeris' own, so there is no Knope
-// writer to match: `message`, `variables` when the key was set, then the signing keys and the file selection.
+// writer to match: `message`, `variables` when the key was set, then the file selection.
 func commitFields(t *tomlwrite.Table, s *steps.Commit) error {
 	t.Set("message", tomlwrite.String(s.Message))
 	if s.Variables != nil {
@@ -107,10 +107,6 @@ func commitFields(t *tomlwrite.Table, s *steps.Commit) error {
 		}
 		t.Set("variables", vars)
 	}
-	if s.Sign != nil {
-		t.Set("sign", tomlwrite.Bool(*s.Sign))
-	}
-	setNonEmpty(t, "signer", s.Signer)
 	if s.Include != nil {
 		t.Set("include", stringArray(s.Include))
 	}

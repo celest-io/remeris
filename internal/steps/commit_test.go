@@ -5,10 +5,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/signing"
@@ -21,8 +19,6 @@ const (
 	gitInit       = "init"
 	lockFile      = "mise.lock"
 	releaseMsg    = "chore: prepare release 1.2.3"
-	fakeGPG       = "#!/bin/sh\ncat >/dev/null\necho '[GNUPG:] SIG_CREATED D 1 8 00 1 KEY' >&2\n" +
-		"printf -- '-----BEGIN PGP SIGNATURE-----\\n\\nZmFrZQ==\\n-----END PGP SIGNATURE-----\\n'\n"
 )
 
 // commitDir makes a repository in a temporary directory with one commit, and moves into it. The machine's Git
@@ -66,9 +62,9 @@ func writeTestFile(t *testing.T, name, content string) {
 	}
 }
 
-func commitState(t *testing.T, options signing.Options, api ...signing.APICommitter) workflow.State {
+func commitState(t *testing.T, options signing.Options) workflow.State {
 	t.Helper()
-	return workflow.State{Signing: signing.Config{Options: options, API: api}}
+	return workflow.State{Signing: signing.Config{Options: options}}
 }
 
 func runCommit(t *testing.T, s *Commit, state workflow.State, dry bool) error {
@@ -79,21 +75,6 @@ func runCommit(t *testing.T, s *Commit, state workflow.State, dry bool) error {
 	}
 	_, err := s.Run(context.Background(), rt)
 	return err
-}
-
-func ptrBool(b bool) *bool { return &b }
-
-// configureSigning makes git sign with a fake gpg program.
-func configureSigning(t *testing.T, dir string) {
-	t.Helper()
-	program := filepath.Join(t.TempDir(), "gpg")
-	if err := os.WriteFile(program, []byte(fakeGPG), 0o700); err != nil { //nolint:gosec // an executable test script
-		t.Fatal(err)
-	}
-	waitExecutable(t, program)
-	runGit(t, "config", "gpg.program", program)
-	runGit(t, "config", "user.signingkey", "KEY")
-	_ = dir
 }
 
 func TestCommitPlain(t *testing.T) {
@@ -204,115 +185,23 @@ func TestCommitEmptyMessage(t *testing.T) {
 	}
 }
 
-func TestCommitSigning(t *testing.T) {
-	t.Run("signs with git when it is set up", func(t *testing.T) {
-		dir := commitDir(t)
-		configureSigning(t, dir)
-		writeTestFile(t, versionFile, "1\n")
-		state := commitState(t, signing.Options{Sign: ptrBool(true)})
-		if err := runCommit(t, &Commit{Message: releaseMsg}, state, false); err != nil {
-			t.Fatal(err)
-		}
-		if got := runGit(t, "cat-file", "commit", "HEAD"); !strings.Contains(got, "gpgsig ") {
-			t.Fatalf("the commit is not signed:\n%s", got)
-		}
-	})
-
-	t.Run("the step turns signing on and off over the command line", func(t *testing.T) {
-		dir := commitDir(t)
-		configureSigning(t, dir)
-		writeTestFile(t, versionFile, "1\n")
-		// The command line says sign, the step says no: the commit is plain, and git is not even asked to sign.
-		state := commitState(t, signing.Options{Sign: ptrBool(true)})
-		if err := runCommit(t, &Commit{Message: releaseMsg, Sign: ptrBool(false)}, state, false); err != nil {
-			t.Fatal(err)
-		}
-		if got := runGit(t, "cat-file", "commit", "HEAD"); strings.Contains(got, "gpgsig") {
-			t.Fatal("the commit is signed")
-		}
-	})
-
-	t.Run("fails with the guide when there is nothing to sign with", func(t *testing.T) {
-		commitDir(t)
-		writeTestFile(t, versionFile, "1\n")
-		before := runGit(t, "rev-parse", "HEAD")
-		err := runCommit(t, &Commit{Message: releaseMsg, Sign: ptrBool(true)}, commitState(t, signing.Options{}), false)
-		var d diag.Diagnostic
-		if !errors.As(err, &d) || d.Code() != signing.CodeNotConfigured || !strings.Contains(d.Help(), "ssh-keygen") {
-			t.Fatalf("error = %v", err)
-		}
-		if runGit(t, "rev-parse", "HEAD") != before {
-			t.Fatal("a commit was made")
-		}
-	})
-
-	t.Run("a bad signer in the step is refused", func(t *testing.T) {
-		commitDir(t)
-		if err := runCommit(
-			t,
-			&Commit{Message: releaseMsg, Signer: "gpg"},
-			commitState(t, signing.Options{}),
-			false,
-		); err == nil {
-			t.Fatal("no error")
-		}
-	})
-}
-
 func TestCommitDryRun(t *testing.T) {
-	dir := commitDir(t)
-	configureSigning(t, dir)
+	commitDir(t)
 	writeTestFile(t, versionFile, "1\n")
 	logs := captureLogs(t)
 	before := runGit(t, "rev-parse", "HEAD")
 
-	state := commitState(t, signing.Options{Sign: ptrBool(true)})
-	if err := runCommit(t, &Commit{Message: releaseMsg}, state, true); err != nil {
+	if err := runCommit(t, &Commit{Message: releaseMsg}, commitState(t, signing.Options{}), true); err != nil {
 		t.Fatal(err)
 	}
 	got := logs.String()
-	for _, want := range []string{
-		"Would create a signed commit using git and your own signing key on main: " + releaseMsg, "Would commit these files:", "  VERSION",
-	} {
+	for _, want := range []string{"Would create a commit using git on main: " + releaseMsg, "Would commit these files:", "  VERSION"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("log lacks %q:\n%s", want, got)
 		}
 	}
 	if runGit(t, "rev-parse", "HEAD") != before || !strings.Contains(runGit(t, "status", "--porcelain"), versionFile) {
 		t.Fatal("a dry run changed the repository")
-	}
-}
-
-func TestCommitDryRunStillFailsWithoutSigning(t *testing.T) {
-	commitDir(t)
-	err := runCommit(t, &Commit{Message: releaseMsg, Sign: ptrBool(true)}, commitState(t, signing.Options{}), true)
-	var d diag.Diagnostic
-	if !errors.As(err, &d) || d.Code() != signing.CodeNotConfigured {
-		t.Fatalf("error = %v, want the guide: the configuration checks fail in a dry run too", err)
-	}
-}
-
-// apiStub is a configured forge that fails the test when it is asked to commit.
-type apiStub struct{ t *testing.T }
-
-func (apiStub) Name() string     { return "GitHub" }
-func (apiStub) Configured() bool { return true }
-func (a apiStub) CommitFiles(context.Context, signing.APICommit) (string, error) {
-	a.t.Helper()
-	a.t.Error("the forge must not be used in a dry run")
-	return "", nil
-}
-
-func TestCommitDryRunUsesNoForge(t *testing.T) {
-	commitDir(t)
-	writeTestFile(t, versionFile, "1\n")
-	logs := captureLogs(t)
-	state := commitState(t, signing.Options{Sign: ptrBool(true)}, apiStub{t})
-	if err := runCommit(t, &Commit{Message: releaseMsg}, state, true); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(logs.String(), "Would create a signed commit using the GitHub API on main") {
-		t.Fatalf("log = %q", logs)
 	}
 }
 
@@ -326,18 +215,4 @@ func TestCommitOpensGitWhenStateHasNone(t *testing.T) {
 	if rt.State.Git == nil {
 		t.Error("the opened repository should be kept in the state")
 	}
-}
-
-// waitExecutable runs the freshly written script until the system lets it run: a fork in another test can hold the
-// file open for writing for a moment, which makes executing it fail with "text file busy".
-func waitExecutable(t *testing.T, program string) {
-	t.Helper()
-	for range 100 {
-		err := exec.CommandContext(t.Context(), program).Run()
-		if err == nil || !strings.Contains(err.Error(), "text file busy") {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("the test script stays busy")
 }

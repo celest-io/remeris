@@ -83,7 +83,7 @@ func TestLoadConfigRootFlags(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			global, _ := run(t, tc.args...)
-			if *global != tc.want {
+			if !reflect.DeepEqual(*global, tc.want) {
 				t.Errorf("global = %+v, want %+v", *global, tc.want)
 			}
 		})
