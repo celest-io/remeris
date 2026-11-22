@@ -714,6 +714,9 @@ func fillStep(t *testing.T, step workflow.Step) {
 			f.SetString("x")
 		case reflect.TypeFor[bool]():
 			f.SetBool(true)
+		case reflect.TypeFor[*bool]():
+			yes := true
+			f.Set(reflect.ValueOf(&yes))
 		case reflect.TypeFor[[]string]():
 			f.Set(reflect.ValueOf([]string{"x"}))
 		case reflect.TypeFor[steps.BumpVersionRule]():
@@ -753,7 +756,7 @@ func fullConfig(t *testing.T, hostile string) (*Config, []string) {
 			UploadURL: "https://ghe.example/up/",
 		},
 		Jira:   &Jira{URL: "https://jira.example", Project: "KEY"},
-		Commit: &Commit{Include: []string{"a " + hostile}, Exclude: []string{}},
+		Commit: &Commit{Sign: ptr(true), Signer: "git", Include: []string{"a " + hostile}, Exclude: []string{}},
 		packages: []PackageConfig{
 			{
 				Name: versioning.CustomName("@scope/" + hostile),
@@ -788,7 +791,7 @@ func fullConfig(t *testing.T, hostile string) (*Config, []string) {
 				&steps.BumpVersion{Rule: steps.RulePre, Label: "rc " + hostile},
 				&steps.Commit{Message: "chore: release $version " + hostile},
 				&steps.Commit{
-					Message: "m", Variables: []variables.Entry{},
+					Message: "m", Variables: []variables.Entry{}, Sign: ptr(false), Signer: "api",
 					Include: []string{"a", hostile}, Exclude: []string{},
 				},
 				&steps.CreateChangeFile{},

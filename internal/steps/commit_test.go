@@ -205,24 +205,12 @@ func TestCommitEmptyMessage(t *testing.T) {
 }
 
 func TestCommitSigning(t *testing.T) {
-	t.Run("signs with git when it is set up", func(t *testing.T) {
+	t.Run("sign = false turns off the signing of the user's own configuration", func(t *testing.T) {
 		dir := commitDir(t)
 		configureSigning(t, dir)
+		runGit(t, "config", "commit.gpgsign", "true")
 		writeTestFile(t, versionFile, "1\n")
-		state := commitState(t, signing.Options{Sign: ptrBool(true)})
-		if err := runCommit(t, &Commit{Message: releaseMsg}, state, false); err != nil {
-			t.Fatal(err)
-		}
-		if got := runGit(t, "cat-file", "commit", "HEAD"); !strings.Contains(got, "gpgsig ") {
-			t.Fatalf("the commit is not signed:\n%s", got)
-		}
-	})
-
-	t.Run("the step turns signing on and off over the command line", func(t *testing.T) {
-		dir := commitDir(t)
-		configureSigning(t, dir)
-		writeTestFile(t, versionFile, "1\n")
-		// The command line says sign, the step says no: the commit is plain, and git is not even asked to sign.
+		// The command line says sign and git signs everything, the step says no: the commit is not signed.
 		state := commitState(t, signing.Options{Sign: ptrBool(true)})
 		if err := runCommit(t, &Commit{Message: releaseMsg, Sign: ptrBool(false)}, state, false); err != nil {
 			t.Fatal(err)
@@ -340,4 +328,22 @@ func waitExecutable(t *testing.T, program string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("the test script stays busy")
+}
+
+func TestCommitDryRunSignsWhenGitIsSetUpToSign(t *testing.T) {
+	dir := commitDir(t)
+	configureSigning(t, dir)
+	writeTestFile(t, versionFile, "1\n")
+	logs := captureLogs(t)
+
+	// No sign option anywhere: the signing setup of Git is enough.
+	if err := runCommit(t, &Commit{Message: releaseMsg}, commitState(t, signing.Options{}), true); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Would create a signed commit using git and your own signing key on main: " + releaseMsg; !strings.Contains(
+		logs.String(),
+		want,
+	) {
+		t.Fatalf("log lacks %q:\n%s", want, logs)
+	}
 }

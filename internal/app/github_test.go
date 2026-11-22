@@ -145,8 +145,15 @@ func TestGitHubURLFlagsLoad(t *testing.T) {
 
 func TestSigningOptions(t *testing.T) {
 	t.Parallel()
-	got := (&GlobalOptions{CommitInclude: []string{"a"}}).SigningOptions()
-	if got.Include[0] != "a" || got.Exclude != nil {
-		t.Errorf("options = %+v", got)
+	yes := true
+	got, err := (&GlobalOptions{SignCommits: &yes, Signer: "API", CommitInclude: []string{"a"}}).SigningOptions()
+	if err != nil || got.Sign == nil || !*got.Sign || got.Signer != "api" || got.Include[0] != "a" || got.Exclude != nil {
+		t.Errorf("options = %+v, error %v", got, err)
+	}
+	if _, err := (&GlobalOptions{Signer: "gpg"}).SigningOptions(); err == nil {
+		t.Error("a bad signer is refused")
+	}
+	if got, err := (&GlobalOptions{}).SigningOptions(); err != nil || got.Sign != nil {
+		t.Errorf("unset options = %+v, error %v", got, err)
 	}
 }

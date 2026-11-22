@@ -71,17 +71,25 @@ type Changes struct {
 // Commit is the `[commit]` table. It is remeris' own (Knope ignores it) and holds the defaults of the Commit step,
 // which the step's own keys, the environment and the command line override.
 type Commit struct {
+	// Sign forces signing (true) or turns it off (false). Unset signs when Git is set up to sign.
+	Sign *bool `toml:"sign"`
+	// Signer limits the way to sign: "auto" (the default), "git" or "api".
+	Signer string `toml:"signer"`
 	// Include and Exclude are glob patterns of the files to commit (see signing.Options).
 	Include []string `toml:"include"`
 	Exclude []string `toml:"exclude"`
 }
 
-// SigningOptions returns the table as commit options.
-func (c *Commit) SigningOptions() signing.Options {
+// SigningOptions returns the table as commit options. A signer that is not auto, git or api is an error.
+func (c *Commit) SigningOptions() (signing.Options, error) {
 	if c == nil {
-		return signing.Options{}
+		return signing.Options{}, nil
 	}
-	return signing.Options{Include: c.Include, Exclude: c.Exclude}
+	m, err := signing.ParseMethod(c.Signer)
+	if err != nil {
+		return signing.Options{}, err
+	}
+	return signing.Options{Sign: c.Sign, Signer: m, Include: c.Include, Exclude: c.Exclude}, nil
 }
 
 type ReleaseNotes struct {
@@ -298,6 +306,9 @@ func decode(path string, src []byte, root fs.StatFS) (*Config, error) {
 		Jira:         r.Jira,
 		Commit:       r.Commit,
 		index:        index,
+	}
+	if _, err := r.Commit.SigningOptions(); err != nil {
+		return nil, err
 	}
 	cfg.Packages = orderedPackages(r.Packages, index.Keys("packages"))
 	if cfg.packages, err = validatePackages(&r, index, string(src), root, cfg.Packages); err != nil {

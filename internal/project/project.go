@@ -95,7 +95,11 @@ func Load(ctx context.Context, cfg *config.Config, opts Options) (workflow.State
 		return state, err
 	}
 	state.IgnoreConventionalMergeCommits = cfg.Changes != nil && cfg.Changes.IgnoreConventionalMergeCommits
-	state.Signing.Options = opts.Signing.Over(cfg.Commit.SigningOptions())
+	fileOptions, err := cfg.Commit.SigningOptions()
+	if err != nil {
+		return state, err
+	}
+	state.Signing.Options = opts.Signing.Over(fileOptions)
 	return state, nil
 }
 

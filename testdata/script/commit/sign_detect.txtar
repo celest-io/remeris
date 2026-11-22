@@ -1,0 +1,71 @@
+# remeris only: the signing setup of Git is detected, so no option is needed to sign. sign = false turns it off.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+chmod 755 gpg
+exec git config gpg.program $WORK/gpg
+exec git add .gitignore knope.toml VERSION
+exec git commit -m 'chore: init'
+cp changed/VERSION VERSION
+
+# Nothing is set up: a plain commit in the dry run.
+exec remeris --dry-run commit
+cmp stdout want/plain.log
+
+# The key is set up: the same workflow now says it signs.
+exec git config user.signingkey KEY
+exec remeris --dry-run commit
+cmp stdout want/signed.log
+
+# The step can turn it off, even when Git signs everything.
+exec git config commit.gpgsign true
+exec remeris commit-unsigned
+stdout 'Created commit'
+exec git cat-file commit HEAD
+! stdout gpgsig
+
+# --sign-commits=false does the same for a step that says nothing.
+cp changed2/VERSION VERSION
+exec remeris --sign-commits=false commit
+exec git cat-file commit HEAD
+! stdout gpgsig
+
+-- knope.toml --
+[[workflows]]
+name = "commit"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: release"
+
+[[workflows]]
+name = "commit-unsigned"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: unsigned"
+sign = false
+-- .gitignore --
+changed/
+changed2/
+want/
+gpg
+-- VERSION --
+0.9.0
+-- changed/VERSION --
+1.0.0
+-- changed2/VERSION --
+1.1.0
+-- gpg --
+#!/bin/sh
+cat >/dev/null
+echo '[GNUPG:] SIG_CREATED D 1 8 00 1 KEY' >&2
+printf -- '-----BEGIN PGP SIGNATURE-----\n\nZmFrZQ==\n-----END PGP SIGNATURE-----\n'
+-- want/plain.log --
+Would create a commit using git on main: chore: release
+Would commit these files:
+  VERSION
+-- want/signed.log --
+Would create a signed commit using git and your own signing key on main: chore: release
+Would commit these files:
+  VERSION

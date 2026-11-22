@@ -403,3 +403,10 @@ func TestLoadMergesTheCommitOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadRefusesABadSignerInTheTable(t *testing.T) {
+	_, err := Load(context.Background(), &config.Config{Commit: &config.Commit{Signer: "gpg"}}, Options{})
+	if err == nil || !strings.Contains(err.Error(), "not a signer") {
+		t.Fatalf("error = %v", err)
+	}
+}
