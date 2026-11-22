@@ -11,7 +11,7 @@ cp changed/VERSION VERSION
 ! stdout .
 stderr 'Cannot sign the commit: signing is not set up'
 stderr 'ssh-keygen -t ed25519'
-stderr 'REMERIS_GITHUB_APP_ID'
+stderr 'REMERIS_COMMIT_GITHUB_APP_ID'
 stderr 'To commit without signing, set sign = false\.'
 exec git log --format=%s
 cmp stdout want/log.txt
