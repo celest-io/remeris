@@ -205,6 +205,19 @@ func TestCommitEmptyMessage(t *testing.T) {
 }
 
 func TestCommitSigning(t *testing.T) {
+	t.Run("signs with git when it is set up", func(t *testing.T) {
+		dir := commitDir(t)
+		configureSigning(t, dir)
+		writeTestFile(t, versionFile, "1\n")
+		state := commitState(t, signing.Options{Sign: ptrBool(true)})
+		if err := runCommit(t, &Commit{Message: releaseMsg}, state, false); err != nil {
+			t.Fatal(err)
+		}
+		if got := runGit(t, "cat-file", "commit", "HEAD"); !strings.Contains(got, "gpgsig ") {
+			t.Fatalf("the commit is not signed:\n%s", got)
+		}
+	})
+
 	t.Run("sign = false turns off the signing of the user's own configuration", func(t *testing.T) {
 		dir := commitDir(t)
 		configureSigning(t, dir)
@@ -345,5 +358,19 @@ func TestCommitDryRunSignsWhenGitIsSetUpToSign(t *testing.T) {
 		want,
 	) {
 		t.Fatalf("log lacks %q:\n%s", want, logs)
+	}
+}
+
+func TestCommitSignsWhenGitIsSetUpToSign(t *testing.T) {
+	dir := commitDir(t)
+	configureSigning(t, dir)
+	writeTestFile(t, versionFile, "1\n")
+
+	// No sign option anywhere: the signing setup of Git is enough.
+	if err := runCommit(t, &Commit{Message: releaseMsg}, commitState(t, signing.Options{}), false); err != nil {
+		t.Fatal(err)
+	}
+	if got := runGit(t, "cat-file", "commit", "HEAD"); !strings.Contains(got, "gpgsig ") {
+		t.Fatalf("the commit is not signed:\n%s", got)
 	}
 }
