@@ -10,6 +10,9 @@
     "html_handling": "drop-trailing-slash",
     "not_found_handling": "404-page"
   },
+  // `wrangler preview` (Workers Builds runs it for branches other than the production one) refuses to run without this
+  // block. It can stay empty: assets and compatibility settings stay at the top level.
+  "previews": {},
   // Attach the domains on deploy. The zone remeris.dev must already be on the Cloudflare account.
   "routes": [
     { "pattern": "remeris.dev", "custom_domain": true },

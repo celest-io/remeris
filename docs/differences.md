@@ -35,6 +35,8 @@ See also [configuration.md](configuration.md) and [usage.md](usage.md).
 - **`SelectGitHubIssue` works with GitHub Enterprise.** The GraphQL endpoint comes from `api_url`. Section "M11 SelectGitHubIssue".
 - **GitHub App authentication (D11).** The order is App credentials (from flags or `REMERIS_GITHUB_APP_*`, never from `knope.toml`), `GITHUB_TOKEN`, the stored token, then a
     prompt. See [usage.md](usage.md).
+- **Signed commits and the `Commit` step.** Knope never commits. remeris adds the `Commit` step and the `[commit]` table (Knope ignores both), with `sign`, include and exclude
+    patterns, and a choice between your own Git key and a commit made through the GitHub API, which GitHub signs. See [signing.md](signing.md).
 - **Hardened Gitea and Jira.** The token goes in the `Authorization` header (Knope puts the Gitea token in the URL), `host` and `url` need a scheme and https (http only for
     loopback), redirects to another origin are refused, and tokens are scrubbed from errors. Rows: "Gitea authentication", "Gitea `host`", "Jira authentication", "Jira `url`".
 - **Jira queries are quoted.** `status` and `project` are quoted and escaped in the JQL, the issue key is escaped as a path segment, every HTTP status is checked, and the search

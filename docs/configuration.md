@@ -95,6 +95,19 @@ versioned_files = [
 
 `PrepareRelease` still accepts `ignore_conventional_commits` as a deprecated step field; `remeris --upgrade` moves it to `[changes]`.
 
+## `[commit]`
+
+remeris only; Knope ignores it. The defaults of the `Commit` step, overridden by the step's own keys, the environment and the command line (see [signing.md](signing.md)).
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `sign` | bool | `true` forces signing and fails when nothing is set up; `false` never signs. When not set, commits are signed if Git is set up to sign. |
+| `signer` | string | `auto` (the default), `git` or `api`. |
+| `include` | list of strings | Glob patterns of the files to commit. Every changed file when not set. |
+| `exclude` | list of strings | Glob patterns of the files to leave out. |
+
+It never holds credentials: the GitHub App of commits comes from `--commit-github-app-*` and the matching variables.
+
 ## `[release_notes]`
 
 | Key | Type | Meaning |
@@ -159,6 +172,7 @@ Meaning of each step and field: <https://knope.tech>. "Variables" below means th
 | `type` | Fields | What it does |
 | --- | --- | --- |
 | `Command` | `command`, `variables`, `shell` | Runs a command after variable substitution. `shell = true` runs it with `sh -c` (`cmd /C` on Windows); otherwise the line is split into arguments and no `$VAR` expansion happens. |
+| `Commit` | `message`, `variables`, `sign`, `signer`, `include`, `exclude` | remeris only. Commits the changed files, signed when Git is set up to sign or when forced. `message` is a template like `Command`'s `command`. See [signing.md](signing.md). |
 | `BumpVersion` | `rule`, `label` | Bumps the version and edits versioned files. `rule` is `Major`, `Minor`, `Patch`, `Pre` or `Release`; `Pre` requires `label`, other rules ignore it. |
 | `PrepareRelease` | `prerelease_label`, `allow_empty`, `ignore_conventional_commits` | Computes versions from commits and change files, edits versioned files and changelogs, removes change files, stages the result. `ignore_conventional_commits` is deprecated for `[changes]`. |
 | `Release` | none | Creates the Git tags and the GitHub or Gitea releases of the prepared release. |
