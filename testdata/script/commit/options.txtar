@@ -1,0 +1,79 @@
+# remeris only: include and exclude come from the step, the [commit] table, the variables and the flags, the nearest one winning.
+exec git init --initial-branch=main
+exec git config user.email fake@remeris.dev
+exec git config user.name 'Fake remeris'
+exec git add .gitignore a.txt b.txt c.txt knope.toml
+exec git commit -m 'chore: init'
+cp changed/a.txt a.txt
+cp changed/b.txt b.txt
+cp changed/c.txt c.txt
+
+# The table excludes c.txt for a step that says nothing.
+exec remeris --dry-run table
+cmp stdout want/table.log
+
+# The variable takes several patterns, separated by commas, and beats the table.
+env REMERIS_COMMIT_EXCLUDE='a.txt,b.txt'
+exec remeris --dry-run table
+cmp stdout want/variable.log
+
+# The flag beats the variable, and can be repeated.
+exec remeris --commit-exclude c.txt --commit-exclude b.txt --dry-run table
+cmp stdout want/flag.log
+
+# The step beats all of them, and include narrows before exclude removes.
+exec remeris --dry-run step
+cmp stdout want/step.log
+
+-- knope.toml --
+[[workflows]]
+name = "table"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: table"
+
+[[workflows]]
+name = "step"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: step"
+include = ["*.txt"]
+exclude = ["b.txt"]
+
+[commit]
+exclude = ["c.txt"]
+-- .gitignore --
+changed/
+want/
+-- a.txt --
+a
+-- b.txt --
+b
+-- c.txt --
+c
+-- changed/a.txt --
+a2
+-- changed/b.txt --
+b2
+-- changed/c.txt --
+c2
+-- want/table.log --
+Would create a commit using git on main: chore: table
+Would commit these files:
+  a.txt
+  b.txt
+-- want/variable.log --
+Would create a commit using git on main: chore: table
+Would commit these files:
+  c.txt
+-- want/flag.log --
+Would create a commit using git on main: chore: table
+Would commit these files:
+  a.txt
+-- want/step.log --
+Would create a commit using git on main: chore: step
+Would commit these files:
+  a.txt
+  c.txt

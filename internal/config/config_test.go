@@ -830,3 +830,52 @@ x = { z = 1, y = 2 }
 		t.Errorf("wrong path shape = %v", got)
 	}
 }
+
+func TestCommitTableAndStep(t *testing.T) {
+	cfg := mustLoad(t, `
+[commit]
+sign = true
+signer = "git"
+include = ["a", "b"]
+exclude = []
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: release $version"
+sign = false
+exclude = ["mise*.lock"]
+`)
+	opts, err := cfg.Commit.SigningOptions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Sign == nil || !*opts.Sign || opts.Signer != "git" || len(opts.Include) != 2 || opts.Exclude == nil ||
+		len(opts.Exclude) != 0 {
+		t.Errorf("table = %+v", opts)
+	}
+	step, ok := stepsOf(t, cfg, "release")[0].(*steps.Commit)
+	if !ok || step.Message != "chore: release $version" || step.Sign == nil || *step.Sign || step.Exclude[0] != "mise*.lock" ||
+		step.Include != nil {
+		t.Errorf("step = %+v", step)
+	}
+	if !step.NeedsPackages() {
+		t.Error("a message with $version needs the packages")
+	}
+}
+
+func TestCommitTableIsOptional(t *testing.T) {
+	cfg := mustLoad(t, "[github]\nowner = \"o\"\nrepo = \"r\"\n")
+	if opts, err := cfg.Commit.SigningOptions(); err != nil || opts.Sign != nil || opts.Signer != "" {
+		t.Errorf("options = %+v, error %v", opts, err)
+	}
+}
+
+func TestCommitTableRefusesAnUnknownSigner(t *testing.T) {
+	_, err := load(t, "[commit]\nsigner = \"gpg\"\n")
+	if err == nil || !strings.Contains(err.Error(), "not a signer") {
+		t.Fatalf("error = %v", err)
+	}
+}

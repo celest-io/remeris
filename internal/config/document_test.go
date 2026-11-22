@@ -714,6 +714,9 @@ func fillStep(t *testing.T, step workflow.Step) {
 			f.SetString("x")
 		case reflect.TypeFor[bool]():
 			f.SetBool(true)
+		case reflect.TypeFor[*bool]():
+			yes := true
+			f.Set(reflect.ValueOf(&yes))
 		case reflect.TypeFor[[]string]():
 			f.Set(reflect.ValueOf([]string{"x"}))
 		case reflect.TypeFor[steps.BumpVersionRule]():
@@ -752,7 +755,8 @@ func fullConfig(t *testing.T, hostile string) (*Config, []string) {
 			APIURL:    "https://ghe.example/api/v3/",
 			UploadURL: "https://ghe.example/up/",
 		},
-		Jira: &Jira{URL: "https://jira.example", Project: "KEY"},
+		Jira:   &Jira{URL: "https://jira.example", Project: "KEY"},
+		Commit: &Commit{Sign: ptr(true), Signer: "git", Include: []string{"a " + hostile}, Exclude: []string{}},
 		packages: []PackageConfig{
 			{
 				Name: versioning.CustomName("@scope/" + hostile),
@@ -785,6 +789,11 @@ func fullConfig(t *testing.T, hostile string) (*Config, []string) {
 				&steps.BumpVersion{Rule: steps.RuleMajor}, &steps.BumpVersion{Rule: steps.RuleMinor},
 				&steps.BumpVersion{Rule: steps.RulePatch}, &steps.BumpVersion{Rule: steps.RuleRelease},
 				&steps.BumpVersion{Rule: steps.RulePre, Label: "rc " + hostile},
+				&steps.Commit{Message: "chore: release $version " + hostile},
+				&steps.Commit{
+					Message: "m", Variables: []variables.Entry{}, Sign: ptr(false), Signer: "api",
+					Include: []string{"a", hostile}, Exclude: []string{},
+				},
 				&steps.CreateChangeFile{},
 				&steps.PrepareRelease{},
 				&steps.PrepareRelease{PrereleaseLabel: "beta " + hostile, AllowEmpty: true, IgnoreConventionalCommits: true},
@@ -853,6 +862,7 @@ func sameConfig(t *testing.T, got, want *Config) {
 	}{
 		{"changes", got.Changes, want.Changes}, {"release_notes", got.ReleaseNotes, want.ReleaseNotes},
 		{"github", got.GitHub, want.GitHub}, {"gitea", got.Gitea, want.Gitea}, {"jira", got.Jira, want.Jira},
+		{"commit", got.Commit, want.Commit},
 		{"packages", got.PackageConfigs(), want.PackageConfigs()}, {"workflows", got.Workflows, want.Workflows},
 	}
 	for _, c := range checks {

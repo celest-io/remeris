@@ -18,6 +18,7 @@ import (
 	gotoml "github.com/pelletier/go-toml/v2"
 
 	"github.com/celest-io/remeris/internal/diag"
+	"github.com/celest-io/remeris/internal/signing"
 	"github.com/celest-io/remeris/internal/workflow"
 )
 
@@ -49,6 +50,8 @@ type Config struct {
 	GitHub    *GitHub
 	Gitea     *Gitea
 	Jira      *Jira
+	// Commit is the remeris-only `[commit]` table: how the Commit step signs commits and which files it commits.
+	Commit *Commit
 
 	// index holds key order and spans of the source, for diagnostics.
 	index *tomlIndex
@@ -63,6 +66,31 @@ type Changes struct {
 	IgnoreConventionalCommits bool `toml:"ignore_conventional_commits"`
 	// IgnoreConventionalMergeCommits skips the commits with more than one parent when reading conventional commits.
 	IgnoreConventionalMergeCommits bool `toml:"ignore_conventional_merge_commits"`
+}
+
+// Commit is the `[commit]` table. It is remeris' own (Knope ignores it) and holds the defaults of the Commit step,
+// which the step's own keys, the environment and the command line override. It has no credentials: those come from
+// flags and environment variables only (decision D11).
+type Commit struct {
+	// Sign turns commit signing on. Nil leaves it to a lower source, which means off.
+	Sign *bool `toml:"sign"`
+	// Signer is "auto" (the default), "git" or "api".
+	Signer string `toml:"signer"`
+	// Include and Exclude are glob patterns of the files to commit (see signing.Options).
+	Include []string `toml:"include"`
+	Exclude []string `toml:"exclude"`
+}
+
+// SigningOptions returns the table as signing options. A signer that is not auto, git or api is an error.
+func (c *Commit) SigningOptions() (signing.Options, error) {
+	if c == nil {
+		return signing.Options{}, nil
+	}
+	m, err := signing.ParseMethod(c.Signer)
+	if err != nil {
+		return signing.Options{}, err
+	}
+	return signing.Options{Sign: c.Sign, Signer: m, Include: c.Include, Exclude: c.Exclude}, nil
 }
 
 type ReleaseNotes struct {
@@ -232,6 +260,7 @@ type raw struct {
 	GitHub       *GitHub            `toml:"github"`
 	Gitea        *Gitea             `toml:"gitea"`
 	Jira         *Jira              `toml:"jira"`
+	Commit       *Commit            `toml:"commit"`
 }
 
 type rawWorkflow struct {
@@ -276,7 +305,11 @@ func decode(path string, src []byte, root fs.StatFS) (*Config, error) {
 		GitHub:       r.GitHub,
 		Gitea:        r.Gitea,
 		Jira:         r.Jira,
+		Commit:       r.Commit,
 		index:        index,
+	}
+	if _, err := r.Commit.SigningOptions(); err != nil {
+		return nil, err
 	}
 	cfg.Packages = orderedPackages(r.Packages, index.Keys("packages"))
 	if cfg.packages, err = validatePackages(&r, index, string(src), root, cfg.Packages); err != nil {

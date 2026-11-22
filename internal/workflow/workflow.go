@@ -17,6 +17,7 @@ import (
 	"github.com/celest-io/remeris/internal/forge/jira"
 	"github.com/celest-io/remeris/internal/git"
 	"github.com/celest-io/remeris/internal/prompt"
+	"github.com/celest-io/remeris/internal/signing"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/action"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
@@ -61,6 +62,9 @@ type State struct {
 	// Jira is the Jira forge, or nil when the configuration has no `[jira]` table. It builds its client (and reads or
 	// asks for the email and the token) on demand and caches it; a step must not ask for the client in a dry run.
 	Jira *jira.Forge
+	// Signing is how the Commit step makes commits: the options of the command line, the environment and the `[commit]`
+	// table, and the forges that can make a signed commit through their API. The zero value means no signing.
+	Signing signing.Config
 	// Issue is the issue a Select*Issue step or SelectIssueFromBranch selected, or nil before any did.
 	Issue *Issue
 }
