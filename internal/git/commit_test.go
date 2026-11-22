@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	keyGPGSign  = "commit.gpgsign"
-	fakeGPGBody = "#!/bin/sh\ncat >/dev/null\necho '[GNUPG:] SIG_CREATED D 1 8 00 1 KEY' >&2\n" +
+	remoteOrigin = "origin"
+	flagForce    = "--force"
+	keyGPGSign   = "commit.gpgsign"
+	fakeGPGBody  = "#!/bin/sh\ncat >/dev/null\necho '[GNUPG:] SIG_CREATED D 1 8 00 1 KEY' >&2\n" +
 		"printf -- '-----BEGIN PGP SIGNATURE-----\\n\\nZmFrZQ==\\n-----END PGP SIGNATURE-----\\n'\n"
 	fileNew    = "new.txt"
 	fileKeep   = "keep.txt"
@@ -401,4 +403,79 @@ func waitExecutable(t *testing.T, program string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("the test script stays busy")
+}
+
+func TestRoot(t *testing.T) { //nolint:paralleltest // sets environment variables
+	eachCommitter(t, func(t *testing.T, r *testRepo, c Committer) {
+		got, err := c.Root(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, _ := filepath.EvalSymlinks(r.dir)
+		if real, _ := filepath.EvalSymlinks(got); real != want {
+			t.Fatalf("Root = %q, want %q", got, r.dir)
+		}
+	})
+}
+
+// remoteWithACommit makes r track a bare remote and returns the id of a commit that was pushed to it from a clone.
+func remoteWithACommit(t *testing.T, r *testRepo) string {
+	t.Helper()
+	bare := filepath.Join(t.TempDir(), "remote.git")
+	r.git("init", "--quiet", "--bare", "--initial-branch="+branchMain, bare)
+	r.git("remote", "add", remoteOrigin, bare)
+	r.git("push", "--quiet", "-u", remoteOrigin, branchMain)
+	other := &testRepo{t: t, dir: filepath.Join(t.TempDir(), "other")}
+	r.git("clone", "--quiet", bare, other.dir)
+	other.write("remote.txt", "remote\n")
+	other.git("add", "remote.txt")
+	other.git("commit", "--quiet", "-m", "remote")
+	other.git("push", "--quiet", remoteOrigin, branchMain)
+	return strings.TrimSpace(other.git("rev-parse", "HEAD"))
+}
+
+func TestAdoptCommit(t *testing.T) { //nolint:paralleltest // sets environment variables
+	t.Run("moves the branch to the commit and keeps the working tree", func(t *testing.T) { //nolint:paralleltest // env
+		r := commitRepo(t)
+		sha := remoteWithACommit(t, r)
+		r.write(fileA, "local change\n")
+		c, _ := AsCommitter(openGit(t, r.dir))
+		if err := c.AdoptCommit(t.Context(), branchMain, sha); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.TrimSpace(r.git("rev-parse", "HEAD")); got != sha {
+			t.Fatalf("HEAD = %s, want %s", got, sha)
+		}
+		// The new file of the remote commit is in HEAD but not in the working tree or the index (a soft reset), and the
+		// local change is still there.
+		if got := r.git("status", "--porcelain"); !strings.Contains(got, "M "+fileA) || !strings.Contains(got, "remote.txt") {
+			t.Fatalf("status = %q", got)
+		}
+	})
+
+	t.Run("never lets a name or an id become an option", func(t *testing.T) { //nolint:paralleltest // env
+		r := commitRepo(t)
+		sha := remoteWithACommit(t, r)
+		c, _ := AsCommitter(openGit(t, r.dir))
+		for name, args := range map[string][2]string{
+			"bad id":     {branchMain, "--hard"},
+			"short id":   {branchMain, sha[:7]},
+			"bad branch": {flagForce, sha},
+		} {
+			if err := c.AdoptCommit(t.Context(), args[0], args[1]); err == nil {
+				t.Errorf("%s: no error", name)
+			}
+		}
+		if got := strings.TrimSpace(r.git("rev-parse", "HEAD")); got == sha {
+			t.Fatal("HEAD moved")
+		}
+	})
+
+	t.Run("go-git cannot fetch", func(t *testing.T) { //nolint:paralleltest // env
+		r := commitRepo(t)
+		c, _ := AsCommitter(openGoGit(t, r.dir))
+		if err := c.AdoptCommit(t.Context(), branchMain, strings.Repeat("a", 40)); err == nil {
+			t.Fatal("no error")
+		}
+	})
 }

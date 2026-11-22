@@ -48,6 +48,12 @@ type CommitOptions struct {
 type Committer interface {
 	// SigningConfig reads the signing setup of the Git configuration.
 	SigningConfig(ctx context.Context) (SigningConfig, error)
+	// Root returns the absolute path of the root of the working tree. Paths of Change and CommitOptions are relative to it.
+	Root(ctx context.Context) (string, error)
+	// AdoptCommit takes a commit that was made elsewhere (through a forge API) on the remote branch: it fetches the
+	// branch from the remote it tracks (origin when it tracks none) and moves HEAD and the branch to sha without
+	// touching the index or the working tree (git reset --soft). Only the git command can do it.
+	AdoptCommit(ctx context.Context, branch, sha string) error
 	// Changes lists what differs from HEAD, sorted by path: modified and untracked files (ignored ones are left out) and
 	// deleted tracked files. A rename is a new path and a deleted old one.
 	Changes(ctx context.Context) ([]Change, error)
