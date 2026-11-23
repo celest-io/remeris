@@ -121,10 +121,25 @@ files that the assets-only Worker serves. Do not add the adapter unless one of t
 
 ### (f) Previews and branches
 
-With Workers Builds, a push to a branch other than `main` runs the build and uploads a **preview version** of the Worker (the non-production branch build command,
-`npx wrangler versions upload`, is set in the Worker's **Settings**, **Builds**). The Cloudflare GitHub application comments on the pull request with the preview URL. `site` is
-fixed to `https://remeris.dev`, so a preview's canonical URLs and sitemap point to production; that is harmless. Restrict or disable branch builds under **Settings**, **Builds**,
-**Branch control**.
+Branch builds use Worker Previews (checked in the Cloudflare documentation, not on a live account). A push to a branch other than `main` runs the build command, then the
+**Preview command**, which defaults to `npx wrangler preview` for new Workers. It creates or updates a Preview named after the branch, under the same Worker, without touching
+production, and the Cloudflare GitHub application comments on the pull request with its URL.
+
+What a preview needs, and where it is set:
+
+- **`"previews": {}` in `wrangler.jsonc`.** The block is required, and it may be empty: the site has no variables or bindings, so a preview uses the top-level settings. Never put
+    `routes` in it (production routes do not target previews).
+- **A preview host.** `"preview_urls": true` serves previews on workers.dev: `<preview-name>-remeris.<subdomain>.workers.dev`. Without any host the build succeeds but the pull
+    request comment says "No Preview URL". Previews on `remeris.dev` itself need a wildcard DNS record and certificate; not worth it for a static site.
+- **Wrangler 4.135.0 or newer** (the repository pins 4.156.0 in `package.json`).
+- **In the dashboard**, on the Worker: **Settings**, **Build**, **Branch control**, tick **Enable Preview Builds**, and set **Preview command** to `npx wrangler preview`. A
+    Worker connected before Worker Previews existed keeps the old model (command `npx wrangler versions upload`) until a one-time, irreversible switch described under
+    *Existing Workers connected to Builds* in the Cloudflare docs (Workers Builds, Build branches). Switch it.
+- The preview build runs the same build command as production (`npm run build`), with the same root directory (`website`) and build variables (`NODE_VERSION`). Variables are per
+    environment in the dashboard: check that the preview one has `NODE_VERSION` too.
+
+`site` is fixed to `https://remeris.dev`, so a preview's canonical URLs and sitemap point to production; that is harmless. `X-Robots-Tag: noindex` is added by Cloudflare to
+workers.dev previews. Restrict or disable branch builds under **Settings**, **Build**, **Branch control**.
 
 ### (g) Caching and purging
 
