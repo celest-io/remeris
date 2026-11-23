@@ -144,6 +144,16 @@ func rootFlags(cfg *config.Config) []cli.Flag {
 				" may hold the key itself",
 			Sources: cli.EnvVars(app.EnvGitHubAppKeyPath),
 		},
+		&cli.StringSliceFlag{
+			Name:    app.FlagCommitInclude,
+			Usage:   "Commit only the changed files that match this glob (can be repeated)",
+			Sources: cli.EnvVars(app.EnvCommitInclude),
+		},
+		&cli.StringSliceFlag{
+			Name:    app.FlagCommitExclude,
+			Usage:   "Do not commit the changed files that match this glob (can be repeated)",
+			Sources: cli.EnvVars(app.EnvCommitExclude),
+		},
 		&cli.StringFlag{
 			Name: app.FlagGitHubAPIURL,
 			Usage: "API base URL of the GitHub instance to send credentials to, for GitHub Enterprise. " +
@@ -287,6 +297,7 @@ func projectOptions(global *app.GlobalOptions, p prompt.Prompter) project.Option
 		Credentials:            &credentials.Store{Prompter: p},
 		TrustedGitHubAPIURL:    global.GitHubAPIURL,
 		TrustedGitHubUploadURL: global.GitHubUploadURL,
+		Signing:                global.SigningOptions(),
 	}
 	if global.GitHubAppID != 0 {
 		opts.GitHubApp = &github.App{

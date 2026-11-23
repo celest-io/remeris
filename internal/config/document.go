@@ -16,7 +16,7 @@ const (
 // It maps the loaded configuration, with the packages that were discovered, the default workflows and the detected
 // forges, to what Knope's `toml::to_string` prints for the same data, in the same order:
 //
-//	[changes]  [package] or [packages.<name>]  [[workflows]]  [github]  [gitea]  [jira]  [release_notes]
+//	[changes]  [package] or [packages.<name>]  [[workflows]]  [github]  [gitea]  [jira]  [release_notes]  [commit]
 //
 // Knope's writer leaves out `[jira]` and `[release_notes]` (its SimpleConfig has no such fields), which loses a
 // user's settings on `--upgrade`; remeris keeps them (testdata/deviations.md). The remeris-only `api_url` and
@@ -84,7 +84,26 @@ func (c *Config) Document() (*tomlwrite.Doc, error) {
 		t.Set("change_templates", stringArray(r.ChangeTemplates))
 		doc.Set("release_notes", t)
 	}
+	if t := commitTable(c.Commit); t != nil {
+		doc.Set("commit", t)
+	}
 	return doc, nil
+}
+
+// commitTable maps `[commit]`, which is kept on `--upgrade` like the other tables Knope does not know. It is nil
+// when the table is absent or has nothing set.
+func commitTable(c *Commit) *tomlwrite.Table {
+	if c == nil {
+		return nil
+	}
+	t := tomlwrite.NewTable()
+	if c.Include != nil {
+		t.Set("include", stringArray(c.Include))
+	}
+	if c.Exclude != nil {
+		t.Set("exclude", stringArray(c.Exclude))
+	}
+	return t
 }
 
 // setPackages writes `[package]` for the one unnamed default package and `[packages.<name>]` for every named package

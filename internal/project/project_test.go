@@ -14,6 +14,7 @@ import (
 	"github.com/celest-io/remeris/internal/diag"
 	"github.com/celest-io/remeris/internal/forge/github"
 	"github.com/celest-io/remeris/internal/git"
+	"github.com/celest-io/remeris/internal/signing"
 	"github.com/celest-io/remeris/pkg/versioning"
 	"github.com/celest-io/remeris/pkg/versioning/versionedfile"
 )
@@ -368,6 +369,36 @@ func TestStateKeepsTheFormOfAssets(t *testing.T) {
 			}
 			if !slices.Equal(lines[1:], tc.want) {
 				t.Errorf("lines = %q, want %q", lines[1:], tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadMergesTheCommitOptions(t *testing.T) {
+	tests := map[string]struct {
+		cfg                   config.Config
+		opts                  Options
+		wantInclude, wantExcl []string
+	}{
+		"nothing": {},
+		"the table fills in what the command line leaves unset": {
+			cfg: config.Config{Commit: &config.Commit{Include: []string{"a"}, Exclude: []string{"b"}}},
+			opts: Options{
+				Signing: signing.Options{Exclude: []string{"c"}},
+			},
+			wantInclude: []string{"a"},
+			wantExcl:    []string{"c"},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			state, err := Load(context.Background(), &tc.cfg, tc.opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := state.Signing.Options
+			if !slices.Equal(got.Include, tc.wantInclude) || !slices.Equal(got.Exclude, tc.wantExcl) {
+				t.Errorf("options = %+v, want include %v exclude %v", got, tc.wantInclude, tc.wantExcl)
 			}
 		})
 	}

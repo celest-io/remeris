@@ -17,11 +17,14 @@ type schema struct {
 // keyName is the key `name` of extra changelog sections and assets.
 const keyName = "name"
 
+// keyVariables is the key `variables` of templates and of the steps that have one.
+const keyVariables = "variables"
+
 var (
 	leaf    = &schema{}
 	freeTab = &schema{free: true}
 
-	templateSchema = &schema{keys: map[string]*schema{"template": leaf, "variables": freeTab}}
+	templateSchema = &schema{keys: map[string]*schema{"template": leaf, keyVariables: freeTab}}
 
 	packageSchema = &schema{keys: map[string]*schema{
 		"versioned_files": {
@@ -36,7 +39,10 @@ var (
 
 	// stepSchemas are the keys of each step type besides `type`. A type that is not listed has no other key.
 	stepSchemas = map[string]*schema{
-		"Command":     {keys: map[string]*schema{"command": leaf, "variables": freeTab, "shell": leaf}},
+		"Command": {keys: map[string]*schema{"command": leaf, keyVariables: freeTab, "shell": leaf}},
+		"Commit": {keys: map[string]*schema{
+			"message": leaf, keyVariables: freeTab, "include": leaf, "exclude": leaf,
+		}},
 		"BumpVersion": {keys: map[string]*schema{"rule": leaf, "label": leaf}},
 		"PrepareRelease": {
 			keys: map[string]*schema{"prerelease_label": leaf, "allow_empty": leaf, "ignore_conventional_commits": leaf},
@@ -60,6 +66,7 @@ var (
 		"github":        {keys: map[string]*schema{"owner": leaf, "repo": leaf, "api_url": leaf, "upload_url": leaf}},
 		"gitea":         {keys: map[string]*schema{"owner": leaf, "repo": leaf, "host": leaf}},
 		"jira":          {keys: map[string]*schema{"url": leaf, "project": leaf}},
+		"commit":        {keys: map[string]*schema{"include": leaf, "exclude": leaf}},
 	}}
 )
 

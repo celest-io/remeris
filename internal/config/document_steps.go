@@ -40,6 +40,8 @@ func stepTable(step workflow.Step) (*tomlwrite.Table, error) {
 	switch s := step.(type) {
 	case *steps.Command:
 		return t, commandFields(t, s)
+	case *steps.Commit:
+		return t, commitFields(t, s)
 	case *steps.BumpVersion:
 		return t, bumpVersionFields(t, s)
 	case *steps.PrepareRelease:
@@ -91,6 +93,26 @@ func commandFields(t *tomlwrite.Table, s *steps.Command) error {
 		t.Set("variables", vars)
 	}
 	setTrue(t, "shell", s.Shell)
+	return nil
+}
+
+// commitFields writes the keys of the Commit step that are set. The step is remeris' own, so there is no Knope
+// writer to match: `message`, `variables` when the key was set, then the file selection.
+func commitFields(t *tomlwrite.Table, s *steps.Commit) error {
+	t.Set("message", tomlwrite.String(s.Message))
+	if s.Variables != nil {
+		vars, err := variablesTable(s.Variables)
+		if err != nil {
+			return err
+		}
+		t.Set("variables", vars)
+	}
+	if s.Include != nil {
+		t.Set("include", stringArray(s.Include))
+	}
+	if s.Exclude != nil {
+		t.Set("exclude", stringArray(s.Exclude))
+	}
 	return nil
 }
 

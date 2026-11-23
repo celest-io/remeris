@@ -830,3 +830,37 @@ x = { z = 1, y = 2 }
 		t.Errorf("wrong path shape = %v", got)
 	}
 }
+
+func TestCommitTableAndStep(t *testing.T) {
+	cfg := mustLoad(t, `
+[commit]
+include = ["a", "b"]
+exclude = []
+
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "Commit"
+message = "chore: release $version"
+exclude = ["mise*.lock"]
+`)
+	opts := cfg.Commit.SigningOptions()
+	if len(opts.Include) != 2 || opts.Exclude == nil || len(opts.Exclude) != 0 {
+		t.Errorf("table = %+v", opts)
+	}
+	step, ok := stepsOf(t, cfg, "release")[0].(*steps.Commit)
+	if !ok || step.Message != "chore: release $version" || step.Exclude[0] != "mise*.lock" || step.Include != nil {
+		t.Errorf("step = %+v", step)
+	}
+	if !step.NeedsPackages() {
+		t.Error("a message with $version needs the packages")
+	}
+}
+
+func TestCommitTableIsOptional(t *testing.T) {
+	cfg := mustLoad(t, "[github]\nowner = \"o\"\nrepo = \"r\"\n")
+	if opts := cfg.Commit.SigningOptions(); opts.Include != nil || opts.Exclude != nil {
+		t.Errorf("options = %+v", opts)
+	}
+}
