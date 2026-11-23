@@ -135,11 +135,11 @@ What a preview needs, and where it is set:
 - **In the dashboard**, on the Worker: **Settings**, **Build**, **Branch control**, tick **Enable Preview Builds**, and set **Preview command** to `npx wrangler preview`. A Worker
     connected before Worker Previews existed keeps the old model (command `npx wrangler versions upload`) until a one-time, irreversible switch described under *Existing Workers
     connected to Builds* in the Cloudflare docs (Workers Builds, Build branches). Switch it.
-- The preview build runs the same build command as production (`npm run build`), with the same root directory (`website`) and build variables (`NODE_VERSION`). Variables are
-    per environment in the dashboard: check that the preview one has `NODE_VERSION` too.
+- The preview build runs the same build command as production (`npm run build`), with the same root directory (`website`) and build variables (`NODE_VERSION`). Variables are per
+    environment in the dashboard: check that the preview one has `NODE_VERSION` too.
 
-`site` is fixed to `https://remeris.dev`, so a preview's canonical URLs and sitemap point to production; that is harmless. `X-Robots-Tag: noindex` is added by Cloudflare to workers.dev
-previews. Restrict or disable branch builds under **Settings**, **Build**, **Branch control**.
+`site` is fixed to `https://remeris.dev`, so a preview's canonical URLs and sitemap point to production; that is harmless. `X-Robots-Tag: noindex` is added by Cloudflare to
+workers.dev previews. Restrict or disable branch builds under **Settings**, **Build**, **Branch control**.
 
 ### (g) Caching and purging
 
