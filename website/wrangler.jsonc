@@ -14,5 +14,12 @@
   "routes": [
     { "pattern": "remeris.dev", "custom_domain": true },
     { "pattern": "www.remeris.dev", "custom_domain": true }
-  ]
+  ],
+  // Branch previews (Worker Previews, `wrangler preview`, run by Workers Builds for non-production branches).
+  // The `previews` block is required for them; an empty one means a preview uses the settings above.
+  // Do not put routes in it: production routes do not target previews.
+  "previews": {},
+  // A preview needs a host to get a URL. Serve it on workers.dev (<preview>-remeris.<subdomain>.workers.dev)
+  // rather than on remeris.dev: no wildcard DNS record or certificate to manage.
+  "preview_urls": true
 }
